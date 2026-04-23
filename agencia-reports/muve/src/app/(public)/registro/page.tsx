@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Ciudad } from '@/types'
 import { CIUDAD_LABELS } from '@/types'
@@ -10,7 +9,6 @@ import { CIUDAD_LABELS } from '@/types'
 const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada']
 
 export default function RegistroPage() {
-  const router = useRouter()
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -28,23 +26,29 @@ export default function RegistroPage() {
     setCargando(true)
     setError(null)
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { nombre, ciudad },
-      },
-    })
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { nombre, ciudad },
+        },
+      })
 
-    if (error) {
-      setError(error.message)
+      if (error) {
+        setError(error.message)
+        setCargando(false)
+        return
+      }
+
+      // Hard redirect: el trigger on_auth_user_created crea el perfil;
+      // la recarga completa asegura que el middleware lea la nueva sesión
+      window.location.href = '/dashboard'
+    } catch {
+      setError('Error de conexión. Intenta de nuevo.')
       setCargando(false)
-      return
     }
-
-    router.push('/dashboard')
-    router.refresh()
   }
 
   return (

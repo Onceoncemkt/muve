@@ -2,11 +2,9 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -17,17 +15,23 @@ export default function LoginPage() {
     setCargando(true)
     setError(null)
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (error) {
-      setError('Correo o contraseña incorrectos')
+      if (error) {
+        setError('Correo o contraseña incorrectos')
+        setCargando(false)
+        return
+      }
+
+      // Hard redirect: fuerza recarga completa para que el middleware
+      // lea las cookies de sesión recién escritas por Supabase
+      window.location.href = '/dashboard'
+    } catch {
+      setError('Error de conexión. Intenta de nuevo.')
       setCargando(false)
-      return
     }
-
-    router.push('/dashboard')
-    router.refresh()
   }
 
   return (

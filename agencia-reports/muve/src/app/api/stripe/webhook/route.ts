@@ -118,8 +118,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ recibido: true })
 }
-
-// Stripe necesita el body raw (sin parsear) para verificar la firma
-export const config = {
-  api: { bodyParser: false },
-}
