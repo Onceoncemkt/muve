@@ -15,7 +15,12 @@ const PLANES = [
     precio: 549,
     visitas: 8,
     maxPorLugar: 2,
-    features: ['8 visitas al mes', 'Máx. 2 visitas por lugar', 'Gimnasios', 'Clases grupales'],
+    features: [
+      '8 visitas totales al mes',
+      'Máximo 2 visitas por lugar',
+      'Acceso a gimnasios y clases',
+      'Las 3 ciudades',
+    ],
     recomendado: false,
   },
   {
@@ -24,7 +29,12 @@ const PLANES = [
     precio: 1199,
     visitas: 16,
     maxPorLugar: 4,
-    features: ['16 visitas al mes', 'Máx. 4 visitas por lugar', 'Gimnasios', 'Clases grupales', 'Estéticas & Wellness'],
+    features: [
+      '16 visitas totales al mes',
+      'Máximo 4 visitas por lugar',
+      'Gimnasios, clases, estéticas y wellness',
+      'Las 3 ciudades',
+    ],
     recomendado: true,
   },
   {
@@ -33,7 +43,12 @@ const PLANES = [
     precio: 2199,
     visitas: 30,
     maxPorLugar: 8,
-    features: ['30 visitas al mes', 'Máx. 8 visitas por lugar', 'Gimnasios', 'Clases grupales', 'Estéticas & Wellness', 'Restaurantes saludables'],
+    features: [
+      '30 visitas totales al mes',
+      'Máximo 8 visitas por lugar',
+      'Todo: gimnasios, clases, estéticas, restaurantes',
+      'Las 3 ciudades',
+    ],
     recomendado: false,
   },
 ]
@@ -132,7 +147,7 @@ export default function PlanesPrecios({ priceIds }: { priceIds: PriceIds }) {
                 {plan.recomendado && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                     <span className="inline-block rounded-full bg-amber-400 px-4 py-1.5 text-[11px] font-black uppercase tracking-widest text-zinc-900">
-                      Recomendado
+                      Más popular
                     </span>
                   </div>
                 )}

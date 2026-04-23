@@ -16,9 +16,9 @@ const BENEFICIOS = [
 
 export default function LandingPage() {
   const priceIds = {
-    basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_basico_placeholder',
-    plus:   process.env.STRIPE_PRICE_ID_PLUS   ?? 'price_plus_placeholder',
-    total:  process.env.STRIPE_PRICE_ID_TOTAL  ?? 'price_total_placeholder',
+    basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_1TPWhLRzNt1SyOBv8EYKsGGP',
+    plus:   process.env.STRIPE_PRICE_ID_PLUS   ?? 'price_1TPS4eRzNt1SyOBv47steWqz',
+    total:  process.env.STRIPE_PRICE_ID_TOTAL  ?? 'price_1TPWhgRzNt1SyOBvrA0F50v1',
   }
 
   return (
