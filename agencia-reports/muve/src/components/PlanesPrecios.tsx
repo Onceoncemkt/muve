@@ -13,6 +13,7 @@ const PLANES = [
     id: 'basico' as const,
     nombre: 'BÁSICO',
     precio: 549,
+    precioAnterior: 699,
     visitas: 8,
     maxPorLugar: 2,
     features: [
@@ -27,6 +28,7 @@ const PLANES = [
     id: 'plus' as const,
     nombre: 'PLUS',
     precio: 1199,
+    precioAnterior: 1399,
     visitas: 16,
     maxPorLugar: 4,
     features: [
@@ -41,6 +43,7 @@ const PLANES = [
     id: 'total' as const,
     nombre: 'TOTAL',
     precio: 2199,
+    precioAnterior: 2499,
     visitas: 30,
     maxPorLugar: 8,
     features: [
@@ -161,13 +164,29 @@ export default function PlanesPrecios({ priceIds }: { priceIds: PriceIds }) {
                 </p>
 
                 {/* Precio */}
-                <div className="mt-6 flex items-end gap-1">
-                  <span className={`text-4xl font-black leading-none tracking-tight ${esPlusCard ? 'text-white' : 'text-gray-900'}`}>
-                    ${plan.precio.toLocaleString('es-MX')}
-                  </span>
-                  <span className={`mb-1 text-sm font-medium ${esPlusCard ? 'text-indigo-200' : 'text-gray-400'}`}>
-                    /mes
-                  </span>
+                <div className="mt-6">
+                  {/* Badge + precio tachado */}
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
+                      esPlusCard ? 'bg-white/20 text-white' : 'bg-green-100 text-green-700'
+                    }`}>
+                      Precio de lanzamiento
+                    </span>
+                    <span className={`text-sm font-semibold line-through ${
+                      esPlusCard ? 'text-indigo-300' : 'text-gray-400'
+                    }`}>
+                      ${plan.precioAnterior.toLocaleString('es-MX')}
+                    </span>
+                  </div>
+                  {/* Precio actual */}
+                  <div className="mt-1.5 flex items-end gap-1">
+                    <span className={`text-4xl font-black leading-none tracking-tight ${esPlusCard ? 'text-white' : 'text-gray-900'}`}>
+                      ${plan.precio.toLocaleString('es-MX')}
+                    </span>
+                    <span className={`mb-1 text-sm font-medium ${esPlusCard ? 'text-indigo-200' : 'text-gray-400'}`}>
+                      /mes
+                    </span>
+                  </div>
                 </div>
 
                 {/* Stats rápidos */}
