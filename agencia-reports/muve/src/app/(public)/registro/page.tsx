@@ -6,7 +6,7 @@ import Link from 'next/link'
 import type { Ciudad } from '@/types'
 import { CIUDAD_LABELS } from '@/types'
 
-const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada']
+const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 
 export default function RegistroPage() {
   const [nombre, setNombre] = useState('')

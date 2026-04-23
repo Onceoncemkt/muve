@@ -3,8 +3,9 @@ import PlanesPrecios from '@/components/PlanesPrecios'
 
 const CIUDADES = [
   { nombre: 'Tulancingo', emoji: '🏔️', negocios: 4 },
-  { nombre: 'Pachuca', emoji: '⛏️', negocios: 4 },
-  { nombre: 'Ensenada', emoji: '🌊', negocios: 4 },
+  { nombre: 'Pachuca',    emoji: '⛏️', negocios: 4 },
+  { nombre: 'Ensenada',   emoji: '🌊', negocios: 4 },
+  { nombre: 'Tijuana',    emoji: '🌮', negocios: 8 },
 ]
 
 const BENEFICIOS = [
@@ -43,7 +44,7 @@ export default function LandingPage() {
       <section className="px-6 py-16 text-center">
         <div className="mx-auto max-w-lg">
           <p className="mb-3 inline-block rounded-full bg-indigo-100 px-4 py-1 text-sm font-medium text-indigo-700">
-            Ya disponible en 3 ciudades
+            Ya disponible en 4 ciudades
           </p>
           <h1 className="text-5xl font-black leading-tight tracking-tight text-gray-900">
             Un pase.<br />
@@ -115,10 +116,10 @@ export default function LandingPage() {
 
       {/* Ciudades */}
       <section className="bg-indigo-600 px-6 py-16 text-white">
-        <div className="mx-auto max-w-lg text-center">
+        <div className="mx-auto max-w-2xl text-center">
           <h2 className="mb-2 text-2xl font-bold">Disponible en</h2>
           <p className="mb-8 text-indigo-200">Creciendo a más ciudades de México</p>
-          <div className="flex justify-center gap-6">
+          <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
             {CIUDADES.map(c => (
               <div key={c.nombre} className="text-center">
                 <p className="text-4xl">{c.emoji}</p>

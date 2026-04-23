@@ -1,4 +1,4 @@
-export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada'
+export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana'
 export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante'
 export type Rol = 'usuario' | 'staff' | 'admin'
 
@@ -47,6 +47,7 @@ export const CIUDAD_LABELS: Record<Ciudad, string> = {
   tulancingo: 'Tulancingo',
   pachuca: 'Pachuca',
   ensenada: 'Ensenada',
+  tijuana: 'Tijuana',
 }
 
 export const CATEGORIA_LABELS: Record<Categoria, string> = {
