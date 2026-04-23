@@ -73,10 +73,13 @@ export default async function DashboardPage({
 
       {/* QR del día */}
       <div className="px-4 -mt-4">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="mb-6 text-center text-lg font-semibold text-gray-800">
+        <div className="rounded-2xl bg-white px-6 py-8 shadow-sm">
+          <h2 className="mb-1 text-center text-lg font-bold text-gray-900">
             Tu QR del día
           </h2>
+          <p className="mb-6 text-center text-xs text-gray-400">
+            Muéstralo en recepción para registrar tu visita
+          </p>
           <QRDisplay />
         </div>
       </div>

@@ -5,37 +5,36 @@ import { randomBytes } from 'crypto'
 export async function GET() {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   }
 
   const ahora = new Date()
-  const inicioDia = new Date(ahora)
-  inicioDia.setHours(0, 0, 0, 0)
 
-  // Buscar token válido de hoy (no usado, no expirado)
+  // Buscar token válido no usado que aún no haya expirado
   const { data: tokenExistente } = await supabase
     .from('qr_tokens')
-    .select('*')
+    .select('token, fecha_expiracion')
     .eq('user_id', user.id)
     .eq('usado', false)
-    .gte('fecha_expiracion', ahora.toISOString())
-    .gte('fecha_expiracion', inicioDia.toISOString())
+    .gt('fecha_expiracion', ahora.toISOString())
     .order('fecha_expiracion', { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (tokenExistente) {
-    return NextResponse.json({ token: tokenExistente.token, fecha_expiracion: tokenExistente.fecha_expiracion })
+    return NextResponse.json({
+      token: tokenExistente.token,
+      fecha_expiracion: tokenExistente.fecha_expiracion,
+    })
   }
 
-  // Generar nuevo token para hoy
+  // Generar nuevo token — expira 24 horas desde ahora
   const token = randomBytes(24).toString('hex')
-  const expiracion = new Date(ahora)
-  expiracion.setHours(23, 59, 59, 999)
+  const expiracion = new Date(ahora.getTime() + 24 * 60 * 60 * 1000)
 
-  const { data: nuevoToken, error } = await supabase
+  const { data: nuevoToken, error: insertError } = await supabase
     .from('qr_tokens')
     .insert({
       user_id: user.id,
@@ -43,12 +42,19 @@ export async function GET() {
       fecha_expiracion: expiracion.toISOString(),
       usado: false,
     })
-    .select()
+    .select('token, fecha_expiracion')
     .single()
 
-  if (error) {
-    return NextResponse.json({ error: 'Error al generar token' }, { status: 500 })
+  if (insertError || !nuevoToken) {
+    console.error('[/api/qr] insert error:', insertError)
+    return NextResponse.json(
+      { error: 'Error al generar token', detail: insertError?.message },
+      { status: 500 }
+    )
   }
 
-  return NextResponse.json({ token: nuevoToken.token, fecha_expiracion: nuevoToken.fecha_expiracion })
+  return NextResponse.json({
+    token: nuevoToken.token,
+    fecha_expiracion: nuevoToken.fecha_expiracion,
+  })
 }
