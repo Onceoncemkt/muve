@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import BotonSuscribirse from '@/components/BotonSuscribirse'
 
 const CIUDADES = [
   { nombre: 'Tulancingo', emoji: '🏔️', negocios: 4 },
@@ -47,12 +48,7 @@ export default function LandingPage() {
             saludables en tu ciudad.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link
-              href="/registro"
-              className="w-full rounded-full bg-indigo-600 py-4 text-base font-semibold text-white hover:bg-indigo-700 sm:w-auto sm:px-10"
-            >
-              Empieza desde $299 MXN/mes
-            </Link>
+            <BotonSuscribirse className="w-full rounded-full bg-indigo-600 py-4 text-base font-semibold text-white hover:bg-indigo-700 disabled:opacity-70 sm:w-auto sm:px-10" />
             <Link
               href="/explorar"
               className="w-full rounded-full border border-gray-200 py-4 text-base font-medium text-gray-700 hover:border-gray-300 sm:w-auto sm:px-10"
@@ -123,12 +119,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-sm">
           <h2 className="text-2xl font-bold text-gray-900">Únete a MUVE hoy</h2>
           <p className="mt-2 text-gray-500">Primer mes sin compromiso.</p>
-          <Link
-            href="/registro"
-            className="mt-6 block w-full rounded-full bg-indigo-600 py-4 font-semibold text-white hover:bg-indigo-700"
-          >
-            Crear mi cuenta →
-          </Link>
+          <BotonSuscribirse className="mt-6 w-full rounded-full bg-indigo-600 py-4 font-semibold text-white hover:bg-indigo-700 disabled:opacity-70" />
         </div>
       </section>
 

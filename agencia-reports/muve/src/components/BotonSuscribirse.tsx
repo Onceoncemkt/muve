@@ -9,6 +9,10 @@ export default function BotonSuscribirse({ className }: { className?: string }) 
     setCargando(true)
     try {
       const res = await fetch('/api/stripe/checkout', { method: 'POST' })
+      if (res.status === 401) {
+        window.location.href = '/registro?redirect=checkout'
+        return
+      }
       const { url, error } = await res.json()
       if (error) { alert(error); return }
       window.location.href = url
@@ -25,7 +29,7 @@ export default function BotonSuscribirse({ className }: { className?: string }) 
       disabled={cargando}
       className={className}
     >
-      {cargando ? 'Redirigiendo...' : 'Suscribirme ahora'}
+      {cargando ? 'Redirigiendo...' : 'Empieza desde $299 MXN/mes'}
     </button>
   )
 }
