@@ -31,59 +31,86 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <Link href="/" className="text-3xl font-black text-indigo-600">MUVE</Link>
-          <p className="mt-2 text-sm text-gray-500">Inicia sesión en tu cuenta</p>
-        </div>
+    <div className="flex min-h-screen flex-col bg-zinc-950">
+      {/* Back link */}
+      <div className="px-6 pt-8">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs font-medium tracking-widest uppercase text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          ← MUVE
+        </Link>
+      </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm">
-          {error && (
-            <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
+      {/* Content */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm">
+
+          {/* Header */}
+          <div className="mb-10">
+            <h1 className="text-4xl font-black tracking-tight text-white">
+              Bienvenido<br />de vuelta.
+            </h1>
+            <p className="mt-3 text-sm text-zinc-400">
+              Inicia sesión para acceder a tu membresía.
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            {error && (
+              <div className="rounded-xl border border-red-800/50 bg-red-950/60 px-4 py-3 text-sm font-medium text-red-400">
+                {error}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+                Correo electrónico
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                placeholder="tu@correo.com"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-sm text-white placeholder-zinc-600 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
+              />
             </div>
-          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-            />
-          </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+                Contraseña
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-sm text-white placeholder-zinc-600 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-            />
-          </div>
+            <button
+              type="submit"
+              disabled={cargando}
+              className="mt-1 w-full rounded-xl bg-indigo-600 py-4 text-sm font-bold tracking-wide text-white transition-colors hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40"
+            >
+              {cargando ? 'Entrando...' : 'Iniciar sesión'}
+            </button>
+          </form>
 
-          <button
-            type="submit"
-            disabled={cargando}
-            className="mt-2 rounded-xl bg-indigo-600 py-3 font-medium text-white disabled:opacity-50 hover:bg-indigo-700 transition-colors"
-          >
-            {cargando ? 'Entrando...' : 'Iniciar sesión'}
-          </button>
-        </form>
-
-        <p className="mt-4 text-center text-sm text-gray-500">
-          ¿No tienes cuenta?{' '}
-          <Link href="/registro" className="font-medium text-indigo-600 hover:underline">
-            Regístrate
-          </Link>
-        </p>
+          {/* Footer */}
+          <p className="mt-8 text-center text-sm text-zinc-600">
+            ¿No tienes cuenta?{' '}
+            <Link href="/registro" className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
+              Regístrate gratis
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )
