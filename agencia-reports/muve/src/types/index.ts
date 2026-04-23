@@ -9,6 +9,7 @@ export interface User {
   ciudad: Ciudad
   plan_activo: boolean
   stripe_customer_id: string | null
+  stripe_subscription_id: string | null
   rol: Rol
   fecha_registro: string
 }

@@ -1,10 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import QRDisplay from '@/components/QRDisplay'
+import BotonPortal from '@/components/BotonPortal'
 import { CIUDAD_LABELS } from '@/types'
 import type { User } from '@/types'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ membresia?: string }>
+}) {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -33,9 +38,17 @@ export default async function DashboardPage() {
 
   const nombre = perfil?.nombre ?? user.email?.split('@')[0] ?? 'Muver'
   const ciudad = perfil?.ciudad ?? 'tulancingo'
+  const params = await searchParams
+  const recienActivada = params.membresia === 'activada'
 
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
+      {recienActivada && (
+        <div className="bg-green-500 px-4 py-3 text-center text-sm font-medium text-white">
+          🎉 ¡Membresía activada! Bienvenid@ a MUVE.
+        </div>
+      )}
+
       {/* Encabezado */}
       <div className="bg-gradient-to-br from-indigo-600 to-violet-600 px-6 pb-8 pt-10 text-white">
         <p className="text-sm font-medium opacity-80">
@@ -84,6 +97,11 @@ export default async function DashboardPage() {
           <span className="text-3xl">📋</span>
           <span className="text-sm font-medium text-gray-700">Mi historial</span>
         </a>
+      </div>
+
+      {/* Gestión de membresía */}
+      <div className="mt-4 px-4">
+        <BotonPortal className="w-full rounded-2xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors" />
       </div>
     </div>
   )
