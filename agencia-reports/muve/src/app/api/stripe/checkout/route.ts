@@ -1,13 +1,20 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { stripe } from '@/lib/stripe'
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  }
+
+  const body = await request.json().catch(() => ({}))
+  const priceId: string = body.priceId ?? process.env.STRIPE_PRICE_ID_MENSUAL ?? ''
+
+  if (!priceId.startsWith('price_')) {
+    return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
   }
 
   const { data: perfil } = await supabase
@@ -20,7 +27,6 @@ export async function POST() {
     return NextResponse.json({ error: 'Ya tienes una membresía activa' }, { status: 400 })
   }
 
-  // Reusar customer de Stripe si ya existe, o crear uno nuevo
   let customerId = perfil?.stripe_customer_id ?? null
 
   if (!customerId) {
@@ -40,12 +46,7 @@ export async function POST() {
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
-    line_items: [
-      {
-        price: process.env.STRIPE_PRICE_ID_MENSUAL!,
-        quantity: 1,
-      },
-    ],
+    line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?membresia=activada`,
     cancel_url: `${process.env.NEXT_PUBLIC_URL}/?pago=cancelado`,
     metadata: { supabase_user_id: user.id },

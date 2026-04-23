@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import BotonSuscribirse from '@/components/BotonSuscribirse'
+import PlanesPrecios from '@/components/PlanesPrecios'
 
 const CIUDADES = [
   { nombre: 'Tulancingo', emoji: '🏔️', negocios: 4 },
@@ -15,6 +15,12 @@ const BENEFICIOS = [
 ]
 
 export default function LandingPage() {
+  const priceIds = {
+    basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_basico_placeholder',
+    plus:   process.env.STRIPE_PRICE_ID_PLUS   ?? 'price_plus_placeholder',
+    total:  process.env.STRIPE_PRICE_ID_TOTAL  ?? 'price_total_placeholder',
+  }
+
   return (
     <div className="min-h-screen bg-white">
       {/* Nav */}
@@ -48,10 +54,15 @@ export default function LandingPage() {
             saludables en tu ciudad.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <BotonSuscribirse className="w-full rounded-full bg-indigo-600 py-4 text-base font-semibold text-white hover:bg-indigo-700 disabled:opacity-70 sm:w-auto sm:px-10" />
+            <a
+              href="#planes"
+              className="w-full rounded-full bg-indigo-600 py-4 text-base font-semibold text-white hover:bg-indigo-700 sm:w-auto sm:px-10 text-center"
+            >
+              Ver planes
+            </a>
             <Link
               href="/explorar"
-              className="w-full rounded-full border border-gray-200 py-4 text-base font-medium text-gray-700 hover:border-gray-300 sm:w-auto sm:px-10"
+              className="w-full rounded-full border border-gray-200 py-4 text-base font-medium text-gray-700 hover:border-gray-300 sm:w-auto sm:px-10 text-center"
             >
               Ver negocios →
             </Link>
@@ -65,9 +76,9 @@ export default function LandingPage() {
           <h2 className="mb-10 text-center text-2xl font-bold text-gray-900">¿Cómo funciona?</h2>
           <div className="flex flex-col gap-6">
             {[
-              { num: '01', titulo: 'Elige tu membresía', desc: 'Pago mensual, cancela cuando quieras. Sin contratos.' },
+              { num: '01', titulo: 'Elige tu plan', desc: 'Pago mensual desde $549. Cancela cuando quieras. Sin contratos.' },
               { num: '02', titulo: 'Obtén tu QR del día', desc: 'Cada día se genera un código único y seguro desde tu app.' },
-              { num: '03', titulo: 'Escanea y entra', desc: 'El staff valida tu visita. Hasta 8 visitas por negocio al mes.' },
+              { num: '03', titulo: 'Escanea y entra', desc: 'El staff valida tu visita en segundos. Sin filas, sin papeles.' },
             ].map(paso => (
               <div key={paso.num} className="flex gap-5">
                 <span className="text-3xl font-black text-indigo-200">{paso.num}</span>
@@ -97,6 +108,11 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Planes */}
+      <div className="bg-gray-50">
+        <PlanesPrecios priceIds={priceIds} />
+      </div>
+
       {/* Ciudades */}
       <section className="bg-indigo-600 px-6 py-16 text-white">
         <div className="mx-auto max-w-lg text-center">
@@ -111,15 +127,6 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* CTA final */}
-      <section className="px-6 py-16 text-center">
-        <div className="mx-auto max-w-sm">
-          <h2 className="text-2xl font-bold text-gray-900">Únete a MUVE hoy</h2>
-          <p className="mt-2 text-gray-500">Primer mes sin compromiso.</p>
-          <BotonSuscribirse className="mt-6 w-full rounded-full bg-indigo-600 py-4 font-semibold text-white hover:bg-indigo-700 disabled:opacity-70" />
         </div>
       </section>
 
