@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { stripe } from '@/lib/stripe'
+import { planDesdePriceId } from '@/lib/planes'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const priceId: string = body.priceId ?? process.env.STRIPE_PRICE_ID_MENSUAL ?? ''
 
-  if (!priceId.startsWith('price_')) {
+  if (!planDesdePriceId(priceId)) {
     return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
   }
 

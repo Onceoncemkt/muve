@@ -2,33 +2,71 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
+import { planDesdePriceId } from '@/lib/planes'
+import type { PlanMembresia } from '@/types'
 
 // Service role para saltarse RLS — solo en server, nunca exponer al cliente
+function serviceRoleKey() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+  if (key.startsWith('tsb_secret_')) {
+    return key.replace(/^tsb_secret_/, 'sb_secret_')
+  }
+  return key
+}
 function getServiceClient() {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    serviceRoleKey()
   )
 }
 
-async function activarMembresia(customerId: string, subscriptionId: string) {
+function columnaPlanNoExiste(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes('plan')
+}
+
+async function activarMembresia(customerId: string, subscriptionId: string, plan: PlanMembresia) {
   const supabase = getServiceClient()
-  const { error } = await supabase
+  let { error } = await supabase
     .from('users')
-    .update({ plan_activo: true, stripe_subscription_id: subscriptionId })
+    .update({ plan_activo: true, stripe_subscription_id: subscriptionId, plan })
     .eq('stripe_customer_id', customerId)
+  if (columnaPlanNoExiste(error)) {
+    const fallback = await supabase
+      .from('users')
+      .update({ plan_activo: true, stripe_subscription_id: subscriptionId })
+      .eq('stripe_customer_id', customerId)
+    error = fallback.error
+  }
 
   if (error) throw new Error(`activarMembresia: ${error.message}`)
 }
 
 async function desactivarMembresia(customerId: string) {
   const supabase = getServiceClient()
-  const { error } = await supabase
+  let { error } = await supabase
     .from('users')
-    .update({ plan_activo: false, stripe_subscription_id: null })
+    .update({ plan_activo: false, stripe_subscription_id: null, plan: null })
     .eq('stripe_customer_id', customerId)
+  if (columnaPlanNoExiste(error)) {
+    const fallback = await supabase
+      .from('users')
+      .update({ plan_activo: false, stripe_subscription_id: null })
+      .eq('stripe_customer_id', customerId)
+    error = fallback.error
+  }
 
   if (error) throw new Error(`desactivarMembresia: ${error.message}`)
+}
+
+async function obtenerPlanDesdeSubscriptionId(subscriptionId: string): Promise<PlanMembresia> {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+  const priceId = subscription.items.data[0]?.price?.id
+  const plan = planDesdePriceId(priceId)
+  if (!plan) {
+    throw new Error(`price_id no mapeado para membresía: ${priceId ?? 'desconocido'}`)
+  }
+  return plan
 }
 
 export async function POST(request: NextRequest) {
@@ -55,10 +93,12 @@ export async function POST(request: NextRequest) {
         // Solo procesar suscripciones (no pagos únicos)
         if (session.mode !== 'subscription') break
         if (!session.customer || !session.subscription) break
+        const plan = await obtenerPlanDesdeSubscriptionId(session.subscription as string)
 
         await activarMembresia(
           session.customer as string,
-          session.subscription as string
+          session.subscription as string,
+          plan
         )
         break
       }
@@ -70,8 +110,8 @@ export async function POST(request: NextRequest) {
           ? (invoice.parent as { subscription_id?: string }).subscription_id
           : null
         if (!invoice.customer || !subId) break
-
-        await activarMembresia(invoice.customer as string, subId)
+        const plan = await obtenerPlanDesdeSubscriptionId(subId)
+        await activarMembresia(invoice.customer as string, subId, plan)
         break
       }
 
@@ -100,7 +140,8 @@ export async function POST(request: NextRequest) {
 
         const activo = sub.status === 'active' || sub.status === 'trialing'
         if (activo) {
-          await activarMembresia(sub.customer as string, sub.id)
+          const plan = planDesdePriceId(sub.items.data[0]?.price?.id) ?? await obtenerPlanDesdeSubscriptionId(sub.id)
+          await activarMembresia(sub.customer as string, sub.id, plan)
         } else {
           await desactivarMembresia(sub.customer as string)
         }

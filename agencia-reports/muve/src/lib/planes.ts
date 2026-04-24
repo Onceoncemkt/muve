@@ -1,0 +1,41 @@
+import type { Categoria, PlanMembresia } from '@/types'
+
+export const PLAN_LABELS: Record<PlanMembresia, string> = {
+  basico: 'BÁSICO',
+  plus: 'PLUS',
+  total: 'TOTAL',
+}
+
+export const PLAN_NIVELES: Record<PlanMembresia, number> = {
+  basico: 1,
+  plus: 2,
+  total: 3,
+}
+
+export const CATEGORIAS_VISIBLES_POR_PLAN: Record<PlanMembresia, Categoria[]> = {
+  basico: ['clases', 'gimnasio'],
+  plus: ['clases', 'gimnasio', 'estetica'],
+  total: ['clases', 'gimnasio', 'estetica', 'restaurante'],
+}
+
+export const PLAN_POR_PRICE_ID: Record<string, PlanMembresia> = {
+  price_1TPWhLRzNt1SyOBv8EYKsGGP: 'basico',
+  price_1TPS4eRzNt1SyOBv47steWqz: 'plus',
+  price_1TPWhgRzNt1SyOBvrA0F50v1: 'total',
+}
+
+export function normalizarPlan(plan: unknown): PlanMembresia | null {
+  if (plan === 'basico' || plan === 'plus' || plan === 'total') {
+    return plan
+  }
+  return null
+}
+
+export function planDesdePriceId(priceId: string | null | undefined): PlanMembresia | null {
+  if (!priceId) return null
+  return PLAN_POR_PRICE_ID[priceId] ?? null
+}
+
+export function puedeReservarConPlan(planUsuario: PlanMembresia, planRequerido: PlanMembresia) {
+  return PLAN_NIVELES[planUsuario] >= PLAN_NIVELES[planRequerido]
+}

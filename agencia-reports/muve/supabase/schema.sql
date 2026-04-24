@@ -19,6 +19,7 @@ create table public.users (
   ciudad              ciudad_enum not null default 'tulancingo',
   plan_activo         boolean not null default false,
   stripe_customer_id  text,
+  plan                text check (plan in ('basico', 'plus', 'total')),
   rol                 rol_enum not null default 'usuario',
   fecha_registro      timestamp with time zone default now()
 );
@@ -37,6 +38,7 @@ create table public.negocios (
   instagram_handle            text,
   requiere_reserva            boolean not null default true,
   capacidad_default           int default 10,
+  plan_requerido              text default 'basico' check (plan_requerido in ('basico', 'plus', 'total')),
   activo                      boolean not null default true,
   visitas_permitidas_por_mes  int not null default 8
 );
@@ -226,3 +228,15 @@ insert into public.negocios (nombre, categoria, ciudad, direccion, descripcion, 
   ('Olympus Gym & Fitness',   'gimnasio',    'tijuana', 'Tijuana, B.C.',                                           'Espacio premium con musculación, cardio, clases grupales y nutrición.', true),
   ('Spa del Río',             'estetica',    'tijuana', 'P.º del Río 6641, Río Tijuana, Tijuana',                  'Masajes, faciales y tratamientos corporales en zona Río.', true),
   ('Green Bowl TJ',           'restaurante', 'tijuana', 'Zona Río, Tijuana',                                       'Bowls saludables, jugos y proteínas. Cocina fit en zona Río.', true);
+
+update public.negocios
+set plan_requerido = 'basico'
+where categoria in ('gimnasio', 'clases');
+
+update public.negocios
+set plan_requerido = 'plus'
+where categoria = 'estetica';
+
+update public.negocios
+set plan_requerido = 'total'
+where categoria = 'restaurante';

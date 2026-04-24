@@ -1,6 +1,7 @@
 export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana'
 export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante'
 export type Rol = 'usuario' | 'staff' | 'admin'
+export type PlanMembresia = 'basico' | 'plus' | 'total'
 export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
 export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada'
 
@@ -12,6 +13,7 @@ export interface User {
   plan_activo: boolean
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
+  plan?: PlanMembresia | null
   rol: Rol
   negocio_id?: string | null
   fecha_registro: string
@@ -28,6 +30,7 @@ export interface Negocio {
   instagram_handle?: string | null
   requiere_reserva?: boolean
   capacidad_default?: number | null
+  plan_requerido?: PlanMembresia | null
   activo: boolean
 }
 
