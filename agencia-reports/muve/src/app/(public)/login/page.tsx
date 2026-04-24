@@ -35,15 +35,6 @@ const { data: perfil } = await supabase
         .eq('id', data.user.id)
         .single()
       const rol = perfil?.rol ?? 'usuario'
-        method: 'GET',
-        cache: 'no-store',
-credentials: 'include',
-      })
-      const rolData = rolResponse.ok
-        ? await rolResponse.json() as { rol?: 'admin' | 'staff' | 'usuario' }
-        : null
-      const rol = rolData?.rol
-
       if (rol === 'admin') {
         window.location.href = '/admin'
       } else if (rol === 'staff') {
