@@ -58,7 +58,8 @@ export default function LandingPage() {
         </p>
         <h1 className="mx-auto max-w-3xl text-6xl font-black leading-none tracking-tight sm:text-7xl lg:text-8xl">
           <span className="block text-white">UN PASE.</span>
-          <span className="block text-[#E8FF47]">TODO EL BIENESTAR.</span>
+          <span className="block text-[#E8FF47]">TODO LO QUE</span>
+          <span className="block text-[#E8FF47]">TE HACE BIEN.</span>
         </h1>
         <p className="mx-auto mt-8 max-w-md text-base text-white/50">
           Membresía mensual que te da acceso a gimnasios, clases, estéticas
