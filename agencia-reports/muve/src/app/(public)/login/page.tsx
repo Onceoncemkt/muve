@@ -1,15 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { normalizarRol, panelPorRol, rolDesdeAuth } from '@/lib/auth/roles'
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0A0A0A]" />}>
+      <LoginPageContent />
+    </Suspense>
+  )
+}
+
+function LoginPageContent() {
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
+  const cuentaActivada = searchParams.get('activada') === '1'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -80,6 +91,11 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            {cuentaActivada && (
+              <div className="rounded-lg border border-emerald-400/20 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-300">
+                Cuenta activada, inicia sesión.
+              </div>
+            )}
             {error && (
               <div className="rounded-lg border border-red-500/20 bg-red-950/40 px-4 py-3 text-sm text-red-400">
                 {error}
