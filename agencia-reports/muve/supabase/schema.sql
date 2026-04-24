@@ -34,6 +34,7 @@ create table public.negocios (
   direccion                   text not null,
   descripcion                 text,
   imagen_url                  text,
+  instagram_handle            text,
   activo                      boolean not null default true,
   visitas_permitidas_por_mes  int not null default 8
 );
@@ -175,10 +176,13 @@ $$;
 -- ============================================================
 insert into public.negocios (nombre, categoria, ciudad, direccion, descripcion, activo) values
   -- Tulancingo
-  ('Iron Gym Tulancingo',   'gimnasio',    'tulancingo', 'Av. Hidalgo 42, Tulancingo',           'Gym completo con pesas libres, máquinas cardio y clases grupales.',        true),
-  ('Yoga Zen',              'clases',      'tulancingo', 'Calle Morelos 15, Col. Centro',         'Clases de yoga y meditación para todos los niveles.',                       true),
-  ('Bellas Manos Spa',      'estetica',    'tulancingo', 'Blvd. Reyes 88, Tulancingo',            'Tratamientos faciales, masajes y uñas.',                                    true),
-  ('Green Bowl',            'restaurante', 'tulancingo', 'Plaza Sendero Local 12, Tulancingo',    'Ensaladas, bowls saludables y jugos naturales.',                             true),
+  ('Heaven Studio',          'clases',      'tulancingo', 'Tulancingo, Hgo.', 'Indoor cycling de alta intensidad con instructores certificados.',         true),
+  ('Mentor Training Center', 'clases',      'tulancingo', 'Tulancingo, Hgo.', 'Entrenamiento funcional y hyrox para todos los niveles.',                  true),
+  ('MOV Reformer',           'clases',      'tulancingo', 'Tulancingo, Hgo.', 'Pilates reformer en estudio boutique, grupos reducidos.',                  true),
+  ('Studio 22:22',           'clases',      'tulancingo', 'Tulancingo, Hgo.', 'Barre, pilates mat y entrenamiento funcional en un mismo espacio.',        true),
+  ('Mundo Fit',              'gimnasio',    'tulancingo', 'Tulancingo, Hgo.', 'Gym completo con pesas, cardio, clases grupales y área funcional.',        true),
+  ('Bellas Manos Spa',       'estetica',    'tulancingo', 'Blvd. Reyes 88, Tulancingo',  'Tratamientos faciales, masajes y uñas.',                        true),
+  ('Green Bowl',             'restaurante', 'tulancingo', 'Plaza Sendero Local 12, Tulancingo', 'Ensaladas, bowls saludables y jugos naturales.',          true),
   -- Pachuca
   ('Titan Fitness',         'gimnasio',    'pachuca',    'Blvd. Colosio 120, Pachuca',            'Gym de alto rendimiento con zona CrossFit y pesas.',                        true),
   ('Cycling Pachuca',       'clases',      'pachuca',    'Av. Revolución 55, Col. Centro',        'Clases de cycling indoor con instructores certificados.',                    true),

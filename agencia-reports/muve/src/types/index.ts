@@ -22,6 +22,7 @@ export interface Negocio {
   direccion: string
   descripcion: string | null
   imagen_url: string | null
+  instagram_handle?: string | null
   activo: boolean
   visitas_permitidas_por_mes: number
 }
