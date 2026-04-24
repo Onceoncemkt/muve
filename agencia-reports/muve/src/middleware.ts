@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Rol } from '@/types'
 
 const RUTAS_USUARIO = ['/dashboard', '/explorar', '/historial']
-const RUTAS_STAFF   = ['/validar']
+const RUTAS_STAFF   = ['/validar', '/negocio']
 const RUTAS_ADMIN   = ['/admin']
 const RUTAS_AUTH    = ['/login', '/registro']
 

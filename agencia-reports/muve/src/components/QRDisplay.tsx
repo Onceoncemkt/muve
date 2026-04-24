@@ -61,7 +61,10 @@ export default function QRDisplay() {
     }
   }, [])
 
-  useEffect(() => { cargarQR() }, [cargarQR])
+  useEffect(() => {
+    const id = setTimeout(() => { void cargarQR() }, 0)
+    return () => clearTimeout(id)
+  }, [cargarQR])
 
   useEffect(() => {
     if (!qrData) return

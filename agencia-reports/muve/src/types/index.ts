@@ -1,6 +1,8 @@
 export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana'
 export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante'
 export type Rol = 'usuario' | 'staff' | 'admin'
+export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
+export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada'
 
 export interface User {
   id: string
@@ -23,8 +25,28 @@ export interface Negocio {
   descripcion: string | null
   imagen_url: string | null
   instagram_handle?: string | null
+  requiere_reserva?: boolean
   activo: boolean
   visitas_permitidas_por_mes: number
+}
+
+export interface Horario {
+  id: string
+  negocio_id: string
+  dia_semana: DiaSemana
+  hora_inicio: string   // "HH:MM:SS"
+  hora_fin: string
+  capacidad_total: number
+  activo: boolean
+}
+
+export interface Reservacion {
+  id: string
+  user_id: string
+  horario_id: string
+  fecha: string         // "YYYY-MM-DD"
+  estado: EstadoReserva
+  created_at: string
 }
 
 export interface Visita {
@@ -63,4 +85,31 @@ export const CATEGORIA_ICONS: Record<Categoria, string> = {
   estetica: '✨',
   clases: '🧘',
   restaurante: '🥗',
+}
+
+export const DIA_LABELS: Record<DiaSemana, string> = {
+  lunes: 'Lunes',
+  martes: 'Martes',
+  miercoles: 'Miércoles',
+  jueves: 'Jueves',
+  viernes: 'Viernes',
+  sabado: 'Sábado',
+  domingo: 'Domingo',
+}
+
+// Devuelve la próxima fecha (o hoy) en que ocurre el día de semana dado
+export function proximaFecha(dia: DiaSemana): Date {
+  const orden: Record<DiaSemana, number> = {
+    domingo: 0, lunes: 1, martes: 2, miercoles: 3,
+    jueves: 4, viernes: 5, sabado: 6,
+  }
+  const hoy = new Date()
+  const diff = (orden[dia] - hoy.getDay() + 7) % 7
+  const fecha = new Date(hoy)
+  fecha.setDate(hoy.getDate() + diff)
+  return fecha
+}
+
+export function formatHora(h: string): string {
+  return h.slice(0, 5) // "HH:MM:SS" → "HH:MM"
 }

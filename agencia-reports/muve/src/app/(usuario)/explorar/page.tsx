@@ -1,54 +1,132 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import NegocioCard from '@/components/NegocioCard'
-import type { Negocio, Ciudad, Categoria } from '@/types'
-import { CIUDAD_LABELS, CATEGORIA_LABELS } from '@/types'
-
-const NEGOCIOS_MOCK: Negocio[] = [
-  // Tulancingo
-  { id: '1',  nombre: 'Mundo Fit',              categoria: 'gimnasio',    ciudad: 'tulancingo', direccion: 'Tulancingo, Hgo.', descripcion: 'Gym completo con pesas, cardio, clases grupales y área funcional.',           imagen_url: null, instagram_handle: 'mundofittulancingo',  activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '2',  nombre: 'Heaven Studio',          categoria: 'clases',      ciudad: 'tulancingo', direccion: 'Tulancingo, Hgo.', descripcion: 'Indoor cycling de alta intensidad con instructores certificados.',            imagen_url: null, instagram_handle: 'heaventstudio',       activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '21', nombre: 'Mentor Training Center', categoria: 'clases',      ciudad: 'tulancingo', direccion: 'Tulancingo, Hgo.', descripcion: 'Entrenamiento funcional y hyrox para todos los niveles.',                     imagen_url: null, instagram_handle: 'mentor.trainingcenter', activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '22', nombre: 'MOV Reformer',           categoria: 'clases',      ciudad: 'tulancingo', direccion: 'Tulancingo, Hgo.', descripcion: 'Pilates reformer en estudio boutique, grupos reducidos.',                    imagen_url: null, instagram_handle: 'movreformer',         activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '23', nombre: 'Studio 22:22',           categoria: 'clases',      ciudad: 'tulancingo', direccion: 'Tulancingo, Hgo.', descripcion: 'Barre, pilates mat y entrenamiento funcional en un mismo espacio.',          imagen_url: null, instagram_handle: 'stdio22.22',          activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '3',  nombre: 'Bellas Manos Spa',       categoria: 'estetica',    ciudad: 'tulancingo', direccion: 'Blvd. Reyes 88, Tulancingo',         descripcion: 'Tratamientos faciales, masajes y uñas.',                              imagen_url: null, instagram_handle: null,                  activo: true, visitas_permitidas_por_mes: 4  },
-  { id: '4',  nombre: 'Green Bowl',             categoria: 'restaurante', ciudad: 'tulancingo', direccion: 'Plaza Sendero Local 12, Tulancingo', descripcion: 'Ensaladas, bowls saludables y jugos naturales.',                       imagen_url: null, instagram_handle: null,                  activo: true, visitas_permitidas_por_mes: 12 },
-  // Pachuca
-  { id: '5',  nombre: "Gold's Gym",            categoria: 'gimnasio',    ciudad: 'pachuca', direccion: 'Pachuca, Hgo.',                       descripcion: 'Cadena internacional con equipamiento completo, pesas y clases grupales.',  imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '6',  nombre: 'Forza',                 categoria: 'clases',      ciudad: 'pachuca', direccion: 'Pachuca, Hgo.',                       descripcion: 'Clases de entrenamiento funcional y fuerza en Pachuca.',                   imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '24', nombre: 'Inside',                categoria: 'clases',      ciudad: 'pachuca', direccion: 'Pachuca, Hgo.',                       descripcion: 'Estudio boutique indoor con cycling, yoga y clases grupales.',              imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '25', nombre: 'Nero',                  categoria: 'clases',      ciudad: 'pachuca', direccion: 'Pachuca, Hgo.',                       descripcion: 'Clases de alto rendimiento: boxing, funcional y cardio intenso.',          imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '7',  nombre: 'Nails & Glow',          categoria: 'estetica',    ciudad: 'pachuca', direccion: 'Plaza Las Américas Local 8, Pachuca', descripcion: 'Servicios de uñas, depilación y lifting de pestañas.',                     imagen_url: null, activo: true, visitas_permitidas_por_mes: 4  },
-  { id: '8',  nombre: 'Vital Kitchen',         categoria: 'restaurante', ciudad: 'pachuca', direccion: 'Blvd. Valle de San Javier 200, Pachuca', descripcion: 'Menú saludable con opciones veganas y sin gluten.',                   imagen_url: null, activo: true, visitas_permitidas_por_mes: 12 },
-  // Ensenada
-  { id: '9',  nombre: 'Pacific Gym',      categoria: 'gimnasio',    ciudad: 'ensenada', direccion: 'Blvd. Costero 300, Ensenada',         descripcion: 'Gym con vista al mar, equipamiento completo.',    imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '10', nombre: 'Pilates Ensenada', categoria: 'clases',      ciudad: 'ensenada', direccion: 'Calle Miramar 45, Ensenada',           descripcion: 'Pilates en aparatos y mat, grupos pequeños.',     imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '11', nombre: 'Sun Spa',          categoria: 'estetica',    ciudad: 'ensenada', direccion: 'Av. Reforma 18, Col. Centro',          descripcion: 'Masajes, faciales y aromaterapia.',               imagen_url: null, activo: true, visitas_permitidas_por_mes: 4  },
-  { id: '12', nombre: 'Mar & Verde',      categoria: 'restaurante', ciudad: 'ensenada', direccion: 'Blvd. Teniente Azueta 88, Ensenada', descripcion: 'Mariscos saludables y bowls de acai.',            imagen_url: null, activo: true, visitas_permitidas_por_mes: 12 },
-  // Tijuana
-  { id: '13', nombre: 'Symmetry Gym',            categoria: 'gimnasio',    ciudad: 'tijuana', direccion: 'Blvd. Agua Caliente, Plaza Galerías Hipódromo, Tijuana', descripcion: 'Gym premium con clases de yoga, spinning, HIIT, pilates y entrenamiento funcional.',              imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '14', nombre: 'Vertical Climb',           categoria: 'clases',      ciudad: 'tijuana', direccion: 'Blvd. Agua Caliente, Tijuana',                            descripcion: 'Estudio boutique fitness con programas Versa y Fuerza, entrenamientos semi personalizados.',  imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '15', nombre: 'Gladiators Gym & Fitness', categoria: 'gimnasio',    ciudad: 'tijuana', direccion: 'C. Real del Mar 10450, Francisco Zarco, Tijuana',         descripcion: 'Cadena de gimnasios con pesas, cardio, clases grupales y entrenamiento personalizado.',      imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '16', nombre: 'Acuario Fitness Center',   categoria: 'clases',      ciudad: 'tijuana', direccion: 'Av. Paseo del Lago 19507, Lago Sur, Tijuana',             descripcion: 'Centro de fitness integral con enfoque médico y nutricional, spinning y clases grupales.',   imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '17', nombre: 'Impact Fitness',            categoria: 'gimnasio',    ciudad: 'tijuana', direccion: 'Tijuana, B.C.',                                           descripcion: 'Gym moderno con yoga, pilates, cardio y clases grupales dinámicas.',                         imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '18', nombre: 'Olympus Gym & Fitness',     categoria: 'gimnasio',    ciudad: 'tijuana', direccion: 'Tijuana, B.C.',                                           descripcion: 'Espacio premium con musculación, cardio, clases grupales y nutrición.',                      imagen_url: null, activo: true, visitas_permitidas_por_mes: 8  },
-  { id: '19', nombre: 'Spa del Río',               categoria: 'estetica',    ciudad: 'tijuana', direccion: 'P. del Río 6641, Río Tijuana, Tijuana',                   descripcion: 'Masajes, faciales y tratamientos corporales en zona Río.',                                  imagen_url: null, activo: true, visitas_permitidas_por_mes: 4  },
-  { id: '20', nombre: 'Green Bowl TJ',             categoria: 'restaurante', ciudad: 'tijuana', direccion: 'Zona Río, Tijuana',                                       descripcion: 'Bowls saludables, jugos y proteínas. Cocina fit en zona Río.',                              imagen_url: null, activo: true, visitas_permitidas_por_mes: 12 },
-]
+import { createClient } from '@/lib/supabase/client'
+import type { Negocio, Ciudad, Categoria, DiaSemana } from '@/types'
+import { CIUDAD_LABELS, CATEGORIA_LABELS, DIA_LABELS, formatHora } from '@/types'
 
 const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 const CATEGORIAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
 
+interface HorarioDisponible {
+  id: string
+  dia_semana: DiaSemana
+  hora_inicio: string
+  hora_fin: string
+  capacidad_total: number
+  spots_disponibles: number
+  spots_ocupados: number
+}
+
+function hoyLocalISO() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().split('T')[0]
+}
+
 export default function ExplorarPage() {
+  const [negocios, setNegocios] = useState<Negocio[]>([])
+  const [cargando, setCargando] = useState(true)
   const [ciudadFiltro, setCiudadFiltro] = useState<Ciudad | 'todas'>('todas')
   const [categoriaFiltro, setCategoriaFiltro] = useState<Categoria | 'todas'>('todas')
 
-  const negocios = NEGOCIOS_MOCK.filter(n => {
-    const matchCiudad = ciudadFiltro === 'todas' || n.ciudad === ciudadFiltro
-    const matchCategoria = categoriaFiltro === 'todas' || n.categoria === categoriaFiltro
-    return matchCiudad && matchCategoria
-  })
+  const [negocioSeleccionado, setNegocioSeleccionado] = useState<Negocio | null>(null)
+  const [fechaReserva, setFechaReserva] = useState(hoyLocalISO())
+  const [horarios, setHorarios] = useState<HorarioDisponible[]>([])
+  const [cargandoHorarios, setCargandoHorarios] = useState(false)
+  const [reservandoHorarioId, setReservandoHorarioId] = useState<string | null>(null)
+  const [mensajeModal, setMensajeModal] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+
+  useEffect(() => {
+    let activo = true
+    async function cargarNegocios() {
+      setCargando(true)
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('negocios')
+        .select('id, nombre, categoria, ciudad, direccion, descripcion, imagen_url, instagram_handle, activo, visitas_permitidas_por_mes, requiere_reserva')
+        .eq('activo', true)
+        .order('ciudad')
+        .order('nombre')
+
+      if (!activo) return
+      setNegocios((data ?? []) as Negocio[])
+      setCargando(false)
+    }
+    cargarNegocios()
+    return () => { activo = false }
+  }, [])
+
+  const cargarHorarios = useCallback(async (negocioId: string, fecha: string) => {
+    setCargandoHorarios(true)
+    setMensajeModal(null)
+    try {
+      const res = await fetch(`/api/negocio/horarios?negocio_id=${encodeURIComponent(negocioId)}&fecha=${encodeURIComponent(fecha)}`)
+      const data = await res.json()
+      if (!res.ok) {
+        setMensajeModal({ tipo: 'error', texto: data.error ?? 'No se pudieron cargar horarios' })
+        setHorarios([])
+      } else {
+        setHorarios((data.horarios ?? []) as HorarioDisponible[])
+      }
+    } catch {
+      setMensajeModal({ tipo: 'error', texto: 'Error de conexión al consultar horarios' })
+      setHorarios([])
+    } finally {
+      setCargandoHorarios(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!negocioSeleccionado) return
+    if (negocioSeleccionado.requiere_reserva === false) return
+    const id = setTimeout(() => {
+      void cargarHorarios(negocioSeleccionado.id, fechaReserva)
+    }, 0)
+    return () => clearTimeout(id)
+  }, [negocioSeleccionado, fechaReserva, cargarHorarios])
+
+  const negociosFiltrados = useMemo(() => {
+    return negocios.filter(n => {
+      const matchCiudad = ciudadFiltro === 'todas' || n.ciudad === ciudadFiltro
+      const matchCategoria = categoriaFiltro === 'todas' || n.categoria === categoriaFiltro
+      return matchCiudad && matchCategoria
+    })
+  }, [negocios, ciudadFiltro, categoriaFiltro])
+
+  async function reservarHorario(horarioId: string) {
+    setReservandoHorarioId(horarioId)
+    setMensajeModal(null)
+    try {
+      const res = await fetch('/api/reservaciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ horario_id: horarioId, fecha: fechaReserva }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setMensajeModal({ tipo: 'error', texto: data.error ?? 'No se pudo crear la reservación' })
+      } else {
+        setMensajeModal({ tipo: 'ok', texto: 'Reservación creada con éxito' })
+        if (negocioSeleccionado) {
+          cargarHorarios(negocioSeleccionado.id, fechaReserva)
+        }
+      }
+    } catch {
+      setMensajeModal({ tipo: 'error', texto: 'Error de conexión al reservar' })
+    } finally {
+      setReservandoHorarioId(null)
+    }
+  }
+
+  function abrirModal(negocio: Negocio) {
+    setNegocioSeleccionado(negocio)
+    setFechaReserva(hoyLocalISO())
+    setMensajeModal(null)
+    setHorarios([])
+  }
 
   const btnBase = 'shrink-0 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wide transition-colors'
   const btnActive = 'bg-[#0A0A0A] text-white'
@@ -59,27 +137,22 @@ export default function ExplorarPage() {
       <div className="bg-white px-4 py-6 shadow-sm">
         <h1 className="text-2xl font-black tracking-tight text-[#0A0A0A]">Explorar</h1>
         <p className="mt-1 text-sm text-[#888]">
-          {negocios.length} {negocios.length === 1 ? 'lugar' : 'lugares'} disponibles
+          {negociosFiltrados.length} {negociosFiltrados.length === 1 ? 'lugar' : 'lugares'} disponibles
         </p>
       </div>
 
-      {/* Filtros */}
       <div className="sticky top-0 z-10 border-b border-[#E5E5E5] bg-white px-4 py-3">
         <div className="flex flex-col gap-2.5">
-          <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
-            <button onClick={() => setCiudadFiltro('todas')} className={`${btnBase} ${ciudadFiltro === 'todas' ? btnActive : btnInactive}`}>
-              Todas
-            </button>
+          <div className="flex gap-2 overflow-x-auto pb-0.5">
+            <button onClick={() => setCiudadFiltro('todas')} className={`${btnBase} ${ciudadFiltro === 'todas' ? btnActive : btnInactive}`}>Todas</button>
             {CIUDADES.map(c => (
               <button key={c} onClick={() => setCiudadFiltro(c)} className={`${btnBase} ${ciudadFiltro === c ? btnActive : btnInactive}`}>
                 {CIUDAD_LABELS[c]}
               </button>
             ))}
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
-            <button onClick={() => setCategoriaFiltro('todas')} className={`${btnBase} ${categoriaFiltro === 'todas' ? 'bg-[#6B4FE8] text-white' : btnInactive}`}>
-              Todo
-            </button>
+          <div className="flex gap-2 overflow-x-auto pb-0.5">
+            <button onClick={() => setCategoriaFiltro('todas')} className={`${btnBase} ${categoriaFiltro === 'todas' ? 'bg-[#6B4FE8] text-white' : btnInactive}`}>Todo</button>
             {CATEGORIAS.map(c => (
               <button key={c} onClick={() => setCategoriaFiltro(c)} className={`${btnBase} ${categoriaFiltro === c ? 'bg-[#6B4FE8] text-white' : btnInactive}`}>
                 {CATEGORIA_LABELS[c]}
@@ -89,21 +162,118 @@ export default function ExplorarPage() {
         </div>
       </div>
 
-      {/* Grid */}
       <div className="p-4">
-        {negocios.length === 0 ? (
+        {cargando ? (
+          <p className="mt-8 text-center text-sm text-[#888]">Cargando negocios...</p>
+        ) : negociosFiltrados.length === 0 ? (
           <div className="mt-16 text-center">
             <p className="font-bold text-[#0A0A0A]">Sin resultados</p>
             <p className="mt-1 text-sm text-[#888]">Prueba con otros filtros.</p>
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {negocios.map(negocio => (
-              <NegocioCard key={negocio.id} negocio={negocio} />
+            {negociosFiltrados.map(negocio => (
+              <div key={negocio.id} className="overflow-hidden rounded-xl border border-[#E5E5E5] bg-white">
+                <NegocioCard negocio={negocio} />
+                <div className="px-4 pb-4">
+                  {negocio.requiere_reserva === false ? (
+                    <p className="rounded-lg bg-[#E8FF47]/20 px-3 py-2 text-xs font-semibold text-[#0A0A0A]">
+                      Acceso directo (sin reservación)
+                    </p>
+                  ) : (
+                    <button
+                      onClick={() => abrirModal(negocio)}
+                      className="w-full rounded-lg bg-[#6B4FE8] py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6]"
+                    >
+                      Ver horarios y reservar
+                    </button>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {negocioSeleccionado && (
+        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-md rounded-xl border border-[#E5E5E5] bg-white p-4 shadow-xl">
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Reservar</p>
+                <h2 className="text-lg font-black text-[#0A0A0A]">{negocioSeleccionado.nombre}</h2>
+              </div>
+              <button
+                onClick={() => setNegocioSeleccionado(null)}
+                className="rounded-md border border-[#E5E5E5] px-2 py-1 text-xs font-bold text-[#888] hover:text-[#0A0A0A]"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            {negocioSeleccionado.requiere_reserva === false ? (
+              <p className="rounded-lg bg-[#E8FF47]/20 px-3 py-2 text-sm text-[#0A0A0A]">
+                Este negocio permite acceso directo sin reservar.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-black uppercase tracking-widest text-[#888]">Fecha</label>
+                  <input
+                    type="date"
+                    value={fechaReserva}
+                    min={hoyLocalISO()}
+                    onChange={e => setFechaReserva(e.target.value)}
+                    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8] focus:ring-1 focus:ring-[#6B4FE8]/20"
+                  />
+                </div>
+
+                {mensajeModal && (
+                  <div className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                    mensajeModal.tipo === 'ok'
+                      ? 'bg-[#E8FF47]/20 text-[#0A0A0A] ring-1 ring-[#E8FF47]'
+                      : 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                  }`}>
+                    {mensajeModal.texto}
+                  </div>
+                )}
+
+                {cargandoHorarios ? (
+                  <p className="text-sm text-[#888]">Cargando horarios...</p>
+                ) : horarios.length === 0 ? (
+                  <p className="text-sm text-[#888]">Sin horarios disponibles para esa fecha.</p>
+                ) : (
+                  <div className="max-h-64 space-y-2 overflow-auto pr-1">
+                    {horarios.map(h => (
+                      <div key={h.id} className="flex items-center gap-3 rounded-lg border border-[#E5E5E5] px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-[#0A0A0A]">
+                            {DIA_LABELS[h.dia_semana]} · {formatHora(h.hora_inicio)} – {formatHora(h.hora_fin)}
+                          </p>
+                          <p className="text-xs text-[#888]">
+                            {h.spots_disponibles} de {h.capacidad_total} lugares disponibles
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => reservarHorario(h.id)}
+                          disabled={h.spots_disponibles <= 0 || reservandoHorarioId === h.id}
+                          className="shrink-0 rounded-md bg-[#0A0A0A] px-2.5 py-1.5 text-[11px] font-bold text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {h.spots_disponibles <= 0
+                            ? 'Lleno'
+                            : reservandoHorarioId === h.id
+                              ? 'Reservando...'
+                              : 'Reservar'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

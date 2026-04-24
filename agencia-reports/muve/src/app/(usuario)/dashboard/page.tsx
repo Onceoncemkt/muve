@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import QRDisplay from '@/components/QRDisplay'
 import BotonPortal from '@/components/BotonPortal'
+import MisReservaciones from '@/components/MisReservaciones'
 import { CIUDAD_LABELS } from '@/types'
 import type { User } from '@/types'
 
@@ -58,12 +60,12 @@ export default async function DashboardPage({
             <p className="text-sm font-bold text-[#0A0A0A]">
               Tu cuenta está lista. Activa tu membresía para empezar.
             </p>
-            <a
+            <Link
               href="/#planes"
               className="shrink-0 rounded-lg bg-[#0A0A0A] px-4 py-1.5 text-xs font-bold text-[#E8FF47] hover:bg-[#222] transition-colors"
             >
               Ver planes
-            </a>
+            </Link>
           </div>
         </div>
       )}
@@ -105,22 +107,25 @@ export default async function DashboardPage({
         </div>
       </div>
 
+      {/* Mis reservaciones */}
+      <MisReservaciones />
+
       {/* Accesos rápidos */}
       <div className="mt-4 grid grid-cols-2 gap-3 px-4">
-        <a
+        <Link
           href="/explorar"
           className="flex flex-col gap-2 rounded-xl border border-[#E5E5E5] bg-white p-4 transition-shadow hover:shadow-sm"
         >
           <span className="text-xs font-black uppercase tracking-widest text-[#6B4FE8]">Explorar</span>
           <span className="text-sm font-semibold text-[#0A0A0A]">Negocios cerca de ti</span>
-        </a>
-        <a
+        </Link>
+        <Link
           href="/historial"
           className="flex flex-col gap-2 rounded-xl border border-[#E5E5E5] bg-white p-4 transition-shadow hover:shadow-sm"
         >
           <span className="text-xs font-black uppercase tracking-widest text-[#6B4FE8]">Historial</span>
           <span className="text-sm font-semibold text-[#0A0A0A]">Tus visitas registradas</span>
-        </a>
+        </Link>
       </div>
 
       {/* Gestión de membresía */}
@@ -130,12 +135,12 @@ export default async function DashboardPage({
         </div>
       ) : (
         <div className="mt-4 px-4">
-          <a
+          <Link
             href="/#planes"
             className="flex w-full items-center justify-center rounded-lg bg-[#6B4FE8] py-4 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6]"
           >
             Activar membresía
-          </a>
+          </Link>
         </div>
       )}
     </div>
