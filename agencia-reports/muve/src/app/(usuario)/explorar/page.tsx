@@ -1,7 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CATEGORIA_LABELS, type Negocio, type PlanMembresia } from '@/types'
+import {
+  CATEGORIA_LABELS,
+  CIUDAD_LABELS,
+  type Ciudad,
+  type Negocio,
+  type PlanMembresia,
+} from '@/types'
 import {
   CATEGORIAS_VISIBLES_POR_PLAN,
   PLAN_LABELS,
@@ -13,6 +19,14 @@ type EstadoPlanUsuario = {
   plan_activo: boolean
   plan: PlanMembresia | null
 }
+type FiltroCategoria = 'todas' | 'gimnasio' | 'clases' | 'wellness'
+
+const FILTROS_CATEGORIA: Array<{ value: FiltroCategoria; label: string }> = [
+  { value: 'todas', label: 'Todas' },
+  { value: 'gimnasio', label: 'Gimnasio' },
+  { value: 'clases', label: 'Clases' },
+  { value: 'wellness', label: 'Wellness' },
+]
 
 async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
   try {
@@ -38,6 +52,8 @@ export default function ExplorarPage() {
   const [cargando, setCargando] = useState(true)
   const [planActivo, setPlanActivo] = useState(false)
   const [planUsuario, setPlanUsuario] = useState<PlanMembresia | null>(null)
+  const [filtroCiudad, setFiltroCiudad] = useState<Ciudad | 'todas'>('todas')
+  const [filtroCategoria, setFiltroCategoria] = useState<FiltroCategoria>('todas')
 
   useEffect(() => {
     let activo = true
@@ -79,13 +95,32 @@ export default function ExplorarPage() {
   }, [])
 
   const planEfectivo = planActivo ? (planUsuario ?? 'basico') : null
+  const ciudadesDisponibles = useMemo(() => {
+    const ciudadesUnicas = Array.from(new Set(negocios.map((negocio) => negocio.ciudad)))
+    return ciudadesUnicas.sort((a, b) =>
+      CIUDAD_LABELS[a].localeCompare(CIUDAD_LABELS[b], 'es')
+    )
+  }, [negocios])
 
   const negociosFiltrados = useMemo(() => {
-    if (!planEfectivo) return negocios
+    let resultado = planEfectivo
+      ? negocios.filter((negocio) =>
+          new Set(CATEGORIAS_VISIBLES_POR_PLAN[planEfectivo]).has(negocio.categoria)
+        )
+      : negocios
 
-    const categoriasPermitidas = new Set(CATEGORIAS_VISIBLES_POR_PLAN[planEfectivo])
-    return negocios.filter((negocio) => categoriasPermitidas.has(negocio.categoria))
-  }, [negocios, planEfectivo])
+    if (filtroCiudad !== 'todas') {
+      resultado = resultado.filter((negocio) => negocio.ciudad === filtroCiudad)
+    }
+
+    if (filtroCategoria === 'wellness') {
+      resultado = resultado.filter((negocio) => negocio.categoria === 'estetica')
+    } else if (filtroCategoria !== 'todas') {
+      resultado = resultado.filter((negocio) => negocio.categoria === filtroCategoria)
+    }
+
+    return resultado
+  }, [negocios, planEfectivo, filtroCiudad, filtroCategoria])
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
@@ -97,6 +132,56 @@ export default function ExplorarPage() {
         <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-[#6B4FE8]">
           {planEfectivo ? `Plan ${PLAN_LABELS[planEfectivo]}` : 'Sin membresía activa'}
         </p>
+
+        <div className="mt-4 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#777]">
+            Filtrar por
+          </p>
+
+          <div className="mt-2">
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#555]">
+              Ciudad
+            </label>
+            <select
+              value={filtroCiudad}
+              onChange={(event) => setFiltroCiudad(event.target.value as Ciudad | 'todas')}
+              className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+            >
+              <option value="todas">Todas las ciudades</option>
+              {ciudadesDisponibles.map((ciudad) => (
+                <option key={ciudad} value={ciudad}>
+                  {CIUDAD_LABELS[ciudad]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mt-3">
+            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-[#555]">
+              Categoría
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {FILTROS_CATEGORIA.map((categoria) => {
+                const activa = filtroCategoria === categoria.value
+
+                return (
+                  <button
+                    key={categoria.value}
+                    type="button"
+                    onClick={() => setFiltroCategoria(categoria.value)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                      activa
+                        ? 'bg-[#6B4FE8] text-white'
+                        : 'border border-[#E5E5E5] bg-white text-[#555] hover:border-[#6B4FE8] hover:text-[#6B4FE8]'
+                    }`}
+                  >
+                    {categoria.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="p-4">
@@ -128,7 +213,7 @@ export default function ExplorarPage() {
                       <span className="font-semibold text-[#0A0A0A]">Categoría:</span> {CATEGORIA_LABELS[negocio.categoria]}
                     </p>
                     <p>
-                      <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {negocio.ciudad}
+                      <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {CIUDAD_LABELS[negocio.ciudad]}
                     </p>
                     <p>
                       <span className="font-semibold text-[#0A0A0A]">Dirección:</span> {negocio.direccion}
