@@ -3,27 +3,40 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --once-whitesmoke: 242 242 242;
+  --once-violet: 240 125 242;
+  --once-midnight: 0 3 38;
+  --once-dodger: 30 100 242;
+  --background: var(--once-whitesmoke);
+  --foreground: var(--once-midnight);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow-soft: 0 10px 30px rgba(0, 3, 38, 0.06);
+  --shadow-card: 0 6px 18px rgba(0, 3, 38, 0.08);
+  --font-brand: "Anderson Grotesk Black", var(--font-body), sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+@font-face {
+  font-family: "Anderson Grotesk Black";
+  src: url("/brand/anderson-grotesk-black.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 900;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: rgb(var(--foreground));
+  background: rgb(var(--background));
+  letter-spacing: 0.01em;
+}
+
+h1,
+h2,
+h3,
+.font-brand {
+  font-family: var(--font-brand);
 }
 
 @layer utilities {

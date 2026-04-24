@@ -103,17 +103,20 @@ export default async function AdminPage({
 }: {
   searchParams: Promise<{ q?: string }>
 }) {
+  const adminPreviewEnabled = process.env.NODE_ENV === 'development' && process.env.PREVIEW_ADMIN === 'true'
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  const { data: perfilAdmin } = await supabase
-    .from('users')
-    .select('rol')
-    .eq('id', user.id)
-    .single<{ rol: Rol }>()
-  const rolAdmin = normalizarRol(perfilAdmin?.rol) ?? rolDesdeAuth(user)
-  if (rolAdmin !== 'admin') redirect('/dashboard')
+  if (!adminPreviewEnabled) {
+    if (!user) redirect('/login')
+    const { data: perfilAdmin } = await supabase
+      .from('users')
+      .select('rol')
+      .eq('id', user.id)
+      .single<{ rol: Rol }>()
+    const rolAdmin = normalizarRol(perfilAdmin?.rol) ?? rolDesdeAuth(user)
+    if (rolAdmin !== 'admin') redirect('/dashboard')
+  }
 
   const params = await searchParams
   const q = params.q?.trim() ?? ''
@@ -258,6 +261,11 @@ export default async function AdminPage({
             <p className="mt-1 text-sm text-white/50">
               MUVET · {new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
             </p>
+            {adminPreviewEnabled && (
+              <p className="mt-2 inline-flex rounded-md bg-[#E8FF47]/20 px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-[#E8FF47]">
+                Preview local
+              </p>
+            )}
           </div>
           <BotonCerrarSesion className="shrink-0" />
         </div>

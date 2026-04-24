@@ -8,10 +8,31 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      backgroundImage: {
-        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-        "gradient-conic":
-          "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
+      colors: {
+        once: {
+          whitesmoke: "#f2f2f2",
+          violet: "#f07df2",
+          midnight: "#000326",
+          dodger: "#1E64F2",
+        },
+      },
+      fontFamily: {
+        brand: ["var(--font-brand)", "var(--font-body)", "sans-serif"],
+        body: ["var(--font-body)", "sans-serif"],
+      },
+      borderRadius: {
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+        xl: "var(--radius-xl)",
+      },
+      boxShadow: {
+        soft: "var(--shadow-soft)",
+        card: "var(--shadow-card)",
+      },
+      spacing: {
+        4.5: "1.125rem",
+        18: "4.5rem",
       },
     },
   },

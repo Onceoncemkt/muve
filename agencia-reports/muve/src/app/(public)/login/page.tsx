@@ -32,6 +32,7 @@ export default function LoginPage() {
       const rolResponse = await fetch('/api/auth/rol', {
         method: 'GET',
         cache: 'no-store',
+credentials: 'include',
       })
       const rolData = rolResponse.ok
         ? await rolResponse.json() as { rol?: 'admin' | 'staff' | 'usuario' }

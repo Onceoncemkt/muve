@@ -1,0 +1,36 @@
+ONCE ONCE BRANDING GUIDE
+1) Brand assets directory
+- Place all official brand assets in: public/brand
+- Expected files:
+  - public/brand/logo-once-once.svg (positive logo for light backgrounds)
+  - public/brand/logo-once-once-dark.svg (negative logo for dark backgrounds)
+  - public/brand/logo-once-once-icon.svg (icon/compact use)
+  - public/brand/anderson-grotesk-black.woff2 (primary local font)
+
+2) Typography
+- Primary: Anderson Grotesk Black (local @font-face from /public/brand/anderson-grotesk-black.woff2)
+- Secondary: Poppins (Google Fonts via next/font)
+- Fallback behavior:
+  - If the Anderson file is missing or unavailable, headings automatically fall back to Poppins.
+
+3) Color palette
+- White Smoke: #f2f2f2
+- Violet: #f07df2
+- Midnight Blue: #000326
+- Dodger Blue: #1E64F2
+
+4) Tokenized configuration
+- Tailwind brand colors live in tailwind.config.ts under theme.extend.colors.once
+- Typography, radius, and shadow tokens are defined in src/app/globals.css with CSS variables.
+
+5) Usage conventions
+- Use logo-once-once.svg on light surfaces.
+- Use logo-once-once-dark.svg on dark surfaces.
+- Use logo-once-once-icon.svg for compact controls and tight headers.
+
+6) Current integrations
+- Login and dashboard shell use Once Once logos.
+- Sidebar uses negative logo over Midnight Blue.
+- Top header uses icon logo.
+- Receipt PDF includes Once Once logo and palette.
+- Emails include branded header/logo and brand colors.
