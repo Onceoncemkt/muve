@@ -2,10 +2,21 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Rol } from '@/types'
 
-const RUTAS_USUARIO = ['/dashboard', '/explorar', '/historial']
-const RUTAS_STAFF   = ['/validar', '/negocio']
-const RUTAS_ADMIN   = ['/admin']
-const RUTAS_AUTH    = ['/login', '/registro']
+const RUTAS_DASHBOARD = ['/dashboard']
+const RUTAS_USUARIO = ['/explorar', '/historial']
+const RUTAS_STAFF = ['/validar', '/negocio']
+const RUTAS_ADMIN = ['/admin']
+const RUTAS_AUTH = ['/login', '/registro']
+
+function startsWithRoute(pathname: string, route: string): boolean {
+  return pathname === route || pathname.startsWith(`${route}/`)
+}
+
+function panelPorRol(rol: Rol): string {
+  if (rol === 'staff') return '/negocio/dashboard'
+  if (rol === 'admin') return '/admin'
+  return '/dashboard'
+}
 
 // Propaga las cookies de sesión de supabaseResponse al redirect.
 // Supabase puede haber refrescado el token durante getUser() — si se pierde
@@ -43,12 +54,14 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const pathname = request.nextUrl.pathname
 
-  const esRutaUsuario   = RUTAS_USUARIO.some(r => pathname.startsWith(r))
-  const esRutaStaff     = RUTAS_STAFF.some(r => pathname.startsWith(r))
-  const esRutaAdmin     = RUTAS_ADMIN.some(r => pathname.startsWith(r))
-  const esRutaProtegida = esRutaUsuario || esRutaStaff || esRutaAdmin
+  const esRutaDashboard = RUTAS_DASHBOARD.some(r => startsWithRoute(pathname, r))
+  const esRutaUsuario = RUTAS_USUARIO.some(r => startsWithRoute(pathname, r))
+  const esRutaStaff = RUTAS_STAFF.some(r => startsWithRoute(pathname, r))
+  const esRutaAdmin = RUTAS_ADMIN.some(r => startsWithRoute(pathname, r))
+  const esRutaAuth = RUTAS_AUTH.some(r => startsWithRoute(pathname, r))
+  const esRutaProtegida = esRutaDashboard || esRutaUsuario || esRutaStaff || esRutaAdmin
 
-  // Sin sesión → /login
+  // Sin sesión en ruta protegida → /login
   if (esRutaProtegida && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
@@ -56,40 +69,45 @@ export async function middleware(request: NextRequest) {
     return redirectWithSession(url, supabaseResponse)
   }
 
-  // Con sesión en ruta de auth → /dashboard
-  if (user && RUTAS_AUTH.some(r => pathname.startsWith(r))) {
+  if (!user) return supabaseResponse
+
+  // Leer rol para redirecciones por panel correcto
+  const { data: perfil } = await supabase
+    .from('users')
+    .select('rol')
+    .eq('id', user.id)
+    .single()
+  const rol: Rol = perfil?.rol ?? 'usuario'
+  const panelCorrecto = panelPorRol(rol)
+
+  // Con sesión en ruta auth → panel correcto por rol
+  if (esRutaAuth) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = panelCorrecto
     return redirectWithSession(url, supabaseResponse)
   }
 
-  // Verificar rol para rutas de staff/admin
-  if (user && (esRutaStaff || esRutaAdmin)) {
-    const { data: perfil } = await supabase
-      .from('users')
-      .select('rol')
-      .eq('id', user.id)
-      .single()
-
-    const rol: Rol = perfil?.rol ?? 'usuario'
-
-    if (esRutaAdmin && rol !== 'admin') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return redirectWithSession(url, supabaseResponse)
-    }
-
-    if (esRutaStaff && rol !== 'staff' && rol !== 'admin') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return redirectWithSession(url, supabaseResponse)
-    }
+  // /admin/* solo admin
+  if (esRutaAdmin && rol !== 'admin') {
+    const url = request.nextUrl.clone()
+    url.pathname = panelCorrecto
+    return redirectWithSession(url, supabaseResponse)
   }
 
-  // El estado de membresía (plan_activo) NO se verifica en el middleware:
-  // - los redirects de Stripe llegan a /dashboard antes de que el webhook active el plan
-  // - los recién registrados no tienen plan aún pero deben ver el dashboard
-  // - el dashboard page maneja el estado sin_membresia con un banner de suscripción
+  // /negocio/* y /validar solo staff/admin
+  if (esRutaStaff && rol !== 'staff' && rol !== 'admin') {
+    const url = request.nextUrl.clone()
+    url.pathname = panelCorrecto
+    return redirectWithSession(url, supabaseResponse)
+  }
+
+  // /dashboard/* solo usuario/admin
+  if (esRutaDashboard && rol !== 'usuario' && rol !== 'admin') {
+    const url = request.nextUrl.clone()
+    url.pathname = panelCorrecto
+    return redirectWithSession(url, supabaseResponse)
+  }
+
   return supabaseResponse
 }
 

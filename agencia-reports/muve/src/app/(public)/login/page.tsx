@@ -3,6 +3,13 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import type { Rol } from '@/types'
+
+function panelPorRol(rol: Rol | null | undefined): string {
+  if (rol === 'staff') return '/negocio/dashboard'
+  if (rol === 'admin') return '/admin'
+  return '/dashboard'
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -17,7 +24,7 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
       if (error) {
         setError('Correo o contraseña incorrectos')
@@ -25,7 +32,17 @@ export default function LoginPage() {
         return
       }
 
-      window.location.href = '/dashboard'
+      let destino = '/dashboard'
+      if (data.user?.id) {
+        const { data: perfil } = await supabase
+          .from('users')
+          .select('rol')
+          .eq('id', data.user.id)
+          .single<{ rol: Rol }>()
+        destino = panelPorRol(perfil?.rol)
+      }
+
+      window.location.href = destino
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
       setCargando(false)
