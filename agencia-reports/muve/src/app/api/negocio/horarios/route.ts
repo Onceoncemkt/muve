@@ -101,16 +101,39 @@ export async function POST(request: NextRequest) {
     dia_semana?: DiaSemana
     hora_inicio?: string
     hora_fin?: string
-    capacidad_total?: number
+    capacidad_total?: number | string
   }
 
-  if (!negocio_id || !dia_semana || !hora_inicio || !hora_fin || !capacidad_total) {
-    return NextResponse.json({ error: 'Todos los campos son requeridos' }, { status: 400 })
+  if (!negocio_id || !dia_semana || !hora_inicio || !hora_fin) {
+    return NextResponse.json({ error: 'negocio_id, dia_semana, hora_inicio y hora_fin son requeridos' }, { status: 400 })
+  }
+
+  let capacidadFinal: number | null = null
+  if (typeof capacidad_total === 'number' && Number.isFinite(capacidad_total)) {
+    capacidadFinal = Math.trunc(capacidad_total)
+  } else if (typeof capacidad_total === 'string' && capacidad_total.trim().length > 0) {
+    const parsed = Number.parseInt(capacidad_total, 10)
+    if (Number.isFinite(parsed)) capacidadFinal = parsed
+  }
+
+  if (capacidadFinal !== null && capacidadFinal < 1) {
+    return NextResponse.json({ error: 'capacidad_total debe ser mayor a 0' }, { status: 400 })
+  }
+
+  if (capacidadFinal === null) {
+    const { data: negocio } = await db
+      .from('negocios')
+      .select('capacidad_default')
+      .eq('id', negocio_id)
+      .maybeSingle<{ capacidad_default: number | null }>()
+    capacidadFinal = negocio?.capacidad_default && negocio.capacidad_default > 0
+      ? negocio.capacidad_default
+      : 10
   }
 
   const { data: nuevo, error } = await db
     .from('horarios')
-    .insert({ negocio_id, dia_semana, hora_inicio, hora_fin, capacidad_total })
+    .insert({ negocio_id, dia_semana, hora_inicio, hora_fin, capacidad_total: capacidadFinal })
     .select('*')
     .single()
 

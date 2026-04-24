@@ -26,8 +26,8 @@ export interface Negocio {
   imagen_url: string | null
   instagram_handle?: string | null
   requiere_reserva?: boolean
+  capacidad_default?: number | null
   activo: boolean
-  visitas_permitidas_por_mes: number
 }
 
 export interface Horario {

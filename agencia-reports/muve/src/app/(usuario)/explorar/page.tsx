@@ -48,7 +48,7 @@ export default function ExplorarPage() {
       const supabase = createClient()
       const { data } = await supabase
         .from('negocios')
-        .select('id, nombre, categoria, ciudad, direccion, descripcion, imagen_url, instagram_handle, activo, visitas_permitidas_por_mes, requiere_reserva')
+        .select('id, nombre, categoria, ciudad, direccion, descripcion, imagen_url, instagram_handle, activo, requiere_reserva, capacidad_default')
         .eq('activo', true)
         .order('ciudad')
         .order('nombre')

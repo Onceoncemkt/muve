@@ -38,7 +38,7 @@ type NegocioAdmin = {
   descripcion: string | null
   instagram_handle: string | null
   requiere_reserva: boolean
-  visitas_permitidas_por_mes: number
+  capacidad_default: number | null
   activo: boolean
 }
 
@@ -150,7 +150,7 @@ export default async function AdminPage({
       .order('fecha', { ascending: false }),
     supabase
       .from('negocios')
-      .select('id, nombre, ciudad, categoria, direccion, descripcion, instagram_handle, requiere_reserva, visitas_permitidas_por_mes, activo')
+      .select('id, nombre, ciudad, categoria, direccion, descripcion, instagram_handle, requiere_reserva, capacidad_default, activo')
       .order('ciudad')
       .order('nombre'),
   ])
@@ -613,29 +613,34 @@ export default async function AdminPage({
                                         className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
                                       />
                                     </div>
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                        Visitas por mes
-                                      </label>
+                                    <div className="sm:col-span-2">
                                       <input
-                                        type="number"
-                                        name="visitas_permitidas_por_mes"
-                                        required
-                                        min={1}
-                                        defaultValue={negocio.visitas_permitidas_por_mes}
-                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                      />
-                                    </div>
-                                    <label className="sm:col-span-2 inline-flex items-center gap-2 rounded-md border border-white/10 bg-[#151515] px-2.5 py-2 text-xs text-white/80">
-                                      <input
+                                        id={`requiere-reserva-${negocio.id}`}
                                         type="checkbox"
                                         name="requiere_reserva"
                                         value="true"
                                         defaultChecked={negocio.requiere_reserva}
-                                        className="h-4 w-4 accent-[#6B4FE8]"
+                                        className="peer h-4 w-4 accent-[#6B4FE8]"
                                       />
-                                      Requiere reserva
-                                    </label>
+                                      <label
+                                        htmlFor={`requiere-reserva-${negocio.id}`}
+                                        className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
+                                      >
+                                        Requiere reserva
+                                      </label>
+                                      <div className="mt-2 hidden peer-checked:block">
+                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                          Capacidad por clase
+                                        </label>
+                                        <input
+                                          type="number"
+                                          name="capacidad_default"
+                                          min={1}
+                                          defaultValue={negocio.capacidad_default ?? 10}
+                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                        />
+                                      </div>
+                                    </div>
                                     <div className="sm:col-span-2 flex justify-end">
                                       <button
                                         type="submit"
@@ -760,43 +765,46 @@ export default async function AdminPage({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
-                      Instagram
-                    </label>
-                    <input
-                      type="text"
-                      name="instagram_handle"
-                      placeholder="usuario"
-                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
-                      Visitas por mes
-                    </label>
-                    <input
-                      type="number"
-                      name="visitas_permitidas_por_mes"
-                      required
-                      min={1}
-                      defaultValue={8}
-                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
-                    />
-                  </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                    Instagram
+                  </label>
+                  <input
+                    type="text"
+                    name="instagram_handle"
+                    placeholder="usuario"
+                    className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                  />
                 </div>
 
-                <label className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-[#151515] px-3 py-2 text-sm text-white/80">
+                <div>
                   <input
+                    id="nuevo-requiere-reserva"
                     type="checkbox"
                     name="requiere_reserva"
                     value="true"
                     defaultChecked
-                    className="h-4 w-4 accent-[#6B4FE8]"
+                    className="peer h-4 w-4 accent-[#6B4FE8]"
                   />
-                  Requiere reserva
-                </label>
+                  <label
+                    htmlFor="nuevo-requiere-reserva"
+                    className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-3 py-1.5 text-sm text-white/80"
+                  >
+                    Requiere reserva
+                  </label>
+                  <div className="mt-2 hidden peer-checked:block">
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                      Capacidad por clase
+                    </label>
+                    <input
+                      type="number"
+                      name="capacidad_default"
+                      min={1}
+                      defaultValue={10}
+                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                    />
+                  </div>
+                </div>
 
                 <button
                   type="submit"

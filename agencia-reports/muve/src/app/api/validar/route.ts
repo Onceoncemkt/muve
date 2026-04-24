@@ -50,27 +50,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ valido: false, error: 'Membresía inactiva' })
   }
 
-  // Verificar límite mensual
-  const inicioMes = new Date()
-  inicioMes.setDate(1)
-  inicioMes.setHours(0, 0, 0, 0)
-
-  const { count: visitasMes } = await supabase
-    .from('visitas')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', qrToken.user_id)
-    .eq('negocio_id', negocio_id)
-    .gte('fecha', inicioMes.toISOString())
 
   const { data: negocio } = await supabase
     .from('negocios')
-    .select('visitas_permitidas_por_mes, nombre')
+    .select('nombre')
     .eq('id', negocio_id)
     .single()
-
-  if ((visitasMes ?? 0) >= (negocio?.visitas_permitidas_por_mes ?? 8)) {
-    return NextResponse.json({ valido: false, error: 'Límite mensual alcanzado en este negocio' })
-  }
 
   // Registrar visita y marcar token como usado
   const [{ error: visitaError }] = await Promise.all([

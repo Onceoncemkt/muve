@@ -35,6 +35,7 @@ create table public.negocios (
   descripcion                 text,
   imagen_url                  text,
   instagram_handle            text,
+  capacidad_default           int default 10,
   activo                      boolean not null default true,
   visitas_permitidas_por_mes  int not null default 8
 );

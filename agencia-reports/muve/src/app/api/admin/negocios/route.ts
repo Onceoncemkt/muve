@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   const descripcionRaw = texto(formData.get('descripcion'))
   const instagramRaw = texto(formData.get('instagram_handle'))
   const requiereReservaRaw = texto(formData.get('requiere_reserva')).toLowerCase()
-  const visitasRaw = texto(formData.get('visitas_permitidas_por_mes'))
+  const capacidadDefaultRaw = texto(formData.get('capacidad_default'))
 
   const categoria = CATEGORIAS_VALIDAS.includes(categoriaRaw as Categoria)
     ? (categoriaRaw as Categoria)
@@ -72,9 +72,8 @@ export async function POST(request: NextRequest) {
   const ciudad = CIUDADES_VALIDAS.includes(ciudadRaw as Ciudad)
     ? (ciudadRaw as Ciudad)
     : null
-  const visitas = Number.parseInt(visitasRaw, 10)
 
-  if (!nombre || !categoria || !ciudad || !direccion || !Number.isFinite(visitas) || visitas < 1) {
+  if (!nombre || !categoria || !ciudad || !direccion) {
     return redireccionConEstado(
       request,
       nextPath,
@@ -86,6 +85,19 @@ export async function POST(request: NextRequest) {
   const instagramHandle = instagramRaw ? instagramRaw.replace(/^@+/, '') : null
   const descripcion = descripcionRaw || null
   const requiereReserva = ['true', 'on', '1', 'si', 'sí'].includes(requiereReservaRaw)
+  const capacidadDefaultParsed = Number.parseInt(capacidadDefaultRaw, 10)
+  const capacidadDefault = requiereReserva
+    ? (Number.isFinite(capacidadDefaultParsed) && capacidadDefaultParsed > 0 ? capacidadDefaultParsed : null)
+    : null
+
+  if (requiereReserva && !capacidadDefault) {
+    return redireccionConEstado(
+      request,
+      nextPath,
+      'error',
+      'Captura una capacidad por clase válida.'
+    )
+  }
 
   const { error } = await db
     .from('negocios')
@@ -97,7 +109,7 @@ export async function POST(request: NextRequest) {
       descripcion,
       instagram_handle: instagramHandle,
       requiere_reserva: requiereReserva,
-      visitas_permitidas_por_mes: visitas,
+      capacidad_default: capacidadDefault,
       activo: true,
     })
 

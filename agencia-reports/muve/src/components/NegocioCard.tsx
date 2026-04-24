@@ -50,7 +50,9 @@ export default function NegocioCard({ negocio }: { negocio: Negocio }) {
             {CATEGORIA_LABELS[negocio.categoria]}
           </span>
           <span className="shrink-0 text-[10px] text-[#888]">
-            {negocio.visitas_permitidas_por_mes} vis/mes
+            {negocio.requiere_reserva === false
+              ? 'Acceso directo'
+              : `${negocio.capacidad_default ?? 10} spots`}
           </span>
         </div>
 
