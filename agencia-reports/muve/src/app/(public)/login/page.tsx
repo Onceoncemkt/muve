@@ -3,19 +3,14 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import type { Rol } from '@/types'
-
-function panelPorRol(rol: Rol | null | undefined): string {
-  if (rol === 'staff') return '/negocio/dashboard'
-  if (rol === 'admin') return '/admin'
-  return '/dashboard'
-}
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
+  const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -31,18 +26,24 @@ export default function LoginPage() {
         setCargando(false)
         return
       }
-
-      let destino = '/dashboard'
-      if (data.user?.id) {
-        const { data: perfil } = await supabase
-          .from('users')
-          .select('rol')
-          .eq('id', data.user.id)
-          .single<{ rol: Rol }>()
-        destino = panelPorRol(perfil?.rol)
+      if (!data.user?.id) {
+        setError('No se pudo iniciar sesión. Intenta de nuevo.')
+        setCargando(false)
+        return
       }
+      const { data: userData } = await supabase
+        .from('users')
+        .select('rol')
+        .eq('id', data.user.id)
+        .single()
 
-      window.location.href = destino
+      if (userData?.rol === 'admin') {
+        router.push('/admin')
+      } else if (userData?.rol === 'staff') {
+        router.push('/negocio/dashboard')
+      } else {
+        router.push('/dashboard')
+      }
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
       setCargando(false)

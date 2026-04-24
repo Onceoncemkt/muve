@@ -23,6 +23,8 @@ export default async function DashboardPage({
     .select('*')
     .eq('id', user.id)
     .single<User>()
+  if (perfil?.rol === 'admin') redirect('/admin')
+  if (perfil?.rol === 'staff') redirect('/negocio/dashboard')
 
   const { count: totalVisitas } = await supabase
     .from('visitas')

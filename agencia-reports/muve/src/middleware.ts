@@ -1,21 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import type { Rol } from '@/types'
 
-const RUTAS_DASHBOARD = ['/dashboard']
-const RUTAS_USUARIO = ['/explorar', '/historial']
-const RUTAS_STAFF = ['/validar', '/negocio']
-const RUTAS_ADMIN = ['/admin']
+const RUTAS_PROTEGIDAS = ['/dashboard', '/explorar', '/historial', '/validar', '/negocio', '/admin']
 const RUTAS_AUTH = ['/login', '/registro']
 
 function startsWithRoute(pathname: string, route: string): boolean {
   return pathname === route || pathname.startsWith(`${route}/`)
-}
-
-function panelPorRol(rol: Rol): string {
-  if (rol === 'staff') return '/negocio/dashboard'
-  if (rol === 'admin') return '/admin'
-  return '/dashboard'
 }
 
 // Propaga las cookies de sesión de supabaseResponse al redirect.
@@ -53,15 +43,9 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
   const pathname = request.nextUrl.pathname
-
-  const esRutaDashboard = RUTAS_DASHBOARD.some(r => startsWithRoute(pathname, r))
-  const esRutaUsuario = RUTAS_USUARIO.some(r => startsWithRoute(pathname, r))
-  const esRutaStaff = RUTAS_STAFF.some(r => startsWithRoute(pathname, r))
-  const esRutaAdmin = RUTAS_ADMIN.some(r => startsWithRoute(pathname, r))
+  const esRutaProtegida = RUTAS_PROTEGIDAS.some(r => startsWithRoute(pathname, r))
   const esRutaAuth = RUTAS_AUTH.some(r => startsWithRoute(pathname, r))
-  const esRutaProtegida = esRutaDashboard || esRutaUsuario || esRutaStaff || esRutaAdmin
 
-  // Sin sesión en ruta protegida → /login
   if (esRutaProtegida && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
@@ -69,42 +53,9 @@ export async function middleware(request: NextRequest) {
     return redirectWithSession(url, supabaseResponse)
   }
 
-  if (!user) return supabaseResponse
-
-  // Leer rol para redirecciones por panel correcto
-  const { data: perfil } = await supabase
-    .from('users')
-    .select('rol')
-    .eq('id', user.id)
-    .single()
-  const rol: Rol = perfil?.rol ?? 'usuario'
-  const panelCorrecto = panelPorRol(rol)
-
-  // Con sesión en ruta auth → panel correcto por rol
-  if (esRutaAuth) {
+  if (esRutaAuth && user) {
     const url = request.nextUrl.clone()
-    url.pathname = panelCorrecto
-    return redirectWithSession(url, supabaseResponse)
-  }
-
-  // /admin/* solo admin
-  if (esRutaAdmin && rol !== 'admin') {
-    const url = request.nextUrl.clone()
-    url.pathname = panelCorrecto
-    return redirectWithSession(url, supabaseResponse)
-  }
-
-  // /negocio/* y /validar solo staff/admin
-  if (esRutaStaff && rol !== 'staff' && rol !== 'admin') {
-    const url = request.nextUrl.clone()
-    url.pathname = panelCorrecto
-    return redirectWithSession(url, supabaseResponse)
-  }
-
-  // /dashboard/* solo usuario/admin
-  if (esRutaDashboard && rol !== 'usuario' && rol !== 'admin') {
-    const url = request.nextUrl.clone()
-    url.pathname = panelCorrecto
+    url.pathname = '/dashboard'
     return redirectWithSession(url, supabaseResponse)
   }
 
