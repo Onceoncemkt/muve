@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { CIUDAD_LABELS, CATEGORIA_LABELS } from '@/types'
 import { stripe } from '@/lib/stripe'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
-import StaffNegocioAsignadoSelect from '@/components/admin/StaffNegocioAsignadoSelect'
+import NegocioStaffAsignarSelect from '@/components/admin/NegocioStaffAsignarSelect'
 import type { Ciudad, Categoria, Rol } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 
@@ -33,6 +33,13 @@ type UsuarioAdmin = {
   stripe_subscription_id: string | null
 }
 
+type UsuarioEnriquecido = UsuarioAdmin & {
+  planId: PlanId
+  plan: PlanConfig
+  usadasMes: number
+  permitidasMes: number
+}
+
 type NegocioAdmin = {
   id: string
   nombre: string
@@ -51,23 +58,6 @@ type VisitaRaw = {
   user_id: string
   negocio_id: string
   fecha: string
-  negocios: {
-    nombre: string
-    ciudad: Ciudad
-    categoria: Categoria
-  } | {
-    nombre: string
-    ciudad: Ciudad
-    categoria: Categoria
-  }[] | null
-}
-
-type VisitaDetalle = {
-  id: string
-  fecha: string
-  negocio: string
-  ciudad: Ciudad
-  categoria: Categoria
 }
 
 const PLANES: Record<PlanId, PlanConfig> = {
@@ -94,20 +84,6 @@ function resolverPlan(priceId: string | null | undefined, unitAmount: number | n
   if (unitAmount === PLANES.plus.precioMensual * 100) return 'plus'
   if (unitAmount === PLANES.total.precioMensual * 100) return 'total'
   return null
-}
-
-function normalizarNegocioRelacion(negocio: VisitaRaw['negocios']) {
-  if (!negocio) return null
-  if (Array.isArray(negocio)) return negocio[0] ?? null
-  return negocio
-}
-
-function formatearFecha(fecha: string) {
-  return new Date(fecha).toLocaleDateString('es-MX', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
 }
 
 function faltaColumnaRequiereReserva(error: { message?: string } | null | undefined) {
@@ -158,7 +134,7 @@ export default async function AdminPage({
       .order('fecha_registro', { ascending: false }),
     supabase
       .from('visitas')
-      .select('id, user_id, negocio_id, fecha, negocios(nombre, ciudad, categoria)')
+      .select('id, user_id, negocio_id, fecha')
       .gte('fecha', inicioMesIso)
       .order('fecha', { ascending: false }),
   ])
@@ -190,11 +166,17 @@ export default async function AdminPage({
       }))
     }
   }
+
   const usuarios = (usuariosRaw ?? []) as UsuarioAdmin[]
   const visitasMes = (visitasRaw ?? []) as VisitaRaw[]
-  const negociosParaAsignacion = negociosAfiliados
-    .map(negocio => ({ id: negocio.id, nombre: negocio.nombre, activo: negocio.activo }))
-  const negociosPorId = new Map(negociosAfiliados.map(negocio => [negocio.id, negocio]))
+
+  const conteoVisitasPorUsuario = new Map<string, number>()
+  for (const visita of visitasMes) {
+    conteoVisitasPorUsuario.set(
+      visita.user_id,
+      (conteoVisitasPorUsuario.get(visita.user_id) ?? 0) + 1
+    )
+  }
 
   const subscriptionIds = Array.from(
     new Set(
@@ -219,38 +201,7 @@ export default async function AdminPage({
     )
   }
 
-  const visitasPorUsuario = new Map<string, VisitaDetalle[]>()
-  const conteoVisitasPorUsuario = new Map<string, number>()
-  const conteoVisitasPorNegocio = new Map<string, number>()
-
-  for (const visita of visitasMes) {
-    const negocio = normalizarNegocioRelacion(visita.negocios)
-    if (!negocio) continue
-
-    const detalle: VisitaDetalle = {
-      id: visita.id,
-      fecha: visita.fecha,
-      negocio: negocio.nombre,
-      ciudad: negocio.ciudad,
-      categoria: negocio.categoria,
-    }
-
-    const usuarioVisitas = visitasPorUsuario.get(visita.user_id) ?? []
-    usuarioVisitas.push(detalle)
-    visitasPorUsuario.set(visita.user_id, usuarioVisitas)
-
-    conteoVisitasPorUsuario.set(
-      visita.user_id,
-      (conteoVisitasPorUsuario.get(visita.user_id) ?? 0) + 1
-    )
-
-    conteoVisitasPorNegocio.set(
-      visita.negocio_id,
-      (conteoVisitasPorNegocio.get(visita.negocio_id) ?? 0) + 1
-    )
-  }
-
-  const usuariosEnriquecidos = usuarios.map(usuario => {
+  const usuariosEnriquecidos: UsuarioEnriquecido[] = usuarios.map(usuario => {
     const stripePlanInfo = usuario.stripe_subscription_id
       ? stripePlanPorSubscription.get(usuario.stripe_subscription_id)
       : undefined
@@ -263,7 +214,6 @@ export default async function AdminPage({
     const plan = PLANES[planId]
     const usadasMes = conteoVisitasPorUsuario.get(usuario.id) ?? 0
     const permitidasMes = usuario.plan_activo ? plan.visitasPorMes : 0
-    const restantesMes = Math.max(permitidasMes - usadasMes, 0)
 
     return {
       ...usuario,
@@ -271,25 +221,43 @@ export default async function AdminPage({
       plan,
       usadasMes,
       permitidasMes,
-      restantesMes,
-      detalleVisitas: visitasPorUsuario.get(usuario.id) ?? [],
     }
   })
 
-  const usuariosFiltrados = qNormalizada
-    ? usuariosEnriquecidos.filter(usuario =>
+  const clientes = usuariosEnriquecidos.filter(usuario => usuario.rol === 'usuario')
+  const clientesFiltrados = qNormalizada
+    ? clientes.filter(usuario =>
       usuario.nombre.toLowerCase().includes(qNormalizada)
       || usuario.email.toLowerCase().includes(qNormalizada)
     )
-    : usuariosEnriquecidos
+    : clientes
 
-  const totalUsuariosActivos = usuariosEnriquecidos.filter(u => u.plan_activo).length
-  const totalUsuariosSinMembresia = usuariosEnriquecidos.length - totalUsuariosActivos
-  const ingresosMes = usuariosEnriquecidos
+  const staffUsuarios = usuariosEnriquecidos.filter(usuario => usuario.rol === 'staff')
+  const negociosPorId = new Map(negociosAfiliados.map(negocio => [negocio.id, negocio]))
+
+  const staffPorNegocio = new Map<string, UsuarioEnriquecido[]>()
+  for (const staff of staffUsuarios) {
+    if (!staff.negocio_id) continue
+    const actuales = staffPorNegocio.get(staff.negocio_id) ?? []
+    actuales.push(staff)
+    staffPorNegocio.set(staff.negocio_id, actuales)
+  }
+
+  const staffParaAsignar = staffUsuarios.map(staff => ({
+    id: staff.id,
+    nombre: staff.nombre,
+    email: staff.email,
+    negocioNombreActual: staff.negocio_id
+      ? (negociosPorId.get(staff.negocio_id)?.nombre ?? null)
+      : null,
+  }))
+
+  const totalUsuariosActivos = clientes.filter(u => u.plan_activo).length
+  const totalUsuariosSinMembresia = clientes.length - totalUsuariosActivos
+  const ingresosMes = clientes
     .filter(u => u.plan_activo)
     .reduce((acc, u) => acc + u.plan.precioMensual, 0)
   const visitasTotalesMes = visitasMes.length
-
 
   const nextPath = q ? `/admin?q=${encodeURIComponent(q)}` : '/admin'
 
@@ -305,18 +273,18 @@ export default async function AdminPage({
               MUVET
             </Link>
             <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href="/admin#usuarios"
+              <a
+                href="#usuarios"
                 className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
               >
                 Usuarios
-              </Link>
-              <Link
-                href="/admin#negocios"
+              </a>
+              <a
+                href="#negocios"
                 className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
               >
                 Negocios
-              </Link>
+              </a>
               <Link
                 href="/"
                 className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
@@ -341,16 +309,16 @@ export default async function AdminPage({
           </div>
         </div>
       </div>
+
       <div className="space-y-8 px-4 py-6">
-        {/* Métricas generales */}
         <section>
           <h2 className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-white/40">
             Métricas generales
           </h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-              { label: 'Total usuarios activos', value: totalUsuariosActivos },
-              { label: 'Total usuarios sin membresía', value: totalUsuariosSinMembresia },
+            {[
+              { label: 'Clientes activos', value: totalUsuariosActivos },
+              { label: 'Clientes sin membresía', value: totalUsuariosSinMembresia },
               { label: 'Ingresos del mes', value: `$${ingresosMes.toLocaleString('es-MX')}` },
               { label: 'Visitas totales del mes', value: visitasTotalesMes },
             ].map(stat => (
@@ -367,12 +335,17 @@ export default async function AdminPage({
           </div>
         </section>
 
-        {/* Usuarios */}
-        <section id="usuarios">
+        <section id="usuarios" className="scroll-mt-24">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xs font-black uppercase tracking-[0.18em] text-white/40">
-              Usuarios
-            </h2>
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-[0.18em] text-[#E8FF47]">
+                Clientes
+              </h2>
+              <p className="mt-1 text-xs text-white/50">
+                Usuarios finales con membresía.
+              </p>
+            </div>
+
             <form method="GET" className="flex w-full max-w-xl gap-2">
               <input
                 type="text"
@@ -405,72 +378,38 @@ export default async function AdminPage({
                   <th className="px-3 py-3">Nombre</th>
                   <th className="px-3 py-3">Email</th>
                   <th className="px-3 py-3">Ciudad</th>
-                  <th className="px-3 py-3">Rol</th>
                   <th className="px-3 py-3">Plan</th>
                   <th className="px-3 py-3">Plan activo</th>
-                  <th className="px-3 py-3">Registro</th>
-                  <th className="px-3 py-3">Visitas mes</th>
-                  <th className="px-3 py-3">Negocio asignado</th>
-                  <th className="px-3 py-3">Acción</th>
+                  <th className="px-3 py-3">Visitas este mes</th>
+                  <th className="px-3 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {usuariosFiltrados.map(usuario => {
-                  const negocioAsignado = usuario.negocio_id
-                    ? (negociosPorId.get(usuario.negocio_id) ?? null)
-                    : null
-
-                  return (
-                    <tr key={usuario.id} className="border-b border-white/10 text-sm text-white/90">
-                      <td className="px-3 py-3 font-semibold">{usuario.nombre}</td>
-                      <td className="px-3 py-3 text-white/70">{usuario.email}</td>
-                      <td className="px-3 py-3">{CIUDAD_LABELS[usuario.ciudad]}</td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={`rounded-md px-2 py-1 text-xs font-bold uppercase tracking-wide ${usuario.rol === 'admin'
-                            ? 'bg-[#6B4FE8]/25 text-[#CBBEFF]'
-                            : usuario.rol === 'staff'
-                              ? 'bg-[#E8FF47]/20 text-[#E8FF47]'
-                              : 'bg-white/10 text-white/70'
-                            }`}
-                        >
-                          {usuario.rol}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="rounded-md bg-[#6B4FE8]/20 px-2 py-1 text-xs font-bold text-[#CBBEFF]">
-                          {usuario.plan.nombre}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={`rounded-md px-2 py-1 text-xs font-bold ${usuario.plan_activo
-                            ? 'bg-[#E8FF47] text-[#0A0A0A]'
-                            : 'bg-white/10 text-white/70'
-                            }`}
-                        >
-                          {usuario.plan_activo ? 'Sí' : 'No'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-white/70">{formatearFecha(usuario.fecha_registro)}</td>
-                      <td className="px-3 py-3 font-semibold text-[#E8FF47]">
-                        {usuario.usadasMes} / {usuario.permitidasMes}
-                      </td>
-                      <td className="px-3 py-3">
-                        {usuario.rol === 'staff' ? (
-                          <StaffNegocioAsignadoSelect
-                            userId={usuario.id}
-                            negocioIdActual={usuario.negocio_id}
-                            negocioActualNombre={negocioAsignado?.nombre ?? null}
-                            opciones={negociosParaAsignacion}
-                          />
-                        ) : (
-                          <span className="text-xs font-semibold uppercase tracking-wide text-white/40">
-                            No aplica
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
+                {clientesFiltrados.map(usuario => (
+                  <tr key={usuario.id} className="border-b border-white/10 align-top text-sm text-white/90">
+                    <td className="px-3 py-3 font-semibold">{usuario.nombre}</td>
+                    <td className="px-3 py-3 text-white/70">{usuario.email}</td>
+                    <td className="px-3 py-3">{CIUDAD_LABELS[usuario.ciudad]}</td>
+                    <td className="px-3 py-3">
+                      <span className="rounded-md bg-[#6B4FE8]/20 px-2 py-1 text-xs font-bold text-[#CBBEFF]">
+                        {usuario.planId}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`rounded-md px-2 py-1 text-xs font-bold ${usuario.plan_activo
+                          ? 'bg-[#E8FF47] text-[#0A0A0A]'
+                          : 'bg-white/10 text-white/70'
+                          }`}
+                      >
+                        {usuario.plan_activo ? 'Sí' : 'No'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 font-semibold text-[#E8FF47]">
+                      {usuario.usadasMes}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex min-w-[16rem] flex-col gap-2">
                         <form
                           method="POST"
                           action={`/api/admin/users/${usuario.id}/toggle-plan`}
@@ -483,17 +422,40 @@ export default async function AdminPage({
                               : 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#d8f03f]'
                               }`}
                           >
-                            {usuario.plan_activo ? 'Desactivar' : 'Activar'}
+                            {usuario.plan_activo ? 'Desactivar plan' : 'Activar plan'}
                           </button>
                         </form>
-                      </td>
-                    </tr>
-                  )
-                })}
-                {usuariosFiltrados.length === 0 && (
+
+                        <form
+                          method="POST"
+                          action={`/api/admin/users/${usuario.id}/rol`}
+                          className="flex items-center gap-2"
+                        >
+                          <input type="hidden" name="next" value={nextPath} />
+                          <select
+                            name="rol"
+                            defaultValue={usuario.rol}
+                            className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                          >
+                            <option value="usuario">usuario</option>
+                            <option value="staff">staff</option>
+                            <option value="admin">admin</option>
+                          </select>
+                          <button
+                            type="submit"
+                            className="rounded-md border border-[#6B4FE8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#CBBEFF] hover:bg-[#6B4FE8]/20"
+                          >
+                            Cambiar rol
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {clientesFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-6 text-center text-sm text-white/50">
-                      No se encontraron usuarios con ese criterio.
+                    <td colSpan={7} className="px-3 py-6 text-center text-sm text-white/50">
+                      No se encontraron clientes con ese criterio.
                     </td>
                   </tr>
                 )}
@@ -502,69 +464,16 @@ export default async function AdminPage({
           </div>
         </section>
 
-        {/* Créditos / visitas */}
-        <section>
-          <h2 className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-white/40">
-            Créditos / Visitas
-          </h2>
-          <div className="space-y-3">
-            {usuariosFiltrados.map(usuario => (
-              <details
-                key={`credito-${usuario.id}`}
-                className="rounded-xl border border-white/10 bg-[#111111] p-4"
-              >
-                <summary className="cursor-pointer list-none">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-bold text-white">{usuario.nombre}</p>
-                      <p className="text-xs text-white/50">{usuario.email}</p>
-                    </div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-[#E8FF47]">
-                      Quedan {usuario.restantesMes} visitas este mes
-                    </p>
-                  </div>
-                </summary>
-
-                <div className="mt-3 overflow-x-auto">
-                  <table className="min-w-full border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
-                        <th className="px-2 py-2">Fecha</th>
-                        <th className="px-2 py-2">Negocio</th>
-                        <th className="px-2 py-2">Ciudad</th>
-                        <th className="px-2 py-2">Categoría</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {usuario.detalleVisitas.map(visita => (
-                        <tr key={visita.id} className="border-b border-white/10 text-sm text-white/85">
-                          <td className="px-2 py-2">{formatearFecha(visita.fecha)}</td>
-                          <td className="px-2 py-2">{visita.negocio}</td>
-                          <td className="px-2 py-2">{CIUDAD_LABELS[visita.ciudad]}</td>
-                          <td className="px-2 py-2">{CATEGORIA_LABELS[visita.categoria]}</td>
-                        </tr>
-                      ))}
-                      {usuario.detalleVisitas.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="px-2 py-3 text-sm text-white/50">
-                            Sin visitas registradas este mes.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
-            ))}
-          </div>
-        </section>
-
-        {/* Negocios */}
-        <section id="negocios">
+        <section id="negocios" className="scroll-mt-24">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xs font-black uppercase tracking-[0.18em] text-white/40">
-              Negocios
-            </h2>
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-[0.18em] text-[#E8FF47]">
+                Negocios afiliados
+              </h2>
+              <p className="mt-1 text-xs text-white/50">
+                Estudios, gimnasios, estéticas y restaurantes.
+              </p>
+            </div>
             <p className="text-xs font-semibold text-white/50">
               {negociosAfiliados.length} registrados · solo los activos se muestran en /explorar
             </p>
@@ -593,188 +502,204 @@ export default async function AdminPage({
                       <th className="px-2 py-2">Nombre</th>
                       <th className="px-2 py-2">Categoría</th>
                       <th className="px-2 py-2">Ciudad</th>
-                      <th className="px-2 py-2">Instagram</th>
-                      <th className="px-2 py-2">Estado</th>
+                      <th className="px-2 py-2">Activo</th>
+                      <th className="px-2 py-2">Staff asignado</th>
                       <th className="px-2 py-2">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {negociosAfiliados.map(negocio => (
-                      <tr key={negocio.id} className="border-b border-white/10 align-top text-sm text-white/85">
-                        <td className="px-2 py-2">
-                          <p className="font-semibold">{negocio.nombre}</p>
-                          <p className="mt-0.5 text-xs text-white/45">{negocio.direccion}</p>
-                        </td>
-                        <td className="px-2 py-2">{CATEGORIA_LABELS[negocio.categoria]}</td>
-                        <td className="px-2 py-2">{CIUDAD_LABELS[negocio.ciudad]}</td>
-                        <td className="px-2 py-2 text-[#CBBEFF]">
-                          {negocio.instagram_handle ? `@${negocio.instagram_handle}` : '—'}
-                        </td>
-                        <td className="px-2 py-2">
-                          <span
-                            className={`rounded-md px-2 py-1 text-xs font-bold ${negocio.activo
-                              ? 'bg-[#E8FF47] text-[#0A0A0A]'
-                              : 'bg-white/10 text-white/70'
-                              }`}
-                          >
-                            {negocio.activo ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2">
-                          <div className="flex flex-col gap-2">
-                            <div className="flex flex-wrap gap-2">
-                              <details>
-                                <summary className="cursor-pointer rounded-md border border-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#CBBEFF] hover:bg-[#6B4FE8]/20">
-                                  Editar
-                                </summary>
-                                <div className="mt-2 w-[26rem] max-w-full rounded-lg border border-white/10 bg-[#0A0A0A] p-3">
-                                  <form
-                                    method="POST"
-                                    action={`/api/admin/negocios/${negocio.id}`}
-                                    className="grid gap-2 sm:grid-cols-2"
-                                  >
-                                    <input type="hidden" name="next" value={nextPath} />
-                                    <div className="sm:col-span-2">
-                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                        Nombre
-                                      </label>
-                                      <input
-                                        type="text"
-                                        name="nombre"
-                                        required
-                                        defaultValue={negocio.nombre}
-                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                        Categoría
-                                      </label>
-                                      <select
-                                        name="categoria"
-                                        required
-                                        defaultValue={negocio.categoria}
-                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                      >
-                                        {CATEGORIAS.map(categoria => (
-                                          <option key={categoria} value={categoria}>
-                                            {CATEGORIA_LABELS[categoria]}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                        Ciudad
-                                      </label>
-                                      <select
-                                        name="ciudad"
-                                        required
-                                        defaultValue={negocio.ciudad}
-                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                      >
-                                        {CIUDADES.map(ciudad => (
-                                          <option key={ciudad} value={ciudad}>
-                                            {CIUDAD_LABELS[ciudad]}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                    <div className="sm:col-span-2">
-                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                        Dirección
-                                      </label>
-                                      <input
-                                        type="text"
-                                        name="direccion"
-                                        required
-                                        defaultValue={negocio.direccion}
-                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                      />
-                                    </div>
-                                    <div className="sm:col-span-2">
-                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                        Descripción
-                                      </label>
-                                      <textarea
-                                        name="descripcion"
-                                        defaultValue={negocio.descripcion ?? ''}
-                                        rows={2}
-                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                        Instagram
-                                      </label>
-                                      <input
-                                        type="text"
-                                        name="instagram_handle"
-                                        defaultValue={negocio.instagram_handle ?? ''}
-                                        placeholder="usuario"
-                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                      />
-                                    </div>
-                                    <div className="sm:col-span-2">
-                                      <input
-                                        id={`requiere-reserva-${negocio.id}`}
-                                        type="checkbox"
-                                        name="requiere_reserva"
-                                        value="true"
-                                        defaultChecked={negocio.requiere_reserva}
-                                        className="peer h-4 w-4 accent-[#6B4FE8]"
-                                      />
-                                      <label
-                                        htmlFor={`requiere-reserva-${negocio.id}`}
-                                        className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
-                                      >
-                                        Requiere reserva
-                                      </label>
-                                      <div className="mt-2 hidden peer-checked:block">
+                    {negociosAfiliados.map(negocio => {
+                      const staffAsignado = staffPorNegocio.get(negocio.id) ?? []
+
+                      return (
+                        <tr key={negocio.id} className="border-b border-white/10 align-top text-sm text-white/85">
+                          <td className="px-2 py-2">
+                            <p className="font-semibold">{negocio.nombre}</p>
+                            <p className="mt-0.5 text-xs text-white/45">{negocio.direccion}</p>
+                          </td>
+                          <td className="px-2 py-2">{CATEGORIA_LABELS[negocio.categoria]}</td>
+                          <td className="px-2 py-2">{CIUDAD_LABELS[negocio.ciudad]}</td>
+                          <td className="px-2 py-2">
+                            <span
+                              className={`rounded-md px-2 py-1 text-xs font-bold ${negocio.activo
+                                ? 'bg-[#E8FF47] text-[#0A0A0A]'
+                                : 'bg-white/10 text-white/70'
+                                }`}
+                            >
+                              {negocio.activo ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2">
+                            {staffAsignado.length === 0 ? (
+                              <span className="text-xs text-white/45">Sin staff asignado</span>
+                            ) : (
+                              <div className="space-y-1">
+                                {staffAsignado.map(staff => (
+                                  <p key={staff.id} className="text-xs text-[#E8FF47]">
+                                    {staff.nombre}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-2 py-2">
+                            <div className="flex flex-col gap-2">
+                              <div className="flex flex-wrap gap-2">
+                                <details>
+                                  <summary className="cursor-pointer rounded-md border border-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#CBBEFF] hover:bg-[#6B4FE8]/20">
+                                    Editar
+                                  </summary>
+                                  <div className="mt-2 w-[26rem] max-w-full rounded-lg border border-white/10 bg-[#0A0A0A] p-3">
+                                    <form
+                                      method="POST"
+                                      action={`/api/admin/negocios/${negocio.id}`}
+                                      className="grid gap-2 sm:grid-cols-2"
+                                    >
+                                      <input type="hidden" name="next" value={nextPath} />
+                                      <div className="sm:col-span-2">
                                         <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Capacidad por clase
+                                          Nombre
                                         </label>
                                         <input
-                                          type="number"
-                                          name="capacidad_default"
-                                          min={1}
-                                          defaultValue={negocio.capacidad_default ?? 10}
+                                          type="text"
+                                          name="nombre"
+                                          required
+                                          defaultValue={negocio.nombre}
                                           className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
                                         />
                                       </div>
-                                    </div>
-                                    <div className="sm:col-span-2 flex justify-end">
-                                      <button
-                                        type="submit"
-                                        className="rounded-md bg-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white hover:bg-[#5b40cd]"
-                                      >
-                                        Guardar cambios
-                                      </button>
-                                    </div>
-                                  </form>
-                                </div>
-                              </details>
+                                      <div>
+                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                          Categoría
+                                        </label>
+                                        <select
+                                          name="categoria"
+                                          required
+                                          defaultValue={negocio.categoria}
+                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                        >
+                                          {CATEGORIAS.map(categoria => (
+                                            <option key={categoria} value={categoria}>
+                                              {CATEGORIA_LABELS[categoria]}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                          Ciudad
+                                        </label>
+                                        <select
+                                          name="ciudad"
+                                          required
+                                          defaultValue={negocio.ciudad}
+                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                        >
+                                          {CIUDADES.map(ciudad => (
+                                            <option key={ciudad} value={ciudad}>
+                                              {CIUDAD_LABELS[ciudad]}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div className="sm:col-span-2">
+                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                          Dirección
+                                        </label>
+                                        <input
+                                          type="text"
+                                          name="direccion"
+                                          required
+                                          defaultValue={negocio.direccion}
+                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                        />
+                                      </div>
+                                      <div className="sm:col-span-2">
+                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                          Descripción
+                                        </label>
+                                        <textarea
+                                          name="descripcion"
+                                          defaultValue={negocio.descripcion ?? ''}
+                                          rows={2}
+                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                          Instagram
+                                        </label>
+                                        <input
+                                          type="text"
+                                          name="instagram_handle"
+                                          defaultValue={negocio.instagram_handle ?? ''}
+                                          placeholder="usuario"
+                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                        />
+                                      </div>
+                                      <div className="sm:col-span-2">
+                                        <input
+                                          id={`requiere-reserva-${negocio.id}`}
+                                          type="checkbox"
+                                          name="requiere_reserva"
+                                          value="true"
+                                          defaultChecked={negocio.requiere_reserva}
+                                          className="peer h-4 w-4 accent-[#6B4FE8]"
+                                        />
+                                        <label
+                                          htmlFor={`requiere-reserva-${negocio.id}`}
+                                          className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
+                                        >
+                                          Requiere reserva
+                                        </label>
+                                        <div className="mt-2 hidden peer-checked:block">
+                                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                            Capacidad por clase
+                                          </label>
+                                          <input
+                                            type="number"
+                                            name="capacidad_default"
+                                            min={1}
+                                            defaultValue={negocio.capacidad_default ?? 10}
+                                            className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="sm:col-span-2 flex justify-end">
+                                        <button
+                                          type="submit"
+                                          className="rounded-md bg-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white hover:bg-[#5b40cd]"
+                                        >
+                                          Guardar cambios
+                                        </button>
+                                      </div>
+                                    </form>
+                                  </div>
+                                </details>
 
-                              <form method="POST" action={`/api/admin/negocios/${negocio.id}/toggle-activo`}>
-                                <input type="hidden" name="next" value={nextPath} />
-                                <button
-                                  type="submit"
-                                  className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${negocio.activo
-                                    ? 'bg-[#6B4FE8] text-white hover:bg-[#5b40cd]'
-                                    : 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#d8f03f]'
-                                    }`}
-                                >
-                                  {negocio.activo ? 'Desactivar' : 'Activar'}
-                                </button>
-                              </form>
+                                <form method="POST" action={`/api/admin/negocios/${negocio.id}/toggle-activo`}>
+                                  <input type="hidden" name="next" value={nextPath} />
+                                  <button
+                                    type="submit"
+                                    className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${negocio.activo
+                                      ? 'bg-[#6B4FE8] text-white hover:bg-[#5b40cd]'
+                                      : 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#d8f03f]'
+                                      }`}
+                                  >
+                                    {negocio.activo ? 'Desactivar' : 'Activar'}
+                                  </button>
+                                </form>
+                              </div>
+
+                              <NegocioStaffAsignarSelect
+                                negocioId={negocio.id}
+                                opciones={staffParaAsignar}
+                              />
                             </div>
-                            <p className="text-[11px] text-white/45">
-                              Visitas del mes: {conteoVisitasPorNegocio.get(negocio.id) ?? 0}
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      )
+                    })}
                     {negociosAfiliados.length === 0 && (
                       <tr>
                         <td colSpan={6} className="px-2 py-4 text-sm text-white/50">
