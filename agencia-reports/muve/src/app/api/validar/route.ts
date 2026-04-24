@@ -9,20 +9,52 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   }
 
+  function faltaColumnaNegocioId(error: { message?: string } | null | undefined) {
+    const message = error?.message?.toLowerCase() ?? ''
+    return message.includes('column') && message.includes('negocio_id')
+  }
+
   // Verificar que sea staff o admin
-  const { data: perfil } = await supabase
+  let perfil: { rol: string; nombre: string | null; negocio_id: string | null } | null = null
+  const consultaPerfil = await supabase
     .from('users')
-    .select('rol, nombre')
+    .select('rol, nombre, negocio_id')
     .eq('id', user.id)
-    .single()
+    .single<{ rol: string; nombre: string | null; negocio_id: string | null }>()
+
+  if (!consultaPerfil.error && consultaPerfil.data) {
+    perfil = consultaPerfil.data
+  } else if (faltaColumnaNegocioId(consultaPerfil.error)) {
+    const fallback = await supabase
+      .from('users')
+      .select('rol, nombre')
+      .eq('id', user.id)
+      .single<{ rol: string; nombre: string | null }>()
+    if (!fallback.error && fallback.data) {
+      perfil = { ...fallback.data, negocio_id: null }
+    }
+  }
 
   if (!perfil || !['staff', 'admin'].includes(perfil.rol)) {
     return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   }
+  const body = await request.json().catch(() => ({}))
+  const token = typeof body.token === 'string' ? body.token.trim() : ''
+  const negocioIdBody = typeof body.negocio_id === 'string' ? body.negocio_id : ''
+  if (!token) {
+    return NextResponse.json({ error: 'Falta token' }, { status: 400 })
+  }
 
-  const { token, negocio_id } = await request.json()
-  if (!token || !negocio_id) {
-    return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
+  const negocioIdObjetivo = perfil.rol === 'staff' ? (perfil.negocio_id ?? '') : negocioIdBody
+  if (!negocioIdObjetivo) {
+    return NextResponse.json(
+      {
+        error: perfil.rol === 'staff'
+          ? 'Tu cuenta no tiene negocio asignado'
+          : 'Falta negocio_id',
+      },
+      { status: 400 }
+    )
   }
 
   // Buscar el token
@@ -54,14 +86,14 @@ export async function POST(request: NextRequest) {
   const { data: negocio } = await supabase
     .from('negocios')
     .select('nombre')
-    .eq('id', negocio_id)
+    .eq('id', negocioIdObjetivo)
     .single()
 
   // Registrar visita y marcar token como usado
   const [{ error: visitaError }] = await Promise.all([
     supabase.from('visitas').insert({
       user_id: qrToken.user_id,
-      negocio_id,
+      negocio_id: negocioIdObjetivo,
       validado_por: perfil.nombre,
     }),
     supabase.from('qr_tokens').update({ usado: true }).eq('id', qrToken.id),

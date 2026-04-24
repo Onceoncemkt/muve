@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Negocio } from '@/types'
 
 type Tab = 'scanner' | 'manual'
+type RolValidar = 'staff' | 'admin'
 
 interface ResultadoValidacion {
   valido: boolean
@@ -16,30 +17,122 @@ interface ResultadoValidacion {
 
 export default function ValidarPage() {
   const [tab, setTab] = useState<Tab>('scanner')
+  const [rol, setRol] = useState<RolValidar | null>(null)
   const [negocios, setNegocios] = useState<Negocio[]>([])
+  const [negocioAsignado, setNegocioAsignado] = useState<Negocio | null>(null)
   const [negocioId, setNegocioId] = useState('')
   const [token, setToken] = useState('')
   const [resultado, setResultado] = useState<ResultadoValidacion | null>(null)
   const [cargando, setCargando] = useState(false)
+  const [cargandoContexto, setCargandoContexto] = useState(true)
+  const [errorContexto, setErrorContexto] = useState<string | null>(null)
   const [scannerActivo, setScannerActivo] = useState(true)
 
   useEffect(() => {
-    async function cargarNegocios() {
+    let activo = true
+
+    function faltaColumnaNegocioId(error: { message?: string } | null | undefined) {
+      const message = error?.message?.toLowerCase() ?? ''
+      return message.includes('column') && message.includes('negocio_id')
+    }
+
+    async function cargarContexto() {
       const supabase = createClient()
+      const { data: authData } = await supabase.auth.getUser()
+      if (!activo) return
+      if (!authData.user) {
+        setErrorContexto('No autenticado')
+        setCargandoContexto(false)
+        return
+      }
+
+      let perfil: { rol: string; negocio_id: string | null } | null = null
+      const consultaPerfil = await supabase
+        .from('users')
+        .select('rol, negocio_id')
+        .eq('id', authData.user.id)
+        .single<{ rol: string; negocio_id: string | null }>()
+
+      if (!consultaPerfil.error && consultaPerfil.data) {
+        perfil = consultaPerfil.data
+      } else if (faltaColumnaNegocioId(consultaPerfil.error)) {
+        const fallback = await supabase
+          .from('users')
+          .select('rol')
+          .eq('id', authData.user.id)
+          .single<{ rol: string }>()
+        if (!fallback.error && fallback.data) {
+          perfil = { rol: fallback.data.rol, negocio_id: null }
+        }
+      }
+
+      if (!activo) return
+
+      if (!perfil || !['staff', 'admin'].includes(perfil.rol)) {
+        setErrorContexto('Sin permisos para validar visitas')
+        setCargandoContexto(false)
+        return
+      }
+
+      setRol(perfil.rol as RolValidar)
+
+      if (perfil.rol === 'staff') {
+        if (!perfil.negocio_id) {
+          setNegocioId('')
+          setErrorContexto('Tu cuenta no tiene negocio asignado')
+          setCargandoContexto(false)
+          return
+        }
+
+        const { data: negocio } = await supabase
+          .from('negocios')
+          .select('id, nombre, ciudad, categoria')
+          .eq('id', perfil.negocio_id)
+          .maybeSingle<Negocio>()
+
+        if (!activo) return
+
+        if (!negocio) {
+          setNegocioId('')
+          setErrorContexto('No se encontró tu negocio asignado')
+          setCargandoContexto(false)
+          return
+        }
+
+        setNegocioAsignado(negocio)
+        setNegocioId(negocio.id)
+        setErrorContexto(null)
+        setCargandoContexto(false)
+        return
+      }
+
       const { data } = await supabase
         .from('negocios')
         .select('id, nombre, ciudad, categoria')
         .eq('activo', true)
         .order('ciudad')
         .order('nombre')
-      if (data) setNegocios(data as Negocio[])
+
+      if (!activo) return
+      const lista = (data ?? []) as Negocio[]
+      setNegocios(lista)
+      setNegocioId(prev => prev || lista[0]?.id || '')
+      setErrorContexto(null)
+      setCargandoContexto(false)
     }
-    cargarNegocios()
+
+    void cargarContexto()
+    return () => {
+      activo = false
+    }
   }, [])
 
   async function enviarValidacion(tokenAValidar: string) {
     if (!negocioId) {
-      setResultado({ valido: false, error: 'Selecciona un negocio primero' })
+      setResultado({
+        valido: false,
+        error: rol === 'admin' ? 'Selecciona un negocio primero' : 'Tu cuenta no tiene negocio asignado',
+      })
       return
     }
     if (!tokenAValidar.trim()) return
@@ -96,25 +189,37 @@ export default function ValidarPage() {
             Escanea el QR del cliente para registrar su entrada
           </p>
         </div>
-
-        {/* Selector de negocio */}
-        <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
-          <label className="mb-2 block text-[11px] font-black uppercase tracking-widest text-[#888]">
-            Negocio
-          </label>
-          <select
-            value={negocioId}
-            onChange={e => setNegocioId(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">Selecciona tu negocio...</option>
-            {negocios.map(n => (
-              <option key={n.id} value={n.id}>
-                {n.nombre} — {n.ciudad.charAt(0).toUpperCase() + n.ciudad.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Negocio asignado / selector admin */}
+        {rol === 'admin' ? (
+          <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
+            <label className="mb-2 block text-[11px] font-black uppercase tracking-widest text-[#888]">
+              Negocio
+            </label>
+            <select
+              value={negocioId}
+              onChange={e => setNegocioId(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Selecciona tu negocio...</option>
+              {negocios.map(n => (
+                <option key={n.id} value={n.id}>
+                  {n.nombre} — {n.ciudad.charAt(0).toUpperCase() + n.ciudad.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
+            <label className="mb-2 block text-[11px] font-black uppercase tracking-widest text-[#888]">
+              Negocio asignado
+            </label>
+            <p className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-4 py-3 text-sm font-semibold text-[#0A0A0A]">
+              {negocioAsignado
+                ? `${negocioAsignado.nombre} — ${negocioAsignado.ciudad.charAt(0).toUpperCase() + negocioAsignado.ciudad.slice(1)}`
+                : (errorContexto ?? 'Cargando negocio...')}
+            </p>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex rounded-lg border border-[#E5E5E5] bg-white p-1">
@@ -137,9 +242,19 @@ export default function ValidarPage() {
         <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
           {tab === 'scanner' ? (
             <div className="flex flex-col gap-4">
+              {cargandoContexto && (
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-4 py-3 text-sm font-semibold text-[#888]">
+                  Cargando contexto de negocio...
+                </div>
+              )}
+              {errorContexto && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                  {errorContexto}
+                </div>
+              )}
               {!negocioId && (
                 <div className="rounded-lg border border-[#E8FF47]/50 bg-[#E8FF47]/10 px-4 py-3 text-sm font-semibold text-[#0A0A0A]">
-                  Selecciona un negocio antes de escanear
+                  No hay negocio disponible para escanear
                 </div>
               )}
               {resultado ? (
