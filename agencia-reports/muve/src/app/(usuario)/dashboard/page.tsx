@@ -40,12 +40,31 @@ export default async function DashboardPage({
   const ciudad = perfil?.ciudad ?? 'tulancingo'
   const params = await searchParams
   const recienActivada = params.membresia === 'activada'
+  const planActivo = perfil?.plan_activo ?? false
 
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
+      {/* Notificación: membresía recién activada por Stripe */}
       {recienActivada && (
         <div className="bg-green-500 px-4 py-3 text-center text-sm font-medium text-white">
           🎉 ¡Membresía activada! Bienvenid@ a MUVE.
+        </div>
+      )}
+
+      {/* Banner: sin membresía activa */}
+      {!planActivo && !recienActivada && (
+        <div className="bg-amber-500 px-4 py-3">
+          <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-4">
+            <p className="text-sm font-medium text-white">
+              Tu cuenta está lista. Activa tu membresía para empezar a visitar negocios.
+            </p>
+            <a
+              href="/#planes"
+              className="shrink-0 rounded-full bg-white px-4 py-1.5 text-xs font-bold text-amber-600 hover:bg-amber-50 transition-colors"
+            >
+              Ver planes →
+            </a>
+          </div>
         </div>
       )}
 
@@ -57,7 +76,9 @@ export default async function DashboardPage({
         <h1 className="mt-1 text-2xl font-bold">
           ¡Hola, {nombre.split(' ')[0]}! 👋
         </h1>
-        <p className="mt-1 text-sm opacity-75">Tu membresía MUVE está activa</p>
+        <p className="mt-1 text-sm opacity-75">
+          {planActivo ? 'Tu membresía MUVE está activa' : 'Bienvenid@ a MUVE'}
+        </p>
 
         <div className="mt-6 flex gap-4">
           <div className="rounded-xl bg-white/20 px-4 py-3 backdrop-blur-sm">
@@ -103,9 +124,23 @@ export default async function DashboardPage({
       </div>
 
       {/* Gestión de membresía */}
-      <div className="mt-4 px-4">
-        <BotonPortal className="w-full rounded-2xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors" />
-      </div>
+      {planActivo && (
+        <div className="mt-4 px-4">
+          <BotonPortal className="w-full rounded-2xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors" />
+        </div>
+      )}
+
+      {/* CTA suscripción cuando no hay plan */}
+      {!planActivo && (
+        <div className="mt-4 px-4">
+          <a
+            href="/#planes"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-4 text-sm font-bold text-white hover:bg-indigo-700 transition-colors"
+          >
+            Activar membresía →
+          </a>
+        </div>
+      )}
     </div>
   )
 }

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   if (!customerId) {
     const customer = await stripe.customers.create({
       email: perfil?.email ?? user.email!,
-      name: perfil?.nombre,
+      name: perfil?.nombre ?? undefined,
       metadata: { supabase_user_id: user.id },
     })
     customerId = customer.id
@@ -43,12 +43,16 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
   }
 
+  // Derivar la URL base del request para que funcione en cualquier entorno
+  // (dev, preview, producción) sin depender de NEXT_PUBLIC_URL
+  const origin = new URL(request.url).origin
+
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?membresia=activada`,
-    cancel_url: `${process.env.NEXT_PUBLIC_URL}/?pago=cancelado`,
+    success_url: `${origin}/dashboard?membresia=activada`,
+    cancel_url: `${origin}/`,
     metadata: { supabase_user_id: user.id },
     subscription_data: {
       metadata: { supabase_user_id: user.id },

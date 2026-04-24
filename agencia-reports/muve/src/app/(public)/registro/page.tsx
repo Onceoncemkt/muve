@@ -15,6 +15,7 @@ export default function RegistroPage() {
   const [ciudad, setCiudad] = useState<Ciudad>('tulancingo')
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
+  const [esperandoConfirmacion, setEsperandoConfirmacion] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,7 +29,7 @@ export default function RegistroPage() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -42,13 +43,61 @@ export default function RegistroPage() {
         return
       }
 
-      // Hard redirect: el trigger on_auth_user_created crea el perfil;
-      // la recarga completa asegura que el middleware lea la nueva sesión
-      window.location.href = '/dashboard'
+      if (data.session) {
+        // Sin confirmación de email: sesión creada, redirigir directo
+        window.location.href = '/dashboard'
+      } else {
+        // Confirmación de email requerida: mostrar instrucción
+        setCargando(false)
+        setEsperandoConfirmacion(true)
+      }
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
       setCargando(false)
     }
+  }
+
+  // Estado: esperando confirmación de email
+  if (esperandoConfirmacion) {
+    return (
+      <div className="flex min-h-screen flex-col bg-zinc-950">
+        <div className="px-6 pt-8">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-medium tracking-widest uppercase text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            ← MUVE
+          </Link>
+        </div>
+        <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
+          <div className="w-full max-w-sm text-center">
+            <div className="mb-6 flex justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-600/20 text-3xl">
+                📬
+              </div>
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-white">
+              Revisa tu correo
+            </h1>
+            <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+              Te enviamos un enlace de confirmación a{' '}
+              <span className="font-semibold text-white">{email}</span>.
+              <br />
+              Haz clic en el enlace para activar tu cuenta e iniciar sesión.
+            </p>
+            <Link
+              href="/login"
+              className="mt-8 inline-block w-full rounded-xl bg-indigo-600 py-4 text-sm font-bold tracking-wide text-white transition-colors hover:bg-indigo-500"
+            >
+              Ir a iniciar sesión
+            </Link>
+            <p className="mt-4 text-xs text-zinc-600">
+              ¿No te llegó? Revisa tu carpeta de spam.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -136,7 +185,7 @@ export default function RegistroPage() {
               <label className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">
                 Tu ciudad
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {CIUDADES.map(c => (
                   <button
                     key={c}

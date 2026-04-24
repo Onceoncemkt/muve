@@ -86,25 +86,10 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Verificar membresía activa para rutas de usuario
-  if (user && esRutaUsuario) {
-    const { data: perfil, error } = await supabase
-      .from('users')
-      .select('plan_activo')
-      .eq('id', user.id)
-      .single()
-
-    // Bloquear solo cuando plan_activo es EXPLÍCITAMENTE false.
-    // Si la query falla (RLS no configurado, perfil no existe aún, error de red),
-    // error es non-null y no redirigimos — la página maneja ese caso.
-    if (!error && perfil?.plan_activo === false) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/'
-      url.searchParams.set('sin_membresia', '1')
-      return redirectWithSession(url, supabaseResponse)
-    }
-  }
-
+  // El estado de membresía (plan_activo) NO se verifica en el middleware:
+  // - los redirects de Stripe llegan a /dashboard antes de que el webhook active el plan
+  // - los recién registrados no tienen plan aún pero deben ver el dashboard
+  // - el dashboard page maneja el estado sin_membresia con un banner de suscripción
   return supabaseResponse
 }
 
