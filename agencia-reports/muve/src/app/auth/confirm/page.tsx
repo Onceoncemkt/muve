@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { EmailOtpType } from '@supabase/supabase-js'
@@ -32,12 +32,48 @@ function ConfirmPageContent() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [sesionValida, setSesionValida] = useState(false)
   const [cargando, setCargando] = useState(false)
   const tokenHash = searchParams.get('token_hash')
   const type = searchParams.get('type')
   const code = searchParams.get('code')
   const tipoOtp = useMemo(() => tipoOtpDesdeQuery(type), [type])
-  const tieneTokenValido = Boolean(code) || (Boolean(tokenHash) && Boolean(tipoOtp))
+  const tieneCredencialesEnUrl = Boolean(code) || (Boolean(tokenHash) && Boolean(tipoOtp))
+  const puedeActivar = sesionValida || tieneCredencialesEnUrl
+
+  useEffect(() => {
+    let activo = true
+
+    async function hidratarSesionDesdeHash() {
+      const supabase = createClient()
+      const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : ''
+      const hashParams = new URLSearchParams(hash)
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        })
+
+        if (typeof window !== 'undefined') {
+          const nuevaUrl = `${window.location.pathname}${window.location.search}`
+          window.history.replaceState({}, '', nuevaUrl)
+        }
+      }
+
+      const { data: authData } = await supabase.auth.getUser()
+      if (activo && authData.user) {
+        setSesionValida(true)
+      }
+    }
+
+    void hidratarSesionDesdeHash()
+    return () => {
+      activo = false
+    }
+  }, [])
 
   async function asegurarSesionDesdeLink() {
     const supabase = createClient()
@@ -63,8 +99,7 @@ function ConfirmPageContent() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
-
-    if (!tieneTokenValido) {
+    if (!puedeActivar) {
       setError('El enlace de activación no es válido o está incompleto.')
       return
     }
@@ -126,7 +161,7 @@ function ConfirmPageContent() {
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            {!tieneTokenValido && (
+            {!puedeActivar && (
               <div className="rounded-lg border border-red-500/20 bg-red-950/40 px-4 py-3 text-sm text-red-400">
                 El enlace de activación no es válido o está incompleto.
               </div>
@@ -172,7 +207,7 @@ function ConfirmPageContent() {
 
             <button
               type="submit"
-              disabled={cargando || !tieneTokenValido}
+              disabled={cargando || !puedeActivar}
               className="mt-1 w-full rounded-lg bg-[#E8FF47] py-4 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-white disabled:opacity-40"
             >
               {cargando ? 'Activando...' : 'Activar mi cuenta'}

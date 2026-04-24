@@ -37,8 +37,8 @@ export default function StaffNegocioAsignadoSelect({
     setError('')
 
     try {
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/negocio`, {
-        method: 'POST',
+      const res = await fetch(`/api/admin/usuarios/${encodeURIComponent(userId)}/negocio`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           negocio_id: nuevoNegocioId || null,

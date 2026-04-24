@@ -28,8 +28,8 @@ export default function NegocioStaffAsignarSelect({ negocioId, opciones }: Props
     setError('')
 
     try {
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(staffUserId)}/negocio`, {
-        method: 'POST',
+      const res = await fetch(`/api/admin/usuarios/${encodeURIComponent(staffUserId)}/negocio`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ negocio_id: negocioId }),
       })
