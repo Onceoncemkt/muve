@@ -27,6 +27,12 @@ function hoyLocalISO() {
   return local.toISOString().split('T')[0]
 }
 
+function faltanColumnasOpcionalesNegocio(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column')
+    && (message.includes('requiere_reserva') || message.includes('capacidad_default'))
+}
+
 export default function ExplorarPage() {
   const [negocios, setNegocios] = useState<Negocio[]>([])
   const [cargando, setCargando] = useState(true)
@@ -46,7 +52,7 @@ export default function ExplorarPage() {
     async function cargarNegocios() {
       setCargando(true)
       const supabase = createClient()
-      const { data } = await supabase
+      const consulta = await supabase
         .from('negocios')
         .select('id, nombre, categoria, ciudad, direccion, descripcion, imagen_url, instagram_handle, activo, requiere_reserva, capacidad_default')
         .eq('activo', true)
@@ -54,7 +60,37 @@ export default function ExplorarPage() {
         .order('nombre')
 
       if (!activo) return
-      setNegocios((data ?? []) as Negocio[])
+
+      if (!consulta.error) {
+        setNegocios((consulta.data ?? []) as Negocio[])
+        setCargando(false)
+        return
+      }
+
+      if (faltanColumnasOpcionalesNegocio(consulta.error)) {
+        type NegocioLegacy = Omit<Negocio, 'requiere_reserva' | 'capacidad_default'>
+        const fallback = await supabase
+          .from('negocios')
+          .select('id, nombre, categoria, ciudad, direccion, descripcion, imagen_url, instagram_handle, activo')
+          .eq('activo', true)
+          .order('ciudad')
+          .order('nombre')
+
+        if (!activo) return
+
+        if (!fallback.error) {
+          const listaCompat = ((fallback.data ?? []) as NegocioLegacy[]).map(negocio => ({
+            ...negocio,
+            requiere_reserva: true,
+            capacidad_default: 10,
+          }))
+          setNegocios(listaCompat)
+        } else {
+          setNegocios([])
+        }
+      } else {
+        setNegocios([])
+      }
       setCargando(false)
     }
 

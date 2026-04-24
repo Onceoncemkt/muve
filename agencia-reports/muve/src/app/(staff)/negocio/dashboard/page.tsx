@@ -186,6 +186,12 @@ export default function NegocioDashboardPage() {
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
+              href="/"
+              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+            >
+              Inicio
+            </Link>
+            <Link
               href="/negocio/horarios"
               className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
             >

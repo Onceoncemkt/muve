@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { DiaSemana, Rol } from '@/types'
 import { DIA_LABELS, formatHora } from '@/types'
 
@@ -262,15 +263,30 @@ export default function NegocioHorariosPage() {
       <div className="bg-[#0A0A0A] px-4 py-6">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <Link
+              href="/negocio/dashboard"
+              className="text-xs font-bold uppercase tracking-widest text-[#E8FF47] transition-colors hover:text-white"
+            >
+              MUVET
+            </Link>
             <h1 className="text-2xl font-black tracking-tight text-white">Horarios del negocio</h1>
             <p className="mt-1 text-sm text-white/40">Crea, activa y ajusta cupos de reservación</p>
           </div>
-          <Link
-            href="/negocio/dashboard"
-            className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-white/40"
-          >
-            Ver dashboard
-          </Link>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Link
+              href="/"
+              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+            >
+              Inicio
+            </Link>
+            <Link
+              href="/negocio/dashboard"
+              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+            >
+              Dashboard
+            </Link>
+            <BotonCerrarSesion />
+          </div>
         </div>
       </div>
 

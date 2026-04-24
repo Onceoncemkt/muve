@@ -20,7 +20,6 @@ create table public.users (
   plan_activo         boolean not null default false,
   stripe_customer_id  text,
   rol                 rol_enum not null default 'usuario',
-  negocio_id          uuid references public.negocios(id),
   fecha_registro      timestamp with time zone default now()
 );
 
@@ -36,10 +35,14 @@ create table public.negocios (
   descripcion                 text,
   imagen_url                  text,
   instagram_handle            text,
+  requiere_reserva            boolean not null default true,
   capacidad_default           int default 10,
   activo                      boolean not null default true,
   visitas_permitidas_por_mes  int not null default 8
 );
+
+alter table public.users
+  add column if not exists negocio_id uuid references public.negocios(id);
 
 -- ============================================================
 -- TABLA: visitas

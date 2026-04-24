@@ -110,6 +110,12 @@ function formatearFecha(fecha: string) {
   })
 }
 
+function faltaColumnaRequiereReserva(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column')
+    && (message.includes('requiere_reserva') || message.includes('capacidad_default'))
+}
+
 export default async function AdminPage({
   searchParams,
 }: {
@@ -141,7 +147,6 @@ export default async function AdminPage({
   const [
     { data: usuariosRaw },
     { data: visitasRaw },
-    { data: negocios },
   ] = await Promise.all([
     supabase
       .from('users')
@@ -152,15 +157,36 @@ export default async function AdminPage({
       .select('id, user_id, negocio_id, fecha, negocios(nombre, ciudad, categoria)')
       .gte('fecha', inicioMesIso)
       .order('fecha', { ascending: false }),
-    supabase
-      .from('negocios')
-      .select('id, nombre, ciudad, categoria, direccion, descripcion, instagram_handle, requiere_reserva, capacidad_default, activo')
-      .order('ciudad')
-      .order('nombre'),
   ])
+
+  const consultaNegocios = await supabase
+    .from('negocios')
+    .select('id, nombre, ciudad, categoria, direccion, descripcion, instagram_handle, requiere_reserva, capacidad_default, activo')
+    .order('ciudad')
+    .order('nombre')
+
+  let negociosAfiliados: NegocioAdmin[] = []
+  if (!consultaNegocios.error) {
+    negociosAfiliados = (consultaNegocios.data ?? []) as NegocioAdmin[]
+  } else if (faltaColumnaRequiereReserva(consultaNegocios.error)) {
+    type NegocioAdminLegacy = Omit<NegocioAdmin, 'requiere_reserva' | 'capacidad_default'>
+
+    const fallback = await supabase
+      .from('negocios')
+      .select('id, nombre, ciudad, categoria, direccion, descripcion, instagram_handle, activo')
+      .order('ciudad')
+      .order('nombre')
+
+    if (!fallback.error) {
+      negociosAfiliados = ((fallback.data ?? []) as NegocioAdminLegacy[]).map(negocio => ({
+        ...negocio,
+        requiere_reserva: true,
+        capacidad_default: 10,
+      }))
+    }
+  }
   const usuarios = (usuariosRaw ?? []) as UsuarioAdmin[]
   const visitasMes = (visitasRaw ?? []) as VisitaRaw[]
-  const negociosAfiliados = (negocios ?? []) as NegocioAdmin[]
   const negociosActivos = negociosAfiliados
     .filter(negocio => negocio.activo)
     .map(negocio => ({ id: negocio.id, nombre: negocio.nombre }))
@@ -286,6 +312,12 @@ export default async function AdminPage({
                 className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
               >
                 Negocios
+              </Link>
+              <Link
+                href="/"
+                className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+              >
+                Inicio
               </Link>
               <BotonCerrarSesion className="shrink-0" />
             </div>

@@ -35,6 +35,12 @@ function redireccionConEstado(
   return NextResponse.redirect(url, 303)
 }
 
+function faltanColumnasOpcionalesNegocio(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column')
+    && (message.includes('requiere_reserva') || message.includes('capacidad_default'))
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -99,19 +105,38 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { error } = await db
+  const payloadBase = {
+    nombre,
+    categoria,
+    ciudad,
+    direccion,
+    descripcion,
+    instagram_handle: instagramHandle,
+    capacidad_default: capacidadDefault,
+    activo: true,
+  }
+
+  let { error } = await db
     .from('negocios')
     .insert({
-      nombre,
-      categoria,
-      ciudad,
-      direccion,
-      descripcion,
-      instagram_handle: instagramHandle,
+      ...payloadBase,
       requiere_reserva: requiereReserva,
-      capacidad_default: capacidadDefault,
-      activo: true,
     })
+
+  if (faltanColumnasOpcionalesNegocio(error)) {
+    const retry = await db
+      .from('negocios')
+      .insert({
+        nombre,
+        categoria,
+        ciudad,
+        direccion,
+        descripcion,
+        instagram_handle: instagramHandle,
+        activo: true,
+      })
+    error = retry.error
+  }
 
   if (error) {
     return redireccionConEstado(
