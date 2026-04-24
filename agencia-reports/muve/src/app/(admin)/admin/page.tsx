@@ -113,7 +113,11 @@ function formatearFecha(fecha: string) {
 function faltaColumnaRequiereReserva(error: { message?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() ?? ''
   return message.includes('column')
-    && (message.includes('requiere_reserva') || message.includes('capacidad_default'))
+    && (
+      message.includes('requiere_reserva')
+      || message.includes('capacidad_default')
+      || message.includes('instagram_handle')
+    )
 }
 
 export default async function AdminPage({
@@ -169,17 +173,18 @@ export default async function AdminPage({
   if (!consultaNegocios.error) {
     negociosAfiliados = (consultaNegocios.data ?? []) as NegocioAdmin[]
   } else if (faltaColumnaRequiereReserva(consultaNegocios.error)) {
-    type NegocioAdminLegacy = Omit<NegocioAdmin, 'requiere_reserva' | 'capacidad_default'>
+    type NegocioAdminLegacy = Omit<NegocioAdmin, 'instagram_handle' | 'requiere_reserva' | 'capacidad_default'>
 
     const fallback = await supabase
       .from('negocios')
-      .select('id, nombre, ciudad, categoria, direccion, descripcion, instagram_handle, activo')
+      .select('id, nombre, ciudad, categoria, direccion, descripcion, activo')
       .order('ciudad')
       .order('nombre')
 
     if (!fallback.error) {
       negociosAfiliados = ((fallback.data ?? []) as NegocioAdminLegacy[]).map(negocio => ({
         ...negocio,
+        instagram_handle: null,
         requiere_reserva: true,
         capacidad_default: 10,
       }))

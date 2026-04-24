@@ -5,6 +5,11 @@ import type { Categoria, Ciudad, Rol } from '@/types'
 
 const CIUDADES_VALIDAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 const CATEGORIAS_VALIDAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
+const COLUMNAS_OPCIONALES_NEGOCIO = [
+  'requiere_reserva',
+  'capacidad_default',
+  'instagram_handle',
+] as const
 
 function admin() {
   return createAdminClient(
@@ -38,7 +43,13 @@ function redireccionConEstado(
 function faltanColumnasOpcionalesNegocio(error: { message?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() ?? ''
   return message.includes('column')
-    && (message.includes('requiere_reserva') || message.includes('capacidad_default'))
+    && COLUMNAS_OPCIONALES_NEGOCIO.some(columna => message.includes(columna))
+}
+
+function columnaOpcionalFaltante(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  if (!message.includes('column')) return null
+  return COLUMNAS_OPCIONALES_NEGOCIO.find(columna => message.includes(columna)) ?? null
 }
 
 export async function POST(
@@ -109,46 +120,50 @@ export async function POST(
     )
   }
 
-  const payloadBase = {
+  const payload: Record<string, unknown> = {
     nombre,
     categoria,
     ciudad,
     direccion,
     descripcion,
     instagram_handle: instagramHandle,
+    requiere_reserva: requiereReserva,
     capacidad_default: capacidadDefault,
   }
+  let negocioActualizado: { id: string } | null = null
+  let error: { message?: string } | null = null
 
-  let { data: negocioActualizado, error } = await db
-    .from('negocios')
-    .update({
-      ...payloadBase,
-      requiere_reserva: requiereReserva,
-    })
-    .eq('id', id)
-    .select('id')
-    .maybeSingle<{ id: string }>()
-
-  if (faltanColumnasOpcionalesNegocio(error)) {
-    const retry = await db
+  for (let intento = 0; intento < 4; intento += 1) {
+    const result = await db
       .from('negocios')
-      .update({
-        nombre,
-        categoria,
-        ciudad,
-        direccion,
-        descripcion,
-        instagram_handle: instagramHandle,
-      })
+      .update(payload)
       .eq('id', id)
       .select('id')
       .maybeSingle<{ id: string }>()
+    negocioActualizado = result.data ?? null
 
-    negocioActualizado = retry.data
-    error = retry.error
+    if (!result.error) {
+      error = null
+      break
+    }
+
+    error = result.error
+
+    if (faltanColumnasOpcionalesNegocio(result.error)) {
+      const columna = columnaOpcionalFaltante(result.error)
+      if (columna) {
+        delete payload[columna]
+        continue
+      }
+    }
+
+    break
   }
 
   if (error || !negocioActualizado) {
+    if (error) {
+      console.error('[POST /api/admin/negocios/[id]] update error:', error.message)
+    }
     return redireccionConEstado(
       request,
       nextPath,

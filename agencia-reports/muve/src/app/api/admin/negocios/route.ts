@@ -5,6 +5,12 @@ import type { Categoria, Ciudad, Rol } from '@/types'
 
 const CIUDADES_VALIDAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 const CATEGORIAS_VALIDAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
+const COLUMNAS_OPCIONALES_NEGOCIO = [
+  'requiere_reserva',
+  'capacidad_default',
+  'instagram_handle',
+  'visitas_permitidas_por_mes',
+] as const
 
 function admin() {
   return createAdminClient(
@@ -38,7 +44,18 @@ function redireccionConEstado(
 function faltanColumnasOpcionalesNegocio(error: { message?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() ?? ''
   return message.includes('column')
-    && (message.includes('requiere_reserva') || message.includes('capacidad_default'))
+    && COLUMNAS_OPCIONALES_NEGOCIO.some(columna => message.includes(columna))
+}
+
+function columnaOpcionalFaltante(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  if (!message.includes('column')) return null
+  return COLUMNAS_OPCIONALES_NEGOCIO.find(columna => message.includes(columna)) ?? null
+}
+
+function requiereValorVisitasPorMes(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('visitas_permitidas_por_mes') && message.includes('null value')
 }
 
 export async function POST(request: NextRequest) {
@@ -105,40 +122,51 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const payloadBase = {
+  const payload: Record<string, unknown> = {
     nombre,
     categoria,
     ciudad,
     direccion,
     descripcion,
     instagram_handle: instagramHandle,
+    requiere_reserva: requiereReserva,
     capacidad_default: capacidadDefault,
+    visitas_permitidas_por_mes: 8,
     activo: true,
   }
 
-  let { error } = await db
-    .from('negocios')
-    .insert({
-      ...payloadBase,
-      requiere_reserva: requiereReserva,
-    })
+  let error: { message?: string } | null = null
 
-  if (faltanColumnasOpcionalesNegocio(error)) {
-    const retry = await db
+  for (let intento = 0; intento < 6; intento += 1) {
+    const result = await db
       .from('negocios')
-      .insert({
-        nombre,
-        categoria,
-        ciudad,
-        direccion,
-        descripcion,
-        instagram_handle: instagramHandle,
-        activo: true,
-      })
-    error = retry.error
+      .insert(payload)
+
+    if (!result.error) {
+      error = null
+      break
+    }
+
+    error = result.error
+
+    if (requiereValorVisitasPorMes(result.error)) {
+      payload.visitas_permitidas_por_mes = 8
+      continue
+    }
+
+    if (faltanColumnasOpcionalesNegocio(result.error)) {
+      const columna = columnaOpcionalFaltante(result.error)
+      if (columna) {
+        delete payload[columna]
+        continue
+      }
+    }
+
+    break
   }
 
   if (error) {
+    console.error('[POST /api/admin/negocios] insert error:', error.message)
     return redireccionConEstado(
       request,
       nextPath,

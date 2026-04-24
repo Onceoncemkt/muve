@@ -30,7 +30,11 @@ function hoyLocalISO() {
 function faltanColumnasOpcionalesNegocio(error: { message?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() ?? ''
   return message.includes('column')
-    && (message.includes('requiere_reserva') || message.includes('capacidad_default'))
+    && (
+      message.includes('requiere_reserva')
+      || message.includes('capacidad_default')
+      || message.includes('instagram_handle')
+    )
 }
 
 export default function ExplorarPage() {
@@ -68,10 +72,10 @@ export default function ExplorarPage() {
       }
 
       if (faltanColumnasOpcionalesNegocio(consulta.error)) {
-        type NegocioLegacy = Omit<Negocio, 'requiere_reserva' | 'capacidad_default'>
+        type NegocioLegacy = Omit<Negocio, 'instagram_handle' | 'requiere_reserva' | 'capacidad_default'>
         const fallback = await supabase
           .from('negocios')
-          .select('id, nombre, categoria, ciudad, direccion, descripcion, imagen_url, instagram_handle, activo')
+          .select('id, nombre, categoria, ciudad, direccion, descripcion, imagen_url, activo')
           .eq('activo', true)
           .order('ciudad')
           .order('nombre')
@@ -81,6 +85,7 @@ export default function ExplorarPage() {
         if (!fallback.error) {
           const listaCompat = ((fallback.data ?? []) as NegocioLegacy[]).map(negocio => ({
             ...negocio,
+            instagram_handle: null,
             requiere_reserva: true,
             capacidad_default: 10,
           }))
