@@ -46,6 +46,11 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
 function planRequeridoNegocio(negocio: Negocio): PlanMembresia {
   return normalizarPlan(negocio.plan_requerido ?? null) ?? 'basico'
 }
+function normalizarHandleInstagram(handle: string | null | undefined): string | null {
+  if (!handle) return null
+  const limpio = handle.trim().replace(/^@+/, '')
+  return limpio.length > 0 ? limpio : null
+}
 
 export default function ExplorarPage() {
   const [negocios, setNegocios] = useState<Negocio[]>([])
@@ -198,6 +203,7 @@ export default function ExplorarPage() {
               const puedeReservar = planEfectivo
                 ? puedeReservarConPlan(planEfectivo, planRequerido)
                 : false
+              const instagramHandle = normalizarHandleInstagram(negocio.instagram_handle)
 
               return (
                 <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
@@ -217,6 +223,21 @@ export default function ExplorarPage() {
                     </p>
                     <p>
                       <span className="font-semibold text-[#0A0A0A]">Dirección:</span> {negocio.direccion}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#0A0A0A]">Instagram:</span>{' '}
+                      {instagramHandle ? (
+                        <a
+                          href={`https://instagram.com/${instagramHandle}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
+                        >
+                          @{instagramHandle}
+                        </a>
+                      ) : (
+                        'No disponible'
+                      )}
                     </p>
                   </div>
 
