@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import type { DiaSemana } from '@/types'
+import { enviarPushAUsuarios, obtenerStaffIdsPorNegocio } from '@/lib/push/server'
 function diaSemanaDesdeFecha(fecha: string): DiaSemana | null {
   const dias: DiaSemana[] = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
   const date = new Date(`${fecha}T00:00:00`)
   if (Number.isNaN(date.getTime())) return null
   return dias[date.getDay()]
+}
+
+function formatHora(hora: string) {
+  return hora.slice(0, 5)
 }
 
 function admin() {
@@ -79,7 +84,7 @@ export async function POST(request: NextRequest) {
   // Verificar que el horario existe y está activo
   const { data: horario, error: hError } = await db
     .from('horarios')
-    .select('id, capacidad_total, activo, dia_semana')
+    .select('id, capacidad_total, activo, dia_semana, hora_inicio, negocio_id')
     .eq('id', horario_id)
     .single()
 
@@ -121,6 +126,48 @@ export async function POST(request: NextRequest) {
     }
     console.error('[POST /api/reservaciones]', iError)
     return NextResponse.json({ error: iError.message }, { status: 500 })
+  }
+
+  const [negocioData, usuarioData] = await Promise.all([
+    typeof horario.negocio_id === 'string'
+      ? db
+        .from('negocios')
+        .select('nombre')
+        .eq('id', horario.negocio_id)
+        .maybeSingle<{ nombre: string }>()
+      : Promise.resolve({ data: null, error: null }),
+    db
+      .from('users')
+      .select('nombre')
+      .eq('id', user.id)
+      .maybeSingle<{ nombre: string }>(),
+  ])
+
+  const negocioNombre = negocioData.data?.nombre ?? 'negocio'
+  const usuarioNombre = usuarioData.data?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
+  const hora = formatHora(horario.hora_inicio)
+
+  await enviarPushAUsuarios(
+    [user.id],
+    {
+      title: 'MUVET',
+      body: `Reservación confirmada en ${negocioNombre} — ${fecha} a las ${hora}`,
+      url: '/historial',
+    }
+  )
+
+  if (typeof horario.negocio_id === 'string') {
+    const staffIds = await obtenerStaffIdsPorNegocio(horario.negocio_id)
+    if (staffIds.length > 0) {
+      await enviarPushAUsuarios(
+        staffIds,
+        {
+          title: 'MUVET',
+          body: `Nueva reservación de ${usuarioNombre} para ${fecha} a las ${hora}`,
+          url: '/negocio/dashboard',
+        }
+      )
+    }
   }
 
   return NextResponse.json({ reservacion: nueva }, { status: 201 })

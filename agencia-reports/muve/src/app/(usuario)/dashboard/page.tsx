@@ -5,6 +5,7 @@ import QRDisplay from '@/components/QRDisplay'
 import BotonPortal from '@/components/BotonPortal'
 import MisReservaciones from '@/components/MisReservaciones'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
+import PushNotificationsSetup from '@/components/push/PushNotificationsSetup'
 import RoleRedirectEffect from './RoleRedirectEffect'
 import { CIUDAD_LABELS } from '@/types'
 import type { User } from '@/types'
@@ -53,6 +54,7 @@ export default async function DashboardPage({
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
       <RoleRedirectEffect />
+      <PushNotificationsSetup />
       {/* Membresía recién activada */}
       {recienActivada && (
         <div className="bg-[#6B4FE8] px-4 py-3 text-center text-sm font-bold text-white">

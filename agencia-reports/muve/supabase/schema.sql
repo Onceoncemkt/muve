@@ -66,11 +66,22 @@ create table public.qr_tokens (
   usado             boolean not null default false
 );
 
+-- ============================================================
+-- TABLA: push_subscriptions
+-- ============================================================
+create table public.push_subscriptions (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid references public.users(id) on delete cascade,
+  subscription  jsonb not null,
+  created_at    timestamp default now()
+);
+
 -- Índice para búsqueda rápida por token
 create index qr_tokens_token_idx on public.qr_tokens (token);
 create index visitas_user_id_idx on public.visitas (user_id);
 create index visitas_negocio_id_idx on public.visitas (negocio_id);
 create index users_negocio_id_idx on public.users (negocio_id);
+create index push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -79,6 +90,7 @@ alter table public.users enable row level security;
 alter table public.negocios enable row level security;
 alter table public.visitas enable row level security;
 alter table public.qr_tokens enable row level security;
+alter table public.push_subscriptions enable row level security;
 
 -- users
 create policy "usuarios leen su propio perfil" on public.users
@@ -131,6 +143,12 @@ create policy "staff actualiza tokens (marcar usado)" on public.qr_tokens
   for update using (
     exists (select 1 from public.users u where u.id = auth.uid() and u.rol in ('staff', 'admin'))
   );
+
+-- push_subscriptions
+create policy "usuarios gestionan sus push subscriptions" on public.push_subscriptions
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 -- ============================================================
 -- TRIGGER: crear perfil al registrarse
