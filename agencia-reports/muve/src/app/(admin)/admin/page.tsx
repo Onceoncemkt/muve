@@ -4,6 +4,7 @@ import { CIUDAD_LABELS, CATEGORIA_LABELS } from '@/types'
 import { stripe } from '@/lib/stripe'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { Ciudad, Categoria, Rol } from '@/types'
+import { normalizarRol, rolDesdeAuth } from '@/lib/auth/roles'
 
 type PlanId = 'basico' | 'plus' | 'total'
 
@@ -111,8 +112,8 @@ export default async function AdminPage({
     .select('rol')
     .eq('id', user.id)
     .single<{ rol: Rol }>()
-
-  if (perfilAdmin?.rol !== 'admin') redirect('/dashboard')
+  const rolAdmin = normalizarRol(perfilAdmin?.rol) ?? rolDesdeAuth(user)
+  if (rolAdmin !== 'admin') redirect('/dashboard')
 
   const params = await searchParams
   const q = params.q?.trim() ?? ''

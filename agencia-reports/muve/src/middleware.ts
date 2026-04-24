@@ -8,6 +8,14 @@ function startsWithRoute(pathname: string, route: string): boolean {
   return pathname === route || pathname.startsWith(`${route}/`)
 }
 
+function redirectProtegidoValido(pathname: string | null): string | null {
+  if (!pathname) return null
+  if (!pathname.startsWith('/')) return null
+  if (RUTAS_AUTH.some(r => startsWithRoute(pathname, r))) return null
+  if (!RUTAS_PROTEGIDAS.some(r => startsWithRoute(pathname, r))) return null
+  return pathname
+}
+
 // Propaga las cookies de sesión de supabaseResponse al redirect.
 // Supabase puede haber refrescado el token durante getUser() — si se pierde
 // ese Set-Cookie la sesión queda inválida en el siguiente request.
@@ -54,8 +62,12 @@ export async function middleware(request: NextRequest) {
   }
 
   if (esRutaAuth && user) {
+    const redirectSolicitado = redirectProtegidoValido(
+      request.nextUrl.searchParams.get('redirect')
+    )
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = redirectSolicitado ?? '/dashboard'
+    url.search = ''
     return redirectWithSession(url, supabaseResponse)
   }
 

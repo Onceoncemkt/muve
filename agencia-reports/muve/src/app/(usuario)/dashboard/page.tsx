@@ -7,6 +7,7 @@ import MisReservaciones from '@/components/MisReservaciones'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import { CIUDAD_LABELS } from '@/types'
 import type { User } from '@/types'
+import { normalizarRol, rolDesdeAuth } from '@/lib/auth/roles'
 
 export default async function DashboardPage({
   searchParams,
@@ -23,8 +24,9 @@ export default async function DashboardPage({
     .select('*')
     .eq('id', user.id)
     .single<User>()
-  if (perfil?.rol === 'admin') redirect('/admin')
-  if (perfil?.rol === 'staff') redirect('/negocio/dashboard')
+  const rol = normalizarRol(perfil?.rol) ?? rolDesdeAuth(user)
+  if (rol === 'admin') redirect('/admin')
+  if (rol === 'staff') redirect('/negocio/dashboard')
 
   const { count: totalVisitas } = await supabase
     .from('visitas')
