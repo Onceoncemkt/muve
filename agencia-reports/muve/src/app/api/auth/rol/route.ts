@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { normalizarRol, rolDesdeAuth } from '@/lib/auth/roles'
-import type { Rol } from '@/types'
+import { obtenerRolServidor } from '@/lib/auth/server-role'
 
 export async function GET() {
   const supabase = await createClient()
@@ -11,13 +10,6 @@ export async function GET() {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   }
 
-  const { data: perfil } = await supabase
-    .schema('public')
-    .from('users')
-    .select('rol')
-    .eq('id', user.id)
-    .maybeSingle<{ rol: Rol }>()
-
-  const rol = normalizarRol(perfil?.rol) ?? rolDesdeAuth(user) ?? 'usuario'
+  const rol = await obtenerRolServidor(user)
   return NextResponse.json({ rol })
 }

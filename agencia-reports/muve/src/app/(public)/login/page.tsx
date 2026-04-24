@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { normalizarRol, panelPorRol, rolDesdeAuth } from '@/lib/auth/roles'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -29,19 +30,27 @@ export default function LoginPage() {
         setCargando(false)
         return
       }
-const { data: perfil } = await supabase
+      const { data: perfil } = await supabase
         .from('users')
         .select('rol')
         .eq('id', data.user.id)
-        .single()
-      const rol = perfil?.rol ?? 'usuario'
-      if (rol === 'admin') {
-        window.location.href = '/admin'
-      } else if (rol === 'staff') {
-        window.location.href = '/negocio/dashboard'
-      } else {
-        window.location.href = '/dashboard'
+        .maybeSingle()
+      let rol = normalizarRol(perfil?.rol) ?? rolDesdeAuth(data.user) ?? 'usuario'
+
+      try {
+        const roleResponse = await fetch('/api/auth/rol', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        if (roleResponse.ok) {
+          const payload = await roleResponse.json() as { rol?: string }
+          rol = normalizarRol(payload.rol) ?? rol
+        }
+      } catch {
+        // fallback silencioso: se usa el rol derivado localmente
       }
+      window.location.href = panelPorRol(rol)
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
       setCargando(false)

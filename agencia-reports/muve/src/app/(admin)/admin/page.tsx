@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation'
 import { CIUDAD_LABELS, CATEGORIA_LABELS } from '@/types'
 import { stripe } from '@/lib/stripe'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
-import type { Ciudad, Categoria, Rol } from '@/types'
-import { normalizarRol, rolDesdeAuth } from '@/lib/auth/roles'
+import type { Ciudad, Categoria } from '@/types'
+import { obtenerRolServidor } from '@/lib/auth/server-role'
 
 type PlanId = 'basico' | 'plus' | 'total'
 
@@ -109,12 +109,7 @@ export default async function AdminPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!adminPreviewEnabled) {
     if (!user) redirect('/login')
-    const { data: perfilAdmin } = await supabase
-      .from('users')
-      .select('rol')
-      .eq('id', user.id)
-      .single<{ rol: Rol }>()
-    const rolAdmin = normalizarRol(perfilAdmin?.rol) ?? rolDesdeAuth(user)
+    const rolAdmin = await obtenerRolServidor(user)
     if (rolAdmin !== 'admin') redirect('/dashboard')
   }
 

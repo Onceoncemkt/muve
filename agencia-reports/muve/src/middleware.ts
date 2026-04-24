@@ -70,6 +70,24 @@ export async function middleware(request: NextRequest) {
     url.search = ''
     return redirectWithSession(url, supabaseResponse)
   }
+  // Proteger /admin solo para admins
+  if (startsWithRoute(pathname, '/admin') && user) {
+    const { data: perfil } = await supabase.from('users').select('rol').eq('id', user.id).single()
+    if (perfil?.rol !== 'admin') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return redirectWithSession(url, supabaseResponse)
+    }
+  }
+  // Proteger /negocio solo para staff y admin
+  if (startsWithRoute(pathname, '/negocio') && user) {
+    const { data: perfil } = await supabase.from('users').select('rol').eq('id', user.id).single()
+    if (!['staff', 'admin'].includes(perfil?.rol ?? '')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return redirectWithSession(url, supabaseResponse)
+    }
+  }
 
   return supabaseResponse
 }
