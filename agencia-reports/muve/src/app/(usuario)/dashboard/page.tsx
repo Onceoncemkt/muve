@@ -4,6 +4,7 @@ import Link from 'next/link'
 import QRDisplay from '@/components/QRDisplay'
 import BotonPortal from '@/components/BotonPortal'
 import MisReservaciones from '@/components/MisReservaciones'
+import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import { CIUDAD_LABELS } from '@/types'
 import type { User } from '@/types'
 
@@ -72,9 +73,12 @@ export default async function DashboardPage({
 
       {/* Encabezado */}
       <div className="bg-[#0A0A0A] px-6 pb-8 pt-10 text-white">
-        <p className="text-xs font-bold uppercase tracking-widest text-white/40">
-          {CIUDAD_LABELS[ciudad]}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-white/40">
+            {CIUDAD_LABELS[ciudad]}
+          </p>
+          <BotonCerrarSesion className="shrink-0" />
+        </div>
         <h1 className="mt-2 text-2xl font-black tracking-tight">
           Hola, {nombre.split(' ')[0]}
         </h1>

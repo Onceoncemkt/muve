@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { DiaSemana, EstadoReserva } from '@/types'
 import { formatHora } from '@/types'
 
@@ -183,7 +184,7 @@ export default function NegocioDashboardPage() {
             <h1 className="text-2xl font-black tracking-tight text-white">Panel de negocio</h1>
             <p className="mt-1 text-sm text-white/40">Reservaciones de hoy agrupadas por horario</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
               href="/validar"
               className="rounded-lg bg-[#E8FF47] px-3 py-2 text-xs font-black uppercase tracking-widest text-[#0A0A0A] transition-colors hover:bg-white"
@@ -196,6 +197,7 @@ export default function NegocioDashboardPage() {
             >
               Horarios
             </Link>
+            <BotonCerrarSesion />
           </div>
         </div>
       </div>

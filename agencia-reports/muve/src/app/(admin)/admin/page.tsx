@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CIUDAD_LABELS, CATEGORIA_LABELS } from '@/types'
 import { stripe } from '@/lib/stripe'
+import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { Ciudad, Categoria, Rol } from '@/types'
 
 type PlanId = 'basico' | 'plus' | 'total'
@@ -250,10 +251,15 @@ export default async function AdminPage({
   return (
     <div className="min-h-screen bg-[#0A0A0A] pb-16 text-white">
       <div className="border-b border-white/10 px-4 py-6">
-        <h1 className="text-2xl font-black tracking-tight text-[#E8FF47]">Panel Admin</h1>
-        <p className="mt-1 text-sm text-white/50">
-          MUVET · {new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-[#E8FF47]">Panel Admin</h1>
+            <p className="mt-1 text-sm text-white/50">
+              MUVET · {new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+          <BotonCerrarSesion className="shrink-0" />
+        </div>
       </div>
       <div className="space-y-8 px-4 py-6">
         {/* Métricas generales */}
