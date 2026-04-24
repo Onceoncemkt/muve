@@ -34,6 +34,11 @@ type NegocioAdmin = {
   nombre: string
   ciudad: Ciudad
   categoria: Categoria
+  direccion: string
+  descripcion: string | null
+  instagram_handle: string | null
+  requiere_reserva: boolean
+  visitas_permitidas_por_mes: number
   activo: boolean
 }
 
@@ -73,6 +78,9 @@ const PRICE_PLAN_MAP: Record<string, PlanId> = {
   [process.env.STRIPE_PRICE_ID_TOTAL ?? 'price_1TPWhgRzNt1SyOBvrA0F50v1']: 'total',
 }
 
+const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CATEGORIAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
+
 function resolverPlan(priceId: string | null | undefined, unitAmount: number | null | undefined): PlanId | null {
   if (priceId && PRICE_PLAN_MAP[priceId]) {
     return PRICE_PLAN_MAP[priceId]
@@ -101,7 +109,7 @@ function formatearFecha(fecha: string) {
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{ q?: string; negocio_status?: string; negocio_msg?: string }>
 }) {
   const adminPreviewEnabled = process.env.NODE_ENV === 'development' && process.env.PREVIEW_ADMIN === 'true'
   const supabase = await createClient()
@@ -116,6 +124,10 @@ export default async function AdminPage({
   const params = await searchParams
   const q = params.q?.trim() ?? ''
   const qNormalizada = q.toLowerCase()
+  const negocioStatus = params.negocio_status === 'ok' || params.negocio_status === 'error'
+    ? params.negocio_status
+    : null
+  const negocioMsg = params.negocio_msg?.trim() ?? ''
 
   const inicioMes = new Date()
   inicioMes.setDate(1)
@@ -138,7 +150,7 @@ export default async function AdminPage({
       .order('fecha', { ascending: false }),
     supabase
       .from('negocios')
-      .select('id, nombre, ciudad, categoria, activo')
+      .select('id, nombre, ciudad, categoria, direccion, descripcion, instagram_handle, requiere_reserva, visitas_permitidas_por_mes, activo')
       .order('ciudad')
       .order('nombre'),
   ])
@@ -240,10 +252,6 @@ export default async function AdminPage({
     .reduce((acc, u) => acc + u.plan.precioMensual, 0)
   const visitasTotalesMes = visitasMes.length
 
-  const negociosPorCiudad = (Object.keys(CIUDAD_LABELS) as Ciudad[]).map(ciudad => ({
-    ciudad,
-    negocios: negociosAfiliados.filter(n => n.ciudad === ciudad),
-  }))
 
   const nextPath = q ? `/admin?q=${encodeURIComponent(q)}` : '/admin'
 
@@ -450,75 +458,354 @@ export default async function AdminPage({
         </section>
 
         {/* Negocios */}
-        <section>
-          <h2 className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-white/40">
-            Negocios
-          </h2>
-          <div className="space-y-4">
-            {negociosPorCiudad.map(bloque => (
-              <div key={bloque.ciudad} className="rounded-xl border border-white/10 bg-[#111111] p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-black text-[#E8FF47]">{CIUDAD_LABELS[bloque.ciudad]}</p>
-                  <p className="text-xs text-white/50">{bloque.negocios.length} negocios</p>
+        <section id="negocios">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-xs font-black uppercase tracking-[0.18em] text-white/40">
+              Negocios
+            </h2>
+            <p className="text-xs font-semibold text-white/50">
+              {negociosAfiliados.length} registrados · solo los activos se muestran en /explorar
+            </p>
+          </div>
+
+          {negocioStatus && (
+            <div
+              className={`mb-4 rounded-lg px-4 py-3 text-sm font-semibold ${negocioStatus === 'ok'
+                ? 'bg-[#E8FF47]/20 text-[#E8FF47] ring-1 ring-[#E8FF47]/40'
+                : 'bg-[#6B4FE8]/20 text-[#CBBEFF] ring-1 ring-[#6B4FE8]/40'
+                }`}
+            >
+              {negocioMsg || (negocioStatus === 'ok' ? 'Operación realizada.' : 'No se pudo completar la operación.')}
+            </div>
+          )}
+
+          <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
+            <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+              <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-[#E8FF47]">
+                Lista de negocios existentes
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
+                      <th className="px-2 py-2">Nombre</th>
+                      <th className="px-2 py-2">Categoría</th>
+                      <th className="px-2 py-2">Ciudad</th>
+                      <th className="px-2 py-2">Instagram</th>
+                      <th className="px-2 py-2">Estado</th>
+                      <th className="px-2 py-2">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {negociosAfiliados.map(negocio => (
+                      <tr key={negocio.id} className="border-b border-white/10 align-top text-sm text-white/85">
+                        <td className="px-2 py-2">
+                          <p className="font-semibold">{negocio.nombre}</p>
+                          <p className="mt-0.5 text-xs text-white/45">{negocio.direccion}</p>
+                        </td>
+                        <td className="px-2 py-2">{CATEGORIA_LABELS[negocio.categoria]}</td>
+                        <td className="px-2 py-2">{CIUDAD_LABELS[negocio.ciudad]}</td>
+                        <td className="px-2 py-2 text-[#CBBEFF]">
+                          {negocio.instagram_handle ? `@${negocio.instagram_handle}` : '—'}
+                        </td>
+                        <td className="px-2 py-2">
+                          <span
+                            className={`rounded-md px-2 py-1 text-xs font-bold ${negocio.activo
+                              ? 'bg-[#E8FF47] text-[#0A0A0A]'
+                              : 'bg-white/10 text-white/70'
+                              }`}
+                          >
+                            {negocio.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex flex-wrap gap-2">
+                              <details>
+                                <summary className="cursor-pointer rounded-md border border-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#CBBEFF] hover:bg-[#6B4FE8]/20">
+                                  Editar
+                                </summary>
+                                <div className="mt-2 w-[26rem] max-w-full rounded-lg border border-white/10 bg-[#0A0A0A] p-3">
+                                  <form
+                                    method="POST"
+                                    action={`/api/admin/negocios/${negocio.id}`}
+                                    className="grid gap-2 sm:grid-cols-2"
+                                  >
+                                    <input type="hidden" name="next" value={nextPath} />
+                                    <div className="sm:col-span-2">
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Nombre
+                                      </label>
+                                      <input
+                                        type="text"
+                                        name="nombre"
+                                        required
+                                        defaultValue={negocio.nombre}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Categoría
+                                      </label>
+                                      <select
+                                        name="categoria"
+                                        required
+                                        defaultValue={negocio.categoria}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      >
+                                        {CATEGORIAS.map(categoria => (
+                                          <option key={categoria} value={categoria}>
+                                            {CATEGORIA_LABELS[categoria]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Ciudad
+                                      </label>
+                                      <select
+                                        name="ciudad"
+                                        required
+                                        defaultValue={negocio.ciudad}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      >
+                                        {CIUDADES.map(ciudad => (
+                                          <option key={ciudad} value={ciudad}>
+                                            {CIUDAD_LABELS[ciudad]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Dirección
+                                      </label>
+                                      <input
+                                        type="text"
+                                        name="direccion"
+                                        required
+                                        defaultValue={negocio.direccion}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Descripción
+                                      </label>
+                                      <textarea
+                                        name="descripcion"
+                                        defaultValue={negocio.descripcion ?? ''}
+                                        rows={2}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Instagram
+                                      </label>
+                                      <input
+                                        type="text"
+                                        name="instagram_handle"
+                                        defaultValue={negocio.instagram_handle ?? ''}
+                                        placeholder="usuario"
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Visitas por mes
+                                      </label>
+                                      <input
+                                        type="number"
+                                        name="visitas_permitidas_por_mes"
+                                        required
+                                        min={1}
+                                        defaultValue={negocio.visitas_permitidas_por_mes}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                    </div>
+                                    <label className="sm:col-span-2 inline-flex items-center gap-2 rounded-md border border-white/10 bg-[#151515] px-2.5 py-2 text-xs text-white/80">
+                                      <input
+                                        type="checkbox"
+                                        name="requiere_reserva"
+                                        value="true"
+                                        defaultChecked={negocio.requiere_reserva}
+                                        className="h-4 w-4 accent-[#6B4FE8]"
+                                      />
+                                      Requiere reserva
+                                    </label>
+                                    <div className="sm:col-span-2 flex justify-end">
+                                      <button
+                                        type="submit"
+                                        className="rounded-md bg-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white hover:bg-[#5b40cd]"
+                                      >
+                                        Guardar cambios
+                                      </button>
+                                    </div>
+                                  </form>
+                                </div>
+                              </details>
+
+                              <form method="POST" action={`/api/admin/negocios/${negocio.id}/toggle-activo`}>
+                                <input type="hidden" name="next" value={nextPath} />
+                                <button
+                                  type="submit"
+                                  className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${negocio.activo
+                                    ? 'bg-[#6B4FE8] text-white hover:bg-[#5b40cd]'
+                                    : 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#d8f03f]'
+                                    }`}
+                                >
+                                  {negocio.activo ? 'Desactivar' : 'Activar'}
+                                </button>
+                              </form>
+                            </div>
+                            <p className="text-[11px] text-white/45">
+                              Visitas del mes: {conteoVisitasPorNegocio.get(negocio.id) ?? 0}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {negociosAfiliados.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-2 py-4 text-sm text-white/50">
+                          No hay negocios registrados.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+              <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-[#E8FF47]">
+                Agregar negocio nuevo
+              </h3>
+              <form method="POST" action="/api/admin/negocios" className="space-y-3">
+                <input type="hidden" name="next" value={nextPath} />
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    name="nombre"
+                    required
+                    className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                  />
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="min-w-full border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
-                        <th className="px-2 py-2">Negocio</th>
-                        <th className="px-2 py-2">Categoría</th>
-                        <th className="px-2 py-2">Visitas mes</th>
-                        <th className="px-2 py-2">Estado</th>
-                        <th className="px-2 py-2">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bloque.negocios.map(negocio => (
-                        <tr key={negocio.id} className="border-b border-white/10 text-sm text-white/85">
-                          <td className="px-2 py-2 font-semibold">{negocio.nombre}</td>
-                          <td className="px-2 py-2">{CATEGORIA_LABELS[negocio.categoria]}</td>
-                          <td className="px-2 py-2 font-semibold text-[#E8FF47]">
-                            {conteoVisitasPorNegocio.get(negocio.id) ?? 0}
-                          </td>
-                          <td className="px-2 py-2">
-                            <span
-                              className={`rounded-md px-2 py-1 text-xs font-bold ${negocio.activo
-                                ? 'bg-[#E8FF47] text-[#0A0A0A]'
-                                : 'bg-white/10 text-white/70'
-                                }`}
-                            >
-                              {negocio.activo ? 'Activo' : 'Inactivo'}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2">
-                            <form method="POST" action={`/api/admin/negocios/${negocio.id}/toggle-activo`}>
-                              <input type="hidden" name="next" value={nextPath} />
-                              <button
-                                type="submit"
-                                className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${negocio.activo
-                                  ? 'bg-[#6B4FE8] text-white hover:bg-[#5b40cd]'
-                                  : 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#d8f03f]'
-                                  }`}
-                              >
-                                {negocio.activo ? 'Desactivar' : 'Activar'}
-                              </button>
-                            </form>
-                          </td>
-                        </tr>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                      Categoría
+                    </label>
+                    <select
+                      name="categoria"
+                      required
+                      defaultValue=""
+                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                    >
+                      <option value="" disabled>Selecciona</option>
+                      {CATEGORIAS.map(categoria => (
+                        <option key={categoria} value={categoria}>
+                          {CATEGORIA_LABELS[categoria]}
+                        </option>
                       ))}
-                      {bloque.negocios.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="px-2 py-3 text-sm text-white/50">
-                            No hay negocios registrados en esta ciudad.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                      Ciudad
+                    </label>
+                    <select
+                      name="ciudad"
+                      required
+                      defaultValue=""
+                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                    >
+                      <option value="" disabled>Selecciona</option>
+                      {CIUDADES.map(ciudad => (
+                        <option key={ciudad} value={ciudad}>
+                          {CIUDAD_LABELS[ciudad]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
-            ))}
+
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                    Dirección
+                  </label>
+                  <input
+                    type="text"
+                    name="direccion"
+                    required
+                    className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                    Descripción
+                  </label>
+                  <textarea
+                    name="descripcion"
+                    rows={3}
+                    className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                      Instagram
+                    </label>
+                    <input
+                      type="text"
+                      name="instagram_handle"
+                      placeholder="usuario"
+                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                      Visitas por mes
+                    </label>
+                    <input
+                      type="number"
+                      name="visitas_permitidas_por_mes"
+                      required
+                      min={1}
+                      defaultValue={8}
+                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                    />
+                  </div>
+                </div>
+
+                <label className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-[#151515] px-3 py-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    name="requiere_reserva"
+                    value="true"
+                    defaultChecked
+                    className="h-4 w-4 accent-[#6B4FE8]"
+                  />
+                  Requiere reserva
+                </label>
+
+                <button
+                  type="submit"
+                  className="w-full rounded-md bg-[#E8FF47] px-4 py-2.5 text-sm font-black uppercase tracking-wide text-[#0A0A0A] hover:bg-[#f1ff89]"
+                >
+                  Agregar negocio
+                </button>
+              </form>
+            </div>
           </div>
         </section>
       </div>
