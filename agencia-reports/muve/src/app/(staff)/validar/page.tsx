@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import QRScanner from '@/components/QRScanner'
-import { createClient } from '@/lib/supabase/client'
 import type { Negocio } from '@/types'
 
 type Tab = 'scanner' | 'manual'
 type RolValidar = 'staff' | 'admin'
+type NegocioContexto = Pick<Negocio, 'id' | 'nombre' | 'ciudad'>
 
 interface ResultadoValidacion {
   valido: boolean
@@ -15,11 +15,16 @@ interface ResultadoValidacion {
   error?: string
 }
 
+function ciudadLabel(ciudad: string | null | undefined) {
+  if (!ciudad) return 'Sin ciudad'
+  return ciudad.charAt(0).toUpperCase() + ciudad.slice(1)
+}
+
 export default function ValidarPage() {
   const [tab, setTab] = useState<Tab>('scanner')
   const [rol, setRol] = useState<RolValidar | null>(null)
-  const [negocios, setNegocios] = useState<Negocio[]>([])
-  const [negocioAsignado, setNegocioAsignado] = useState<Negocio | null>(null)
+  const [negocios, setNegocios] = useState<NegocioContexto[]>([])
+  const [negocioAsignado, setNegocioAsignado] = useState<NegocioContexto | null>(null)
   const [negocioId, setNegocioId] = useState('')
   const [token, setToken] = useState('')
   const [resultado, setResultado] = useState<ResultadoValidacion | null>(null)
@@ -31,90 +36,57 @@ export default function ValidarPage() {
   useEffect(() => {
     let activo = true
 
-    function faltaColumnaNegocioId(error: { message?: string } | null | undefined) {
-      const message = error?.message?.toLowerCase() ?? ''
-      return message.includes('column') && message.includes('negocio_id')
-    }
-
     async function cargarContexto() {
-      const supabase = createClient()
-      const { data: authData } = await supabase.auth.getUser()
+      setCargandoContexto(true)
+
+      const res = await fetch('/api/negocio/negocios', { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
       if (!activo) return
-      if (!authData.user) {
-        setErrorContexto('No autenticado')
+
+      if (!res.ok) {
+        setRol(null)
+        setNegocios([])
+        setNegocioAsignado(null)
+        setNegocioId('')
+        setErrorContexto(data.error ?? 'No se pudo cargar el contexto de validación')
         setCargandoContexto(false)
         return
       }
 
-      let perfil: { rol: string; negocio_id: string | null } | null = null
-      const consultaPerfil = await supabase
-        .from('users')
-        .select('rol, negocio_id')
-        .eq('id', authData.user.id)
-        .single<{ rol: string; negocio_id: string | null }>()
-
-      if (!consultaPerfil.error && consultaPerfil.data) {
-        perfil = consultaPerfil.data
-      } else if (faltaColumnaNegocioId(consultaPerfil.error)) {
-        const fallback = await supabase
-          .from('users')
-          .select('rol')
-          .eq('id', authData.user.id)
-          .single<{ rol: string }>()
-        if (!fallback.error && fallback.data) {
-          perfil = { rol: fallback.data.rol, negocio_id: null }
-        }
-      }
-
-      if (!activo) return
-
-      if (!perfil || !['staff', 'admin'].includes(perfil.rol)) {
+      const rolRespuesta = data.rol as RolValidar | undefined
+      if (!rolRespuesta || !['staff', 'admin'].includes(rolRespuesta)) {
+        setRol(null)
+        setNegocios([])
+        setNegocioAsignado(null)
+        setNegocioId('')
         setErrorContexto('Sin permisos para validar visitas')
         setCargandoContexto(false)
         return
       }
 
-      setRol(perfil.rol as RolValidar)
+      const lista = (data.negocios ?? []) as NegocioContexto[]
+      setRol(rolRespuesta)
 
-      if (perfil.rol === 'staff') {
-        if (!perfil.negocio_id) {
+      if (rolRespuesta === 'staff') {
+        const asignado = lista[0] ?? null
+        if (!asignado) {
+          setNegocios([])
+          setNegocioAsignado(null)
           setNegocioId('')
           setErrorContexto('Tu cuenta no tiene negocio asignado')
           setCargandoContexto(false)
           return
         }
 
-        const { data: negocio } = await supabase
-          .from('negocios')
-          .select('id, nombre, ciudad, categoria')
-          .eq('id', perfil.negocio_id)
-          .maybeSingle<Negocio>()
-
-        if (!activo) return
-
-        if (!negocio) {
-          setNegocioId('')
-          setErrorContexto('No se encontró tu negocio asignado')
-          setCargandoContexto(false)
-          return
-        }
-
-        setNegocioAsignado(negocio)
-        setNegocioId(negocio.id)
+        setNegocios([])
+        setNegocioAsignado(asignado)
+        setNegocioId(asignado.id)
         setErrorContexto(null)
         setCargandoContexto(false)
         return
       }
 
-      const { data } = await supabase
-        .from('negocios')
-        .select('id, nombre, ciudad, categoria')
-        .eq('activo', true)
-        .order('ciudad')
-        .order('nombre')
-
-      if (!activo) return
-      const lista = (data ?? []) as Negocio[]
+      setNegocioAsignado(null)
       setNegocios(lista)
       setNegocioId(prev => prev || lista[0]?.id || '')
       setErrorContexto(null)
@@ -182,14 +154,13 @@ export default function ValidarPage() {
     <div className="min-h-screen bg-[#F7F7F7] p-4">
       <div className="mx-auto max-w-sm space-y-4">
 
-        {/* Header */}
         <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
           <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Validar visita</h1>
           <p className="mt-1 text-sm text-[#888]">
             Escanea el QR del cliente para registrar su entrada
           </p>
         </div>
-        {/* Negocio asignado / selector admin */}
+
         {rol === 'admin' ? (
           <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
             <label className="mb-2 block text-[11px] font-black uppercase tracking-widest text-[#888]">
@@ -203,7 +174,7 @@ export default function ValidarPage() {
               <option value="">Selecciona tu negocio...</option>
               {negocios.map(n => (
                 <option key={n.id} value={n.id}>
-                  {n.nombre} — {n.ciudad.charAt(0).toUpperCase() + n.ciudad.slice(1)}
+                  {n.nombre} — {ciudadLabel(n.ciudad)}
                 </option>
               ))}
             </select>
@@ -215,13 +186,12 @@ export default function ValidarPage() {
             </label>
             <p className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-4 py-3 text-sm font-semibold text-[#0A0A0A]">
               {negocioAsignado
-                ? `${negocioAsignado.nombre} — ${negocioAsignado.ciudad.charAt(0).toUpperCase() + negocioAsignado.ciudad.slice(1)}`
+                ? `${negocioAsignado.nombre} — ${ciudadLabel(negocioAsignado.ciudad)}`
                 : (errorContexto ?? 'Cargando negocio...')}
             </p>
           </div>
         )}
 
-        {/* Tabs */}
         <div className="flex rounded-lg border border-[#E5E5E5] bg-white p-1">
           {(['scanner', 'manual'] as Tab[]).map(t => (
             <button
@@ -238,7 +208,6 @@ export default function ValidarPage() {
           ))}
         </div>
 
-        {/* Panel */}
         <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
           {tab === 'scanner' ? (
             <div className="flex flex-col gap-4">

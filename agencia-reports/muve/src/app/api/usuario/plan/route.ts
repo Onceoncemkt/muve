@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { stripe } from '@/lib/stripe'
 import { normalizarPlan, planDesdePriceId } from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
+import { createServiceClient } from '@/lib/supabase/service'
 
 type PerfilPlan = {
   plan_activo: boolean | null
@@ -11,21 +11,6 @@ type PerfilPlan = {
   stripe_subscription_id?: string | null
 }
 
-function serviceRoleKey() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-  if (key.startsWith('tsb_secret_')) {
-    return key.replace(/^tsb_secret_/, 'sb_secret_')
-  }
-  return key
-}
-
-function serviceClient() {
-  return createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceRoleKey(),
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 function mensajeColumnaNoExiste(error: { message?: string } | null | undefined, columna: string) {
   const message = error?.message?.toLowerCase() ?? ''
@@ -33,7 +18,7 @@ function mensajeColumnaNoExiste(error: { message?: string } | null | undefined, 
 }
 
 async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const consultaPrincipal = await supabase
     .from('users')
@@ -90,7 +75,7 @@ export async function GET() {
       try {
         plan = await planDesdeStripe(perfil.stripe_subscription_id)
         if (plan) {
-          const admin = serviceClient()
+          const admin = createServiceClient()
           await admin.from('users').update({ plan }).eq('id', user.id)
         }
       } catch (error) {

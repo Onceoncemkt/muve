@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdmin } from '@supabase/supabase-js'
 import type { Rol } from '@/types'
+import { createServiceClient } from '@/lib/supabase/service'
 
 type PerfilFlexible = {
   rol: Rol
@@ -20,13 +20,6 @@ type NegocioSinCiudad = {
   nombre: string
 }
 
-function admin() {
-  return createAdmin(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 function faltaColumna(error: { message?: string } | null | undefined, columna: string) {
   const message = error?.message?.toLowerCase() ?? ''
@@ -38,7 +31,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const db = admin()
+  const db = createServiceClient()
 
   const consultasPerfil = [
     { select: 'rol, ciudad, negocio_id', incluyeCiudad: true, incluyeNegocioId: true },

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { CATEGORIA_LABELS, type Negocio, type PlanMembresia } from '@/types'
 import {
   CATEGORIAS_VISIBLES_POR_PLAN,
@@ -46,16 +45,16 @@ export default function ExplorarPage() {
     async function cargarNegociosYPlan() {
       setCargando(true)
 
-      const supabase = createClient()
-
-      const [consultaNegocios, estadoPlan] = await Promise.all([
-        supabase.from('negocios').select('*').eq('activo', true),
+      const [respuestaNegocios, estadoPlan] = await Promise.all([
+        fetch('/api/explorar/negocios', { cache: 'no-store' }),
         obtenerEstadoPlanUsuario(),
       ])
 
+      const payloadNegocios = await respuestaNegocios.json().catch(() => ({ negocios: [], error: 'Respuesta inválida' }))
+
       console.log('[explorar] resultado query negocios activos', {
-        data: consultaNegocios.data,
-        error: consultaNegocios.error,
+        data: payloadNegocios.negocios ?? [],
+        error: payloadNegocios.error ?? null,
       })
 
       if (!activo) return
@@ -63,10 +62,10 @@ export default function ExplorarPage() {
       setPlanActivo(estadoPlan.plan_activo)
       setPlanUsuario(estadoPlan.plan)
 
-      if (consultaNegocios.error) {
+      if (!respuestaNegocios.ok) {
         setNegocios([])
       } else {
-        setNegocios((consultaNegocios.data ?? []) as Negocio[])
+        setNegocios((payloadNegocios.negocios ?? []) as Negocio[])
       }
 
       setCargando(false)

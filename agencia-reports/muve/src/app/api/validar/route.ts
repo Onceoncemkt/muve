@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
+  const authClient = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await authClient.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   }
+
+  const db = createServiceClient()
 
   function faltaColumnaNegocioId(error: { message?: string } | null | undefined) {
     const message = error?.message?.toLowerCase() ?? ''
@@ -16,7 +19,7 @@ export async function POST(request: NextRequest) {
 
   // Verificar que sea staff o admin
   let perfil: { rol: string; nombre: string | null; negocio_id: string | null } | null = null
-  const consultaPerfil = await supabase
+  const consultaPerfil = await db
     .from('users')
     .select('rol, nombre, negocio_id')
     .eq('id', user.id)
@@ -25,7 +28,7 @@ export async function POST(request: NextRequest) {
   if (!consultaPerfil.error && consultaPerfil.data) {
     perfil = consultaPerfil.data
   } else if (faltaColumnaNegocioId(consultaPerfil.error)) {
-    const fallback = await supabase
+    const fallback = await db
       .from('users')
       .select('rol, nombre')
       .eq('id', user.id)
@@ -58,7 +61,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Buscar el token
-  const { data: qrToken } = await supabase
+  const { data: qrToken } = await db
     .from('qr_tokens')
     .select('*, users(nombre, ciudad, plan_activo)')
     .eq('token', token)
@@ -83,7 +86,7 @@ export async function POST(request: NextRequest) {
   }
 
 
-  const { data: negocio } = await supabase
+  const { data: negocio } = await db
     .from('negocios')
     .select('nombre')
     .eq('id', negocioIdObjetivo)
@@ -91,12 +94,12 @@ export async function POST(request: NextRequest) {
 
   // Registrar visita y marcar token como usado
   const [{ error: visitaError }] = await Promise.all([
-    supabase.from('visitas').insert({
+    db.from('visitas').insert({
       user_id: qrToken.user_id,
       negocio_id: negocioIdObjetivo,
       validado_por: perfil.nombre,
     }),
-    supabase.from('qr_tokens').update({ usado: true }).eq('id', qrToken.id),
+    db.from('qr_tokens').update({ usado: true }).eq('id', qrToken.id),
   ])
 
   if (visitaError) {
