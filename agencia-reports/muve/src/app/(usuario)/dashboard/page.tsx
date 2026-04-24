@@ -73,10 +73,10 @@ export default async function DashboardPage({
       {/* Encabezado */}
       <div className="bg-[#0A0A0A] px-6 pb-8 pt-10 text-white">
         <p className="text-xs font-bold uppercase tracking-widest text-white/40">
-          📍 {CIUDAD_LABELS[ciudad]}
+          {CIUDAD_LABELS[ciudad]}
         </p>
         <h1 className="mt-2 text-2xl font-black tracking-tight">
-          Hola, {nombre.split(' ')[0]} 👋
+          Hola, {nombre.split(' ')[0]}
         </h1>
         <p className="mt-1 text-sm text-white/40">
           {planActivo ? 'Membresía activa' : 'Sin membresía activa'}

@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { formatHora } from '@/types'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { formatHora, type EstadoReserva } from '@/types'
 
 type NegocioReserva = { id: string; nombre: string; direccion: string }
 type HorarioReserva = {
@@ -16,7 +16,7 @@ type HorarioReserva = {
 interface ReservaUsuario {
   id: string
   fecha: string
-  estado: string
+  estado: EstadoReserva | string
   created_at: string
   horarios: HorarioReserva | HorarioReserva[] | null
 }
@@ -26,11 +26,27 @@ function normalizarRelacion<T>(value: T | T[] | null | undefined): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value
 }
 
+function obtenerFechaHora(reserva: ReservaUsuario): Date | null {
+  const horario = normalizarRelacion(reserva.horarios)
+  if (!horario?.hora_inicio) return null
+  const fechaHora = new Date(`${reserva.fecha}T${horario.hora_inicio}`)
+  if (Number.isNaN(fechaHora.getTime())) return null
+  return fechaHora
+}
+
+function etiquetaEstado(estado: string) {
+  if (estado === 'confirmada') return 'bg-[#E8FF47]/30 text-[#0A0A0A]'
+  if (estado === 'cancelada') return 'bg-red-200/80 text-red-900'
+  if (estado === 'completada') return 'bg-white/20 text-white'
+  return 'bg-white/10 text-white'
+}
+
 export default function MisReservaciones() {
   const [reservas, setReservas] = useState<ReservaUsuario[]>([])
   const [cargando, setCargando] = useState(true)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
   const [cancelandoId, setCancelandoId] = useState<string | null>(null)
+  const [ahoraMs, setAhoraMs] = useState(0)
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -40,21 +56,27 @@ export default function MisReservaciones() {
       if (!res.ok) {
         setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudieron cargar tus reservaciones' })
         setReservas([])
+        setAhoraMs(0)
       } else {
         setReservas((data.reservaciones ?? []) as ReservaUsuario[])
+        setAhoraMs(typeof data.now_ms === 'number' ? data.now_ms : 0)
       }
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar reservaciones' })
       setReservas([])
+      setAhoraMs(0)
     } finally {
       setCargando(false)
     }
   }, [])
 
   useEffect(() => {
-    const id = setTimeout(() => { void cargar() }, 0)
+    const id = setTimeout(() => {
+      void cargar()
+    }, 0)
     return () => clearTimeout(id)
   }, [cargar])
+
 
   async function cancelarReserva(id: string) {
     setCancelandoId(id)
@@ -70,73 +92,104 @@ export default function MisReservaciones() {
         setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudo cancelar la reservación' })
       } else {
         setMensaje({ tipo: 'ok', texto: 'Reservación cancelada' })
-        cargar()
+        void cargar()
       }
     } catch {
-      setMensaje({ tipo: 'error', texto: 'Error de conexión al cancelar' })
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al cancelar reservación' })
     } finally {
       setCancelandoId(null)
     }
   }
 
+  const reservasProximas = useMemo(() => {
+    if (!ahoraMs) return reservas
+    return reservas.filter(reserva => {
+      const fechaHora = obtenerFechaHora(reserva)
+      if (!fechaHora) return true
+      return fechaHora.getTime() >= ahoraMs
+    })
+  }, [reservas, ahoraMs])
+
   return (
-    <div className="mt-4 px-4">
-      <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-        <h2 className="text-xs font-black uppercase tracking-widest text-[#888]">Mis reservaciones</h2>
+    <section className="mt-4 px-4">
+      <div className="rounded-xl border border-white/10 bg-[#0A0A0A] p-4">
+        <h2 className="text-xs font-black uppercase tracking-widest text-[#E8FF47]">Mis reservaciones</h2>
 
         {mensaje && (
           <div className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold ${
             mensaje.tipo === 'ok'
-              ? 'bg-[#E8FF47]/20 text-[#0A0A0A] ring-1 ring-[#E8FF47]'
-              : 'bg-red-50 text-red-700 ring-1 ring-red-200'
+              ? 'bg-[#E8FF47]/20 text-[#E8FF47] ring-1 ring-[#E8FF47]/40'
+              : 'bg-red-100 text-red-800 ring-1 ring-red-300'
           }`}>
             {mensaje.texto}
           </div>
         )}
 
         {cargando ? (
-          <p className="mt-3 text-sm text-[#888]">Cargando reservaciones...</p>
-        ) : reservas.length === 0 ? (
-          <div className="mt-3">
-            <p className="text-sm text-[#888]">No tienes reservaciones próximas.</p>
-            <a
-              href="/explorar"
-              className="mt-3 inline-flex rounded-lg bg-[#6B4FE8] px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-[#5a3fd6]"
-            >
-              Explorar horarios
-            </a>
-          </div>
+          <p className="mt-3 text-sm text-white/60">Cargando reservaciones...</p>
+        ) : reservasProximas.length === 0 ? (
+          <p className="mt-3 text-sm text-white/80">No tienes reservaciones próximas</p>
         ) : (
-          <div className="mt-3 flex flex-col gap-2">
-            {reservas.map(r => {
-              const horario = normalizarRelacion(r.horarios)
-              const negocio = normalizarRelacion(horario?.negocios)
-              const fechaHora = horario ? new Date(`${r.fecha}T${horario.hora_inicio}`) : null
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full border-collapse text-left">
+              <thead>
+                <tr className="border-b border-white/15 text-[11px] uppercase tracking-widest text-white/60">
+                  <th className="px-2 py-2 font-black">Fecha</th>
+                  <th className="px-2 py-2 font-black">Negocio</th>
+                  <th className="px-2 py-2 font-black">Horario</th>
+                  <th className="px-2 py-2 font-black">Estado</th>
+                  <th className="px-2 py-2 font-black">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reservasProximas.map(reserva => {
+                  const horario = normalizarRelacion(reserva.horarios)
+                  const negocio = normalizarRelacion(horario?.negocios)
+                  const fechaHora = obtenerFechaHora(reserva)
+                  const faltanMasDe2Horas = fechaHora ? fechaHora.getTime() - ahoraMs > 2 * 60 * 60 * 1000 : false
+                  const puedeCancelar = reserva.estado === 'confirmada' && faltanMasDe2Horas
 
-              return (
-                <div key={r.id} className="flex items-center gap-3 rounded-lg border border-[#E5E5E5] px-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-[#0A0A0A]">{negocio?.nombre ?? 'Negocio'}</p>
-                    <p className="text-xs text-[#888]">
-                      {fechaHora
-                        ? fechaHora.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })
-                        : r.fecha}
-                      {horario ? ` · ${formatHora(horario.hora_inicio)}-${formatHora(horario.hora_fin)}` : ''}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => cancelarReserva(r.id)}
-                    disabled={cancelandoId === r.id}
-                    className="shrink-0 rounded-md border border-[#E5E5E5] px-2 py-1 text-[10px] font-bold uppercase text-[#888] transition-colors hover:border-red-200 hover:text-red-700 disabled:opacity-40"
-                  >
-                    {cancelandoId === r.id ? 'Cancelando' : 'Cancelar'}
-                  </button>
-                </div>
-              )
-            })}
+                  return (
+                    <tr key={reserva.id} className="border-b border-white/10 align-middle text-sm text-white/90 last:border-b-0">
+                      <td className="px-2 py-2">
+                        {new Date(`${reserva.fecha}T00:00:00`).toLocaleDateString('es-MX', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </td>
+                      <td className="px-2 py-2 font-semibold text-white">{negocio?.nombre ?? 'Negocio'}</td>
+                      <td className="px-2 py-2">
+                        {horario
+                          ? `${formatHora(horario.hora_inicio)} - ${formatHora(horario.hora_fin)}`
+                          : 'No disponible'}
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className={`rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${etiquetaEstado(reserva.estado)}`}>
+                          {reserva.estado}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2">
+                        {puedeCancelar ? (
+                          <button
+                            onClick={() => cancelarReserva(reserva.id)}
+                            disabled={cancelandoId === reserva.id}
+                            className="rounded-md bg-[#6B4FE8] px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-[#5a3fd6] disabled:opacity-40"
+                          >
+                            {cancelandoId === reserva.id ? 'Cancelando...' : 'Cancelar'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-white/40">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
-    </div>
+    </section>
   )
 }

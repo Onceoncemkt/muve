@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import NegocioCard from '@/components/NegocioCard'
 import { createClient } from '@/lib/supabase/client'
 import type { Negocio, Ciudad, Categoria, DiaSemana } from '@/types'
-import { CIUDAD_LABELS, CATEGORIA_LABELS, DIA_LABELS, formatHora } from '@/types'
+import { CIUDAD_LABELS, CATEGORIA_LABELS, formatHora } from '@/types'
 
 const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 const CATEGORIAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
@@ -19,6 +19,8 @@ interface HorarioDisponible {
   spots_ocupados: number
 }
 
+type Mensaje = { tipo: 'ok' | 'error'; texto: string }
+
 function hoyLocalISO() {
   const now = new Date()
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
@@ -31,15 +33,16 @@ export default function ExplorarPage() {
   const [ciudadFiltro, setCiudadFiltro] = useState<Ciudad | 'todas'>('todas')
   const [categoriaFiltro, setCategoriaFiltro] = useState<Categoria | 'todas'>('todas')
 
-  const [negocioSeleccionado, setNegocioSeleccionado] = useState<Negocio | null>(null)
   const [fechaReserva, setFechaReserva] = useState(hoyLocalISO())
-  const [horarios, setHorarios] = useState<HorarioDisponible[]>([])
-  const [cargandoHorarios, setCargandoHorarios] = useState(false)
+  const [horariosPorNegocio, setHorariosPorNegocio] = useState<Record<string, HorarioDisponible[]>>({})
+  const [negociosCargandoHorarios, setNegociosCargandoHorarios] = useState<string[]>([])
+  const [erroresHorarios, setErroresHorarios] = useState<Record<string, string>>({})
+  const [mensajesReserva, setMensajesReserva] = useState<Record<string, Mensaje>>({})
   const [reservandoHorarioId, setReservandoHorarioId] = useState<string | null>(null)
-  const [mensajeModal, setMensajeModal] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
 
   useEffect(() => {
     let activo = true
+
     async function cargarNegocios() {
       setCargando(true)
       const supabase = createClient()
@@ -54,38 +57,12 @@ export default function ExplorarPage() {
       setNegocios((data ?? []) as Negocio[])
       setCargando(false)
     }
-    cargarNegocios()
-    return () => { activo = false }
-  }, [])
 
-  const cargarHorarios = useCallback(async (negocioId: string, fecha: string) => {
-    setCargandoHorarios(true)
-    setMensajeModal(null)
-    try {
-      const res = await fetch(`/api/negocio/horarios?negocio_id=${encodeURIComponent(negocioId)}&fecha=${encodeURIComponent(fecha)}`)
-      const data = await res.json()
-      if (!res.ok) {
-        setMensajeModal({ tipo: 'error', texto: data.error ?? 'No se pudieron cargar horarios' })
-        setHorarios([])
-      } else {
-        setHorarios((data.horarios ?? []) as HorarioDisponible[])
-      }
-    } catch {
-      setMensajeModal({ tipo: 'error', texto: 'Error de conexión al consultar horarios' })
-      setHorarios([])
-    } finally {
-      setCargandoHorarios(false)
+    void cargarNegocios()
+    return () => {
+      activo = false
     }
   }, [])
-
-  useEffect(() => {
-    if (!negocioSeleccionado) return
-    if (negocioSeleccionado.requiere_reserva === false) return
-    const id = setTimeout(() => {
-      void cargarHorarios(negocioSeleccionado.id, fechaReserva)
-    }, 0)
-    return () => clearTimeout(id)
-  }, [negocioSeleccionado, fechaReserva, cargarHorarios])
 
   const negociosFiltrados = useMemo(() => {
     return negocios.filter(n => {
@@ -95,9 +72,81 @@ export default function ExplorarPage() {
     })
   }, [negocios, ciudadFiltro, categoriaFiltro])
 
-  async function reservarHorario(horarioId: string) {
+  const idsCargandoHorarios = useMemo(() => new Set(negociosCargandoHorarios), [negociosCargandoHorarios])
+
+  const cargarHorariosNegocio = useCallback(async (negocioId: string, fecha: string) => {
+    const res = await fetch(
+      `/api/negocio/horarios?negocio_id=${encodeURIComponent(negocioId)}&fecha=${encodeURIComponent(fecha)}`
+    )
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.error ?? 'No se pudieron cargar horarios')
+    }
+    return (data.horarios ?? []) as HorarioDisponible[]
+  }, [])
+
+  useEffect(() => {
+    let activo = true
+    const negociosConReserva = negociosFiltrados.filter(n => n.requiere_reserva !== false)
+
+    async function cargarTodos() {
+      if (negociosConReserva.length === 0) {
+        if (activo) setNegociosCargandoHorarios([])
+        return
+      }
+
+      setNegociosCargandoHorarios(negociosConReserva.map(n => n.id))
+      const resultados = await Promise.all(
+        negociosConReserva.map(async negocio => {
+          try {
+            const horarios = await cargarHorariosNegocio(negocio.id, fechaReserva)
+            return { negocioId: negocio.id, horarios, error: null as string | null }
+          } catch (error) {
+            const mensaje = error instanceof Error ? error.message : 'No se pudieron cargar horarios'
+            return { negocioId: negocio.id, horarios: [] as HorarioDisponible[], error: mensaje }
+          }
+        })
+      )
+
+      if (!activo) return
+
+      setHorariosPorNegocio(prev => {
+        const next = { ...prev }
+        for (const resultado of resultados) {
+          next[resultado.negocioId] = resultado.horarios
+        }
+        return next
+      })
+
+      setErroresHorarios(prev => {
+        const next = { ...prev }
+        for (const resultado of resultados) {
+          if (resultado.error) {
+            next[resultado.negocioId] = resultado.error
+          } else {
+            delete next[resultado.negocioId]
+          }
+        }
+        return next
+      })
+
+      setNegociosCargandoHorarios([])
+    }
+
+    void cargarTodos()
+    return () => {
+      activo = false
+    }
+  }, [negociosFiltrados, fechaReserva, cargarHorariosNegocio])
+
+  async function reservarHorario(negocioId: string, horarioId: string) {
     setReservandoHorarioId(horarioId)
-    setMensajeModal(null)
+    setMensajesReserva(prev => {
+      const next = { ...prev }
+      delete next[negocioId]
+      return next
+    })
+
     try {
       const res = await fetch('/api/reservaciones', {
         method: 'POST',
@@ -107,25 +156,31 @@ export default function ExplorarPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setMensajeModal({ tipo: 'error', texto: data.error ?? 'No se pudo crear la reservación' })
+        setMensajesReserva(prev => ({
+          ...prev,
+          [negocioId]: { tipo: 'error', texto: data.error ?? 'No se pudo crear la reservación' },
+        }))
       } else {
-        setMensajeModal({ tipo: 'ok', texto: 'Reservación creada con éxito' })
-        if (negocioSeleccionado) {
-          cargarHorarios(negocioSeleccionado.id, fechaReserva)
-        }
+        setMensajesReserva(prev => ({
+          ...prev,
+          [negocioId]: { tipo: 'ok', texto: 'Reservación creada con éxito' },
+        }))
+        const horariosActualizados = await cargarHorariosNegocio(negocioId, fechaReserva)
+        setHorariosPorNegocio(prev => ({ ...prev, [negocioId]: horariosActualizados }))
+        setErroresHorarios(prev => {
+          const next = { ...prev }
+          delete next[negocioId]
+          return next
+        })
       }
     } catch {
-      setMensajeModal({ tipo: 'error', texto: 'Error de conexión al reservar' })
+      setMensajesReserva(prev => ({
+        ...prev,
+        [negocioId]: { tipo: 'error', texto: 'Error de conexión al reservar' },
+      }))
     } finally {
       setReservandoHorarioId(null)
     }
-  }
-
-  function abrirModal(negocio: Negocio) {
-    setNegocioSeleccionado(negocio)
-    setFechaReserva(hoyLocalISO())
-    setMensajeModal(null)
-    setHorarios([])
   }
 
   const btnBase = 'shrink-0 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wide transition-colors'
@@ -143,6 +198,17 @@ export default function ExplorarPage() {
 
       <div className="sticky top-0 z-10 border-b border-[#E5E5E5] bg-white px-4 py-3">
         <div className="flex flex-col gap-2.5">
+          <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-3 py-2">
+            <label className="mb-1 block text-[11px] font-black uppercase tracking-widest text-[#888]">Fecha de reservación</label>
+            <input
+              type="date"
+              value={fechaReserva}
+              min={hoyLocalISO()}
+              onChange={e => setFechaReserva(e.target.value)}
+              className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8] focus:ring-1 focus:ring-[#6B4FE8]/20"
+            />
+          </div>
+
           <div className="flex gap-2 overflow-x-auto pb-0.5">
             <button onClick={() => setCiudadFiltro('todas')} className={`${btnBase} ${ciudadFiltro === 'todas' ? btnActive : btnInactive}`}>Todas</button>
             {CIUDADES.map(c => (
@@ -151,6 +217,7 @@ export default function ExplorarPage() {
               </button>
             ))}
           </div>
+
           <div className="flex gap-2 overflow-x-auto pb-0.5">
             <button onClick={() => setCategoriaFiltro('todas')} className={`${btnBase} ${categoriaFiltro === 'todas' ? 'bg-[#6B4FE8] text-white' : btnInactive}`}>Todo</button>
             {CATEGORIAS.map(c => (
@@ -172,108 +239,80 @@ export default function ExplorarPage() {
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {negociosFiltrados.map(negocio => (
-              <div key={negocio.id} className="overflow-hidden rounded-xl border border-[#E5E5E5] bg-white">
-                <NegocioCard negocio={negocio} />
-                <div className="px-4 pb-4">
-                  {negocio.requiere_reserva === false ? (
-                    <p className="rounded-lg bg-[#E8FF47]/20 px-3 py-2 text-xs font-semibold text-[#0A0A0A]">
-                      Acceso directo (sin reservación)
-                    </p>
-                  ) : (
-                    <button
-                      onClick={() => abrirModal(negocio)}
-                      className="w-full rounded-lg bg-[#6B4FE8] py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6]"
-                    >
-                      Ver horarios y reservar
-                    </button>
-                  )}
+            {negociosFiltrados.map(negocio => {
+              const horariosNegocio = horariosPorNegocio[negocio.id] ?? []
+
+              return (
+                <div key={negocio.id} className="overflow-hidden rounded-xl border border-[#E5E5E5] bg-white">
+                  <NegocioCard negocio={negocio} />
+                  <div className="space-y-2 px-4 pb-4">
+                    {negocio.requiere_reserva === false ? (
+                      <p className="rounded-lg bg-[#E8FF47]/20 px-3 py-2 text-xs font-semibold text-[#0A0A0A]">
+                        Llegar directo
+                      </p>
+                    ) : (
+                      <>
+                        {mensajesReserva[negocio.id] && (
+                          <div className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                            mensajesReserva[negocio.id].tipo === 'ok'
+                              ? 'bg-[#E8FF47]/20 text-[#0A0A0A] ring-1 ring-[#E8FF47]'
+                              : 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                          }`}>
+                            {mensajesReserva[negocio.id].texto}
+                          </div>
+                        )}
+
+                        {erroresHorarios[negocio.id] && (
+                          <div className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 ring-1 ring-red-200">
+                            {erroresHorarios[negocio.id]}
+                          </div>
+                        )}
+
+                        {idsCargandoHorarios.has(negocio.id) ? (
+                          <p className="rounded-lg border border-[#E5E5E5] px-3 py-2 text-xs text-[#888]">Cargando horarios...</p>
+                        ) : horariosNegocio.length === 0 ? (
+                          <p className="rounded-lg border border-dashed border-[#E5E5E5] px-3 py-2 text-xs text-[#888]">
+                            Sin horarios disponibles para la fecha seleccionada.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {horariosNegocio.map(horario => {
+                              const spotsDisponibles = Math.max(horario.spots_disponibles, 0)
+                              return (
+                                <div key={horario.id} className="flex items-center gap-2 rounded-lg border border-[#E5E5E5] px-3 py-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-bold text-[#0A0A0A]">
+                                      {formatHora(horario.hora_inicio)} – {formatHora(horario.hora_fin)}
+                                    </p>
+                                    <p className="text-xs text-[#888]">
+                                      {spotsDisponibles} de {horario.capacidad_total} spots libres
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={() => reservarHorario(negocio.id, horario.id)}
+                                    disabled={spotsDisponibles <= 0 || reservandoHorarioId === horario.id}
+                                    className="shrink-0 rounded-md bg-[#0A0A0A] px-2.5 py-1.5 text-[11px] font-bold text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    {spotsDisponibles <= 0
+                                      ? 'Lleno'
+                                      : reservandoHorarioId === horario.id
+                                        ? 'Reservando...'
+                                        : 'Reservar'}
+                                  </button>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
-
-      {negocioSeleccionado && (
-        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-          <div className="w-full max-w-md rounded-xl border border-[#E5E5E5] bg-white p-4 shadow-xl">
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Reservar</p>
-                <h2 className="text-lg font-black text-[#0A0A0A]">{negocioSeleccionado.nombre}</h2>
-              </div>
-              <button
-                onClick={() => setNegocioSeleccionado(null)}
-                className="rounded-md border border-[#E5E5E5] px-2 py-1 text-xs font-bold text-[#888] hover:text-[#0A0A0A]"
-              >
-                Cerrar
-              </button>
-            </div>
-
-            {negocioSeleccionado.requiere_reserva === false ? (
-              <p className="rounded-lg bg-[#E8FF47]/20 px-3 py-2 text-sm text-[#0A0A0A]">
-                Este negocio permite acceso directo sin reservar.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-black uppercase tracking-widest text-[#888]">Fecha</label>
-                  <input
-                    type="date"
-                    value={fechaReserva}
-                    min={hoyLocalISO()}
-                    onChange={e => setFechaReserva(e.target.value)}
-                    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8] focus:ring-1 focus:ring-[#6B4FE8]/20"
-                  />
-                </div>
-
-                {mensajeModal && (
-                  <div className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-                    mensajeModal.tipo === 'ok'
-                      ? 'bg-[#E8FF47]/20 text-[#0A0A0A] ring-1 ring-[#E8FF47]'
-                      : 'bg-red-50 text-red-700 ring-1 ring-red-200'
-                  }`}>
-                    {mensajeModal.texto}
-                  </div>
-                )}
-
-                {cargandoHorarios ? (
-                  <p className="text-sm text-[#888]">Cargando horarios...</p>
-                ) : horarios.length === 0 ? (
-                  <p className="text-sm text-[#888]">Sin horarios disponibles para esa fecha.</p>
-                ) : (
-                  <div className="max-h-64 space-y-2 overflow-auto pr-1">
-                    {horarios.map(h => (
-                      <div key={h.id} className="flex items-center gap-3 rounded-lg border border-[#E5E5E5] px-3 py-2.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold text-[#0A0A0A]">
-                            {DIA_LABELS[h.dia_semana]} · {formatHora(h.hora_inicio)} – {formatHora(h.hora_fin)}
-                          </p>
-                          <p className="text-xs text-[#888]">
-                            {h.spots_disponibles} de {h.capacidad_total} lugares disponibles
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => reservarHorario(h.id)}
-                          disabled={h.spots_disponibles <= 0 || reservandoHorarioId === h.id}
-                          className="shrink-0 rounded-md bg-[#0A0A0A] px-2.5 py-1.5 text-[11px] font-bold text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {h.spots_disponibles <= 0
-                            ? 'Lleno'
-                            : reservandoHorarioId === h.id
-                              ? 'Reservando...'
-                              : 'Reservar'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

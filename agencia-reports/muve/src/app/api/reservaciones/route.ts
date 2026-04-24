@@ -24,6 +24,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
   const hoy = new Date().toISOString().split('T')[0]
+  const now_ms = Date.now()
 
   const { data, error } = await admin()
     .from('reservaciones')
@@ -36,17 +37,15 @@ export async function GET() {
     `)
     .eq('user_id', user.id)
     .gte('fecha', hoy)
-    .in('estado', ['confirmada'])
     .order('fecha', { ascending: true })
     .order('horarios(hora_inicio)', { ascending: true })
-    .limit(10)
 
   if (error) {
     console.error('[GET /api/reservaciones]', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ reservaciones: data })
+  return NextResponse.json({ reservaciones: data, now_ms })
 }
 
 // POST /api/reservaciones — crear reservación
