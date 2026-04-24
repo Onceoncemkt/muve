@@ -3,15 +3,12 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { normalizarRol, rolDesdeAuth } from '@/lib/auth/roles'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
-  const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -32,29 +29,21 @@ export default function LoginPage() {
         setCargando(false)
         return
       }
-
-      const callbackResponse = await fetch('/api/auth/callback', {
-        method: 'POST',
+      const rolResponse = await fetch('/api/auth/rol', {
+        method: 'GET',
+        cache: 'no-store',
       })
-
-      const callbackData = callbackResponse.ok
-        ? await callbackResponse.json() as { rol?: string; destino?: string }
+      const rolData = rolResponse.ok
+        ? await rolResponse.json() as { rol?: 'admin' | 'staff' | 'usuario' }
         : null
-      const { data: userData } = await supabase
-        .from('users')
-        .select('rol')
-        .eq('id', data.user.id)
-        .single()
-      const rol = normalizarRol(userData?.rol)
-        ?? rolDesdeAuth(data.user)
-        ?? normalizarRol(callbackData?.rol)
+      const rol = rolData?.rol
 
       if (rol === 'admin') {
-        router.push('/admin')
+        window.location.href = '/admin'
       } else if (rol === 'staff') {
-        router.push('/negocio/dashboard')
+        window.location.href = '/negocio/dashboard'
       } else {
-        router.push(callbackData?.destino ?? '/dashboard')
+        window.location.href = '/dashboard'
       }
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
