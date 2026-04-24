@@ -6,7 +6,8 @@ import BotonPortal from '@/components/BotonPortal'
 import MisReservaciones from '@/components/MisReservaciones'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import { CIUDAD_LABELS } from '@/types'
-import type { User } from '@/types'
+import type { Rol, User } from '@/types'
+import { normalizarRol, rolDesdeAuth } from '@/lib/auth/roles'
 
 export default async function DashboardPage({
   searchParams,
@@ -17,9 +18,15 @@ export default async function DashboardPage({
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: userData } = await supabase.from('users').select('rol').eq('id', user.id).single()
-  if (userData?.rol === 'admin') redirect('/admin')
-  if (userData?.rol === 'staff') redirect('/negocio/dashboard')
+  const { data: userData } = await supabase
+    .schema('public')
+    .from('users')
+    .select('rol')
+    .eq('id', user.id)
+    .maybeSingle<{ rol: Rol }>()
+  const rol = normalizarRol(userData?.rol) ?? rolDesdeAuth(user)
+  if (rol === 'admin') redirect('/admin')
+  if (rol === 'staff') redirect('/negocio/dashboard')
 
   const { data: perfil } = await supabase
     .from('users')

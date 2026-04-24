@@ -28,7 +28,7 @@ export default function RegistroPage() {
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [ciudad, setCiudad] = useState<Ciudad>('tulancingo')
+  const [ciudadSeleccionada, setCiudadSeleccionada] = useState<Ciudad>('tulancingo')
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
   const [esperandoConfirmacion, setEsperandoConfirmacion] = useState(false)
@@ -48,7 +48,7 @@ export default function RegistroPage() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { nombre, ciudad } },
+        options: { data: { nombre, ciudad: ciudadSeleccionada } },
       })
 
       if (error) {
@@ -187,9 +187,9 @@ export default function RegistroPage() {
                   <button
                     key={c}
                     type="button"
-                    onClick={() => setCiudad(c)}
+                    onClick={() => setCiudadSeleccionada(c)}
                     className={`rounded-lg border py-3 text-xs font-bold tracking-wide transition-colors ${
-                      ciudad === c
+                      ciudadSeleccionada === c
                         ? 'border-[#E8FF47] bg-[#E8FF47]/10 text-[#E8FF47]'
                         : 'border-white/10 bg-white/5 text-white/40 hover:border-white/20 hover:text-white/60'
                     }`}
