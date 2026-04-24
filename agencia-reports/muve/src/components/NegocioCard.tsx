@@ -17,8 +17,16 @@ function getInitials(nombre: string): string {
     .join('')
 }
 
+function normalizarHandle(value: string | null | undefined) {
+  if (!value) return null
+  const limpio = value.trim().replace(/^@+/, '')
+  return limpio.length > 0 ? limpio : null
+}
+
 export default function NegocioCard({ negocio }: { negocio: Negocio }) {
   const accent = CATEGORIA_ACCENT[negocio.categoria]
+  const instagramHandle = normalizarHandle(negocio.instagram_handle)
+  const tiktokHandle = normalizarHandle(negocio.tiktok_handle)
 
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-[#E5E5E5] bg-white transition-shadow hover:shadow-sm">
@@ -69,14 +77,26 @@ export default function NegocioCard({ negocio }: { negocio: Negocio }) {
         )}
 
         {/* Instagram */}
-        {negocio.instagram_handle && (
+        {instagramHandle && (
           <a
-            href={`https://instagram.com/${negocio.instagram_handle}`}
+            href={`https://instagram.com/${instagramHandle}`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-1 text-xs font-semibold text-[#6B4FE8] hover:underline"
           >
-            @{negocio.instagram_handle}
+            @{instagramHandle}
+          </a>
+        )}
+
+        {/* TikTok */}
+        {tiktokHandle && (
+          <a
+            href={`https://tiktok.com/@${tiktokHandle}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold text-[#6B4FE8] hover:underline"
+          >
+            @{tiktokHandle}
           </a>
         )}
 

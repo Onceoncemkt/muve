@@ -8,6 +8,15 @@ type Perfil = {
   negocio_id: string | null
 }
 
+type NegocioDashboard = {
+  id: string
+  nombre: string
+  ciudad: string
+  categoria: string
+  instagram_handle?: string | null
+  tiktok_handle?: string | null
+}
+
 function admin() {
   return createAdmin(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,6 +33,17 @@ function validarFecha(fecha: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false
   const parsed = new Date(`${fecha}T00:00:00`)
   return !Number.isNaN(parsed.getTime())
+}
+
+function faltaColumna(error: { message?: string } | null | undefined, columna: string) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes(columna.toLowerCase())
+}
+
+function normalizarHandle(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const limpio = value.trim().replace(/^@+/, '')
+  return limpio.length > 0 ? limpio : null
 }
 
 export async function GET(request: NextRequest) {
@@ -80,11 +100,42 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const { data: negocio, error: negocioError } = await db
-    .from('negocios')
-    .select('id, nombre, ciudad, categoria')
-    .eq('id', negocioIdObjetivo)
-    .maybeSingle()
+  const consultasNegocio = [
+    { select: 'id, nombre, ciudad, categoria, instagram_handle, tiktok_handle', incluyeInstagram: true, incluyeTiktok: true },
+    { select: 'id, nombre, ciudad, categoria, instagram_handle', incluyeInstagram: true, incluyeTiktok: false },
+    { select: 'id, nombre, ciudad, categoria', incluyeInstagram: false, incluyeTiktok: false },
+  ] as const
+
+  let negocio: NegocioDashboard | null = null
+  let negocioError: { message?: string } | null = null
+
+  for (const consulta of consultasNegocio) {
+    const resultado = await db
+      .from('negocios')
+      .select(consulta.select)
+      .eq('id', negocioIdObjetivo)
+      .maybeSingle<NegocioDashboard>()
+
+    if (!resultado.error && resultado.data) {
+      negocio = {
+        id: resultado.data.id,
+        nombre: resultado.data.nombre,
+        ciudad: resultado.data.ciudad,
+        categoria: resultado.data.categoria,
+        instagram_handle: consulta.incluyeInstagram ? (resultado.data.instagram_handle ?? null) : null,
+        tiktok_handle: consulta.incluyeTiktok ? (resultado.data.tiktok_handle ?? null) : null,
+      }
+      negocioError = null
+      break
+    }
+
+    negocioError = resultado.error
+    const errorPorColumnaOpcional = (
+      (consulta.incluyeInstagram && faltaColumna(resultado.error, 'instagram_handle'))
+      || (consulta.incluyeTiktok && faltaColumna(resultado.error, 'tiktok_handle'))
+    )
+    if (!errorPorColumnaOpcional) break
+  }
 
   if (negocioError || !negocio) {
     return NextResponse.json({ error: 'Negocio no encontrado' }, { status: 404 })
@@ -124,5 +175,92 @@ export async function GET(request: NextRequest) {
       horarios_activos: horariosActivos ?? 0,
     },
     reservaciones: reservaciones ?? [],
+  })
+}
+
+export async function PATCH(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+  const db = admin()
+  const { data: perfil } = await db
+    .from('users')
+    .select('rol, negocio_id')
+    .eq('id', user.id)
+    .single<Perfil>()
+
+  if (!perfil || !['staff', 'admin'].includes(perfil.rol)) {
+    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+  }
+
+  const body = await request.json().catch(() => null) as {
+    instagram_handle?: unknown
+    tiktok_handle?: unknown
+    negocio_id?: unknown
+  } | null
+
+  if (!body) {
+    return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const negocioIdBody = typeof body.negocio_id === 'string' ? body.negocio_id : null
+  const negocioIdQuery = searchParams.get('negocio_id')
+  const negocioIdObjetivo = perfil.rol === 'staff'
+    ? perfil.negocio_id
+    : (negocioIdBody ?? negocioIdQuery ?? perfil.negocio_id)
+
+  if (!negocioIdObjetivo) {
+    return NextResponse.json({ error: 'negocio_id requerido' }, { status: 400 })
+  }
+
+  const instagramHandle = normalizarHandle(body.instagram_handle)
+  const tiktokHandle = normalizarHandle(body.tiktok_handle)
+
+  const payload: Record<string, string | null> = {
+    instagram_handle: instagramHandle,
+    tiktok_handle: tiktokHandle,
+  }
+
+  let error: { message?: string } | null = null
+
+  for (let intento = 0; intento < 3; intento += 1) {
+    const resultado = await db
+      .from('negocios')
+      .update(payload)
+      .eq('id', negocioIdObjetivo)
+
+    if (!resultado.error) {
+      error = null
+      break
+    }
+
+    error = resultado.error
+    if (faltaColumna(resultado.error, 'tiktok_handle') && 'tiktok_handle' in payload) {
+      delete payload.tiktok_handle
+      continue
+    }
+    if (faltaColumna(resultado.error, 'instagram_handle') && 'instagram_handle' in payload) {
+      delete payload.instagram_handle
+      continue
+    }
+    break
+  }
+
+  if (error) {
+    return NextResponse.json(
+      { error: error.message ?? 'No se pudo actualizar el perfil del negocio' },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({
+    ok: true,
+    negocio: {
+      id: negocioIdObjetivo,
+      instagram_handle: 'instagram_handle' in payload ? instagramHandle : null,
+      tiktok_handle: 'tiktok_handle' in payload ? tiktokHandle : null,
+    },
   })
 }

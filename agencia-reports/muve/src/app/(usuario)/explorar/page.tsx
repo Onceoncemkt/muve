@@ -46,7 +46,7 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
 function planRequeridoNegocio(negocio: Negocio): PlanMembresia {
   return normalizarPlan(negocio.plan_requerido ?? null) ?? 'basico'
 }
-function normalizarHandleInstagram(handle: string | null | undefined): string | null {
+function normalizarHandleSocial(handle: string | null | undefined): string | null {
   if (!handle) return null
   const limpio = handle.trim().replace(/^@+/, '')
   return limpio.length > 0 ? limpio : null
@@ -203,7 +203,8 @@ export default function ExplorarPage() {
               const puedeReservar = planEfectivo
                 ? puedeReservarConPlan(planEfectivo, planRequerido)
                 : false
-              const instagramHandle = normalizarHandleInstagram(negocio.instagram_handle)
+              const instagramHandle = normalizarHandleSocial(negocio.instagram_handle)
+              const tiktokHandle = normalizarHandleSocial(negocio.tiktok_handle)
 
               return (
                 <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
@@ -234,6 +235,21 @@ export default function ExplorarPage() {
                           className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
                         >
                           @{instagramHandle}
+                        </a>
+                      ) : (
+                        'No disponible'
+                      )}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#0A0A0A]">TikTok:</span>{' '}
+                      {tiktokHandle ? (
+                        <a
+                          href={`https://tiktok.com/@${tiktokHandle}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
+                        >
+                          @{tiktokHandle}
                         </a>
                       ) : (
                         'No disponible'

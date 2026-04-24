@@ -29,6 +29,8 @@ interface NegocioDashboard {
   nombre: string
   ciudad: string
   categoria: string
+  instagram_handle?: string | null
+  tiktok_handle?: string | null
 }
 
 interface DashboardPayload {
@@ -60,6 +62,12 @@ function claseEstado(estado: string) {
   return 'bg-red-100 text-red-700'
 }
 
+function normalizarHandle(input: string | null | undefined) {
+  if (!input) return null
+  const limpio = input.trim().replace(/^@+/, '')
+  return limpio.length > 0 ? limpio : null
+}
+
 export default function NegocioDashboardPage() {
   const [fechaHoy] = useState(hoyLocalISO())
   const [negocio, setNegocio] = useState<NegocioDashboard | null>(null)
@@ -68,6 +76,9 @@ export default function NegocioDashboardPage() {
   const [sinNegocio, setSinNegocio] = useState(false)
   const [cargando, setCargando] = useState(false)
   const [completandoId, setCompletandoId] = useState<string | null>(null)
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false)
+  const [instagramHandle, setInstagramHandle] = useState('')
+  const [tiktokHandle, setTiktokHandle] = useState('')
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
 
   const cargarDashboard = useCallback(async () => {
@@ -81,22 +92,29 @@ export default function NegocioDashboardPage() {
       if (!res.ok) {
         setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudieron cargar datos del panel' })
         setNegocio(null)
+        setInstagramHandle('')
+        setTiktokHandle('')
         setSinNegocio(false)
         setReservaciones([])
         setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
         return
       }
+      const negocioPerfil = data.negocio ?? null
 
       if (data.sin_negocio) {
         setSinNegocio(true)
         setNegocio(null)
+        setInstagramHandle('')
+        setTiktokHandle('')
         setReservaciones([])
         setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
         return
       }
 
       setSinNegocio(false)
-      setNegocio(data.negocio ?? null)
+      setNegocio(negocioPerfil)
+      setInstagramHandle(negocioPerfil?.instagram_handle ? `@${negocioPerfil.instagram_handle}` : '')
+      setTiktokHandle(negocioPerfil?.tiktok_handle ? `@${negocioPerfil.tiktok_handle}` : '')
       setReservaciones((data.reservaciones ?? []) as ReservacionNegocio[])
       setResumen({
         reservaciones_hoy: data.resumen?.reservaciones_hoy ?? 0,
@@ -105,6 +123,8 @@ export default function NegocioDashboardPage() {
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar el panel' })
       setNegocio(null)
+      setInstagramHandle('')
+      setTiktokHandle('')
       setSinNegocio(false)
       setReservaciones([])
       setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
@@ -140,6 +160,50 @@ export default function NegocioDashboardPage() {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al completar reservación' })
     } finally {
       setCompletandoId(null)
+    }
+  }
+
+  async function guardarPerfilNegocio(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!negocio) return
+
+    setGuardandoPerfil(true)
+    setMensaje(null)
+
+    try {
+      const res = await fetch('/api/negocio/dashboard', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instagram_handle: instagramHandle,
+          tiktok_handle: tiktokHandle,
+        }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMensaje({
+          tipo: 'error',
+          texto: typeof data.error === 'string' ? data.error : 'No se pudo guardar el perfil del negocio',
+        })
+        return
+      }
+
+      const instagramActualizado = normalizarHandle(data.negocio?.instagram_handle)
+      const tiktokActualizado = normalizarHandle(data.negocio?.tiktok_handle)
+
+      setNegocio(prev => prev ? {
+        ...prev,
+        instagram_handle: instagramActualizado,
+        tiktok_handle: tiktokActualizado,
+      } : prev)
+      setInstagramHandle(instagramActualizado ? `@${instagramActualizado}` : '')
+      setTiktokHandle(tiktokActualizado ? `@${tiktokActualizado}` : '')
+      setMensaje({ tipo: 'ok', texto: 'Perfil del negocio actualizado correctamente' })
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al guardar el perfil del negocio' })
+    } finally {
+      setGuardandoPerfil(false)
     }
   }
 
@@ -255,6 +319,47 @@ export default function NegocioDashboardPage() {
               >
                 Abrir escáner QR
               </Link>
+            </div>
+
+            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Perfil del negocio</p>
+              <p className="mt-1 text-xs text-[#666]">
+                Completa tus redes para que aparezcan en las cards del panel de usuario.
+              </p>
+
+              <form onSubmit={guardarPerfilNegocio} className="mt-3 space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#555]">Instagram</span>
+                    <input
+                      type="text"
+                      value={instagramHandle}
+                      onChange={event => setInstagramHandle(event.target.value)}
+                      placeholder="@tu_negocio"
+                      className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#555]">TikTok</span>
+                    <input
+                      type="text"
+                      value={tiktokHandle}
+                      onChange={event => setTiktokHandle(event.target.value)}
+                      placeholder="@tu_negocio"
+                      className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={guardandoPerfil}
+                  className="rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {guardandoPerfil ? 'Guardando...' : 'Guardar perfil'}
+                </button>
+              </form>
             </div>
           </section>
         )}

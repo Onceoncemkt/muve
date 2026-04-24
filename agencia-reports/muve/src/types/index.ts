@@ -28,6 +28,7 @@ export interface Negocio {
   descripcion: string | null
   imagen_url: string | null
   instagram_handle?: string | null
+  tiktok_handle?: string | null
   requiere_reserva?: boolean
   capacidad_default?: number | null
   plan_requerido?: PlanMembresia | null

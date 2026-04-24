@@ -36,6 +36,7 @@ create table public.negocios (
   descripcion                 text,
   imagen_url                  text,
   instagram_handle            text,
+  tiktok_handle               text,
   requiere_reserva            boolean not null default true,
   capacidad_default           int default 10,
   plan_requerido              text default 'basico' check (plan_requerido in ('basico', 'plus', 'total')),
