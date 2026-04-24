@@ -25,8 +25,6 @@ export default function LoginPage() {
         return
       }
 
-      // Hard redirect: fuerza recarga completa para que el middleware
-      // lea las cookies de sesión recién escritas por Supabase
       window.location.href = '/dashboard'
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
@@ -35,41 +33,36 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950">
-      {/* Back link */}
+    <div className="flex min-h-screen flex-col bg-[#0A0A0A]">
       <div className="px-6 pt-8">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-xs font-medium tracking-widest uppercase text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="text-xs font-bold uppercase tracking-widest text-white/30 hover:text-white/60 transition-colors"
         >
-          ← MUVE
+          MUVET
         </Link>
       </div>
 
-      {/* Content */}
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
-
-          {/* Header */}
           <div className="mb-10">
             <h1 className="text-4xl font-black tracking-tight text-white">
               Bienvenido<br />de vuelta.
             </h1>
-            <p className="mt-3 text-sm text-zinc-400">
+            <p className="mt-3 text-sm text-white/40">
               Inicia sesión para acceder a tu membresía.
             </p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {error && (
-              <div className="rounded-xl border border-red-800/50 bg-red-950/60 px-4 py-3 text-sm font-medium text-red-400">
+              <div className="rounded-lg border border-red-500/20 bg-red-950/40 px-4 py-3 text-sm text-red-400">
                 {error}
               </div>
             )}
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-white/30">
                 Correo electrónico
               </label>
               <input
@@ -79,12 +72,12 @@ export default function LoginPage() {
                 required
                 autoComplete="email"
                 placeholder="tu@correo.com"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-sm text-white placeholder-zinc-600 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-[#6B4FE8] focus:ring-1 focus:ring-[#6B4FE8]/30"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-white/30">
                 Contraseña
               </label>
               <input
@@ -94,24 +87,23 @@ export default function LoginPage() {
                 required
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-sm text-white placeholder-zinc-600 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-[#6B4FE8] focus:ring-1 focus:ring-[#6B4FE8]/30"
               />
             </div>
 
             <button
               type="submit"
               disabled={cargando}
-              className="mt-1 w-full rounded-xl bg-indigo-600 py-4 text-sm font-bold tracking-wide text-white transition-colors hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40"
+              className="mt-1 w-full rounded-lg bg-[#E8FF47] py-4 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-white disabled:opacity-40"
             >
               {cargando ? 'Entrando...' : 'Iniciar sesión'}
             </button>
           </form>
 
-          {/* Footer */}
-          <p className="mt-8 text-center text-sm text-zinc-600">
-            ¿No tienes cuenta?{' '}
-            <Link href="/registro" className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
-              Regístrate gratis
+          <p className="mt-8 text-center text-sm text-white/30">
+            Sin cuenta?{' '}
+            <Link href="/registro" className="font-semibold text-white hover:text-[#E8FF47] transition-colors">
+              Regístrate
             </Link>
           </p>
         </div>

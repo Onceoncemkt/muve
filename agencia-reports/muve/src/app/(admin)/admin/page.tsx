@@ -31,57 +31,57 @@ export default async function AdminPage() {
   }, {})
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-16">
-      <div className="bg-white px-4 py-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">Panel Admin</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          {new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+    <div className="min-h-screen bg-[#F7F7F7] pb-16">
+      <div className="bg-[#0A0A0A] px-4 py-6">
+        <h1 className="text-2xl font-black tracking-tight text-white">Panel Admin</h1>
+        <p className="mt-1 text-sm text-white/40">
+          MUVET · {new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
         </p>
       </div>
 
-      {/* Métricas generales */}
+      {/* Métricas */}
       <div className="grid grid-cols-3 gap-3 p-4">
         {[
-          { label: 'Usuarios totales', value: totalUsuarios ?? 0, icon: '👥' },
-          { label: 'Membresías activas', value: usuariosActivos ?? 0, icon: '✅' },
-          { label: 'Visitas este mes', value: visitasMes ?? 0, icon: '📊' },
+          { label: 'Usuarios', value: totalUsuarios ?? 0 },
+          { label: 'Activos', value: usuariosActivos ?? 0 },
+          { label: 'Visitas', value: visitasMes ?? 0 },
         ].map(stat => (
-          <div key={stat.label} className="rounded-2xl bg-white p-4 shadow-sm text-center">
-            <p className="text-2xl">{stat.icon}</p>
-            <p className="mt-1 text-2xl font-bold text-gray-900">{stat.value}</p>
-            <p className="text-xs text-gray-400 leading-tight mt-0.5">{stat.label}</p>
+          <div key={stat.label} className="rounded-xl border border-[#E5E5E5] bg-white p-4 text-center">
+            <p className="text-2xl font-black text-[#0A0A0A]">{stat.value}</p>
+            <p className="mt-0.5 text-xs font-bold uppercase tracking-widest text-[#888]">{stat.label}</p>
           </div>
         ))}
       </div>
 
       {/* Negocios por ciudad */}
       <div className="px-4">
-        <h2 className="mb-3 font-semibold text-gray-700">Negocios activos por ciudad</h2>
+        <h2 className="mb-3 text-xs font-black uppercase tracking-widest text-[#888]">
+          Negocios por ciudad
+        </h2>
         <div className="flex flex-col gap-2">
           {(Object.keys(CIUDAD_LABELS) as Ciudad[]).map(ciudad => (
-            <div
-              key={ciudad}
-              className="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm"
-            >
-              <span className="text-sm font-medium text-gray-700">{CIUDAD_LABELS[ciudad]}</span>
-              <span className="rounded-full bg-indigo-100 px-3 py-0.5 text-sm font-semibold text-indigo-700">
-                {negociosPorCiudad[ciudad] ?? 0} negocios
+            <div key={ciudad} className="flex items-center justify-between rounded-xl border border-[#E5E5E5] bg-white px-4 py-3">
+              <span className="text-sm font-bold text-[#0A0A0A]">{CIUDAD_LABELS[ciudad]}</span>
+              <span className="rounded-lg bg-[#6B4FE8] px-3 py-1 text-xs font-bold text-white">
+                {negociosPorCiudad[ciudad] ?? 0}
               </span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Negocios por categoría */}
+      {/* Por categoría */}
       <div className="mt-6 px-4">
-        <h2 className="mb-3 font-semibold text-gray-700">Por categoría</h2>
+        <h2 className="mb-3 text-xs font-black uppercase tracking-widest text-[#888]">
+          Por categoría
+        </h2>
         <div className="grid grid-cols-2 gap-2">
           {(Object.keys(CATEGORIA_LABELS) as Categoria[]).map(cat => {
             const count = (negocios ?? []).filter(n => n.categoria === cat).length
             return (
-              <div key={cat} className="rounded-xl bg-white px-4 py-3 shadow-sm">
-                <p className="text-sm text-gray-500">{CATEGORIA_LABELS[cat]}</p>
-                <p className="text-xl font-bold text-gray-900">{count}</p>
+              <div key={cat} className="rounded-xl border border-[#E5E5E5] bg-white px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-[#888]">{CATEGORIA_LABELS[cat]}</p>
+                <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{count}</p>
               </div>
             )
           })}

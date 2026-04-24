@@ -5,14 +5,14 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 
 export const metadata: Metadata = {
-  title: 'MUVE — Membresía de bienestar',
+  title: 'MUVET — Membresía de bienestar',
   description: 'Un pase. Todo el bienestar. Gimnasios, clases, estéticas y restaurantes saludables en tu ciudad.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={`${geist.variable} h-full antialiased`}>
-      <body className="min-h-full bg-gray-50 font-sans">{children}</body>
+      <body className="min-h-full font-sans">{children}</body>
     </html>
   )
 }

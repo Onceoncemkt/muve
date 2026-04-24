@@ -17,10 +17,10 @@ function formatCountdown(ms: number): string {
 }
 
 export default function QRDisplay() {
-  const [qrData, setQrData]     = useState<QRData | null>(null)
-  const [qrImage, setQrImage]   = useState<string | null>(null)
-  const [error, setError]        = useState<string | null>(null)
-  const [loading, setLoading]    = useState(true)
+  const [qrData, setQrData]      = useState<QRData | null>(null)
+  const [qrImage, setQrImage]    = useState<string | null>(null)
+  const [error, setError]         = useState<string | null>(null)
+  const [loading, setLoading]     = useState(true)
   const [countdown, setCountdown] = useState('')
 
   const cargarQR = useCallback(async () => {
@@ -36,11 +36,10 @@ export default function QRDisplay() {
         setError('Tu sesión expiró. Recarga la página para continuar.')
         return
       }
-
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         console.error('[QRDisplay] API error:', res.status, body)
-        setError(`No se pudo generar tu QR (${res.status}). Intenta de nuevo.`)
+        setError(`No se pudo generar tu QR. Intenta de nuevo.`)
         return
       }
 
@@ -50,12 +49,12 @@ export default function QRDisplay() {
       const imagen = await QRCode.toDataURL(data.token, {
         width: 300,
         margin: 2,
-        color: { dark: '#1e1b4b', light: '#ffffff' },
+        color: { dark: '#0A0A0A', light: '#ffffff' },
         errorCorrectionLevel: 'M',
       })
       setQrImage(imagen)
     } catch (err) {
-      console.error('[QRDisplay] unexpected error:', err)
+      console.error('[QRDisplay] error:', err)
       setError('Error de conexión. Verifica tu red e intenta de nuevo.')
     } finally {
       setLoading(false)
@@ -64,7 +63,6 @@ export default function QRDisplay() {
 
   useEffect(() => { cargarQR() }, [cargarQR])
 
-  // Cuenta regresiva
   useEffect(() => {
     if (!qrData) return
     const tick = () => {
@@ -77,28 +75,23 @@ export default function QRDisplay() {
     return () => clearInterval(id)
   }, [qrData])
 
-  // ── Loading ───────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex flex-col items-center gap-4 py-6">
-        <div className="h-[300px] w-[300px] animate-pulse rounded-2xl bg-gray-100" />
-        <div className="h-4 w-32 animate-pulse rounded-full bg-gray-100" />
-        <p className="text-sm text-gray-400">Generando tu QR del día...</p>
+        <div className="h-[300px] w-[300px] animate-pulse rounded-lg bg-[#F0F0F0]" />
+        <div className="h-4 w-32 animate-pulse rounded bg-[#F0F0F0]" />
+        <p className="text-xs text-[#888]">Generando tu QR del día...</p>
       </div>
     )
   }
 
-  // ── Error ─────────────────────────────────────────────────
   if (error) {
     return (
-      <div className="flex flex-col items-center gap-4 rounded-2xl bg-red-50 px-6 py-8 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-2xl">
-          ⚠️
-        </div>
-        <p className="font-medium text-red-700">{error}</p>
+      <div className="flex flex-col items-center gap-4 rounded-xl border border-red-200 bg-red-50 px-6 py-8 text-center">
+        <p className="font-bold text-red-700">{error}</p>
         <button
           onClick={cargarQR}
-          className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
+          className="rounded-lg bg-red-600 px-6 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700"
         >
           Reintentar
         </button>
@@ -106,35 +99,26 @@ export default function QRDisplay() {
     )
   }
 
-  // ── QR ────────────────────────────────────────────────────
   return (
     <div className="flex flex-col items-center gap-5">
-      {/* Imagen QR */}
-      <div className="rounded-2xl bg-white p-3 shadow-md ring-1 ring-gray-100">
+      {/* QR image */}
+      <div className="rounded-lg border border-[#E5E5E5] bg-white p-3 shadow-sm">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={qrImage!}
-          alt="Tu código QR MUVE"
-          width={300}
-          height={300}
-          className="block"
-        />
+        <img src={qrImage!} alt="Tu QR MUVET" width={300} height={300} className="block" />
       </div>
 
       {/* Cuenta regresiva */}
       <div className="flex flex-col items-center gap-1 text-center">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-          Válido hoy · expira en
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[#888]">
+          Válido hoy — expira en
         </p>
-        <p className="font-mono text-2xl font-bold tabular-nums text-indigo-600">
+        <p className="font-mono text-2xl font-bold tabular-nums text-[#6B4FE8]">
           {countdown}
         </p>
       </div>
 
-      {/* Instrucción */}
-      <p className="max-w-xs text-center text-xs text-gray-400">
-        Muestra este código al staff del negocio para registrar tu entrada.
-        Se genera un código nuevo cada 24 horas.
+      <p className="max-w-xs text-center text-xs text-[#888]">
+        Muestra este código al staff del negocio. Se genera uno nuevo cada 24 horas.
       </p>
     </div>
   )

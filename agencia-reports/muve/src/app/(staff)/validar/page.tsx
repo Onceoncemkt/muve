@@ -23,7 +23,6 @@ export default function ValidarPage() {
   const [cargando, setCargando] = useState(false)
   const [scannerActivo, setScannerActivo] = useState(true)
 
-  // Cargar negocios del staff (todos activos, el staff selecciona el suyo)
   useEffect(() => {
     async function cargarNegocios() {
       const supabase = createClient()
@@ -47,7 +46,6 @@ export default function ValidarPage() {
 
     setCargando(true)
     setResultado(null)
-    // Pausar el escáner mientras se procesa para no re-escanear
     setScannerActivo(false)
 
     try {
@@ -66,11 +64,10 @@ export default function ValidarPage() {
     }
   }
 
-  // useCallback para que el efecto del scanner no se reinstancie en cada render
   const handleScan = useCallback((texto: string) => {
     setToken(texto)
     enviarValidacion(texto)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [negocioId])
 
   function reiniciarEscaner() {
@@ -83,31 +80,32 @@ export default function ValidarPage() {
     setTab(nuevaTab)
     setResultado(null)
     setToken('')
-    // Apagar cámara al cambiar a manual, reactivar al volver al scanner
     setScannerActivo(nuevaTab === 'scanner')
   }
 
+  const inputCls = 'w-full rounded-lg border border-[#E5E5E5] bg-white px-4 py-3 text-sm text-[#0A0A0A] outline-none transition-colors focus:border-[#6B4FE8] focus:ring-1 focus:ring-[#6B4FE8]/20'
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-[#F7F7F7] p-4">
       <div className="mx-auto max-w-sm space-y-4">
 
         {/* Header */}
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <h1 className="text-xl font-bold text-gray-900">Validar visita</h1>
-          <p className="mt-1 text-sm text-gray-500">
+        <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
+          <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Validar visita</h1>
+          <p className="mt-1 text-sm text-[#888]">
             Escanea el QR del cliente para registrar su entrada
           </p>
         </div>
 
         {/* Selector de negocio */}
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
+          <label className="mb-2 block text-[11px] font-black uppercase tracking-widest text-[#888]">
             Negocio
           </label>
           <select
             value={negocioId}
             onChange={e => setNegocioId(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className={inputCls}
           >
             <option value="">Selecciona tu negocio...</option>
             {negocios.map(n => (
@@ -119,42 +117,38 @@ export default function ValidarPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex rounded-2xl bg-gray-100 p-1">
+        <div className="flex rounded-lg border border-[#E5E5E5] bg-white p-1">
           {(['scanner', 'manual'] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => handleTabChange(t)}
-              className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
+              className={`flex-1 rounded-md py-2.5 text-xs font-bold uppercase tracking-widest transition-colors ${
                 tab === t
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-[#0A0A0A] text-white'
+                  : 'text-[#888] hover:text-[#0A0A0A]'
               }`}
             >
-              {t === 'scanner' ? '📷 Escanear' : '⌨️ Manual'}
+              {t === 'scanner' ? 'Escanear' : 'Manual'}
             </button>
           ))}
         </div>
 
-        {/* Panel principal */}
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
+        {/* Panel */}
+        <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
           {tab === 'scanner' ? (
             <div className="flex flex-col gap-4">
               {!negocioId && (
-                <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <div className="rounded-lg border border-[#E8FF47]/50 bg-[#E8FF47]/10 px-4 py-3 text-sm font-semibold text-[#0A0A0A]">
                   Selecciona un negocio antes de escanear
                 </div>
               )}
-
               {resultado ? (
                 <ResultadoBanner resultado={resultado} onReiniciar={reiniciarEscaner} />
               ) : (
                 <>
                   {cargando ? (
-                    <div className="flex h-64 items-center justify-center rounded-2xl bg-gray-50">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-                        <p className="text-sm text-gray-400">Validando...</p>
-                      </div>
+                    <div className="flex h-64 items-center justify-center rounded-lg bg-[#F7F7F7]">
+                      <p className="text-sm font-semibold text-[#888]">Validando...</p>
                     </div>
                   ) : (
                     <QRScanner onScan={handleScan} activo={scannerActivo && !!negocioId} />
@@ -168,7 +162,7 @@ export default function ValidarPage() {
               className="flex flex-col gap-4"
             >
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="mb-2 block text-[11px] font-black uppercase tracking-widest text-[#888]">
                   Token QR
                 </label>
                 <input
@@ -178,14 +172,14 @@ export default function ValidarPage() {
                   placeholder="Pega o escribe el token"
                   required
                   autoFocus
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                  className={`${inputCls} font-mono`}
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={cargando || !token.trim() || !negocioId}
-                className="rounded-xl bg-indigo-600 py-3 font-medium text-white disabled:opacity-50 hover:bg-indigo-700 transition-colors"
+                className="rounded-lg bg-[#6B4FE8] py-3 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6] disabled:opacity-40"
               >
                 {cargando ? 'Validando...' : 'Validar visita'}
               </button>
@@ -211,33 +205,34 @@ function ResultadoBanner({
 }) {
   return (
     <div
-      className={`flex flex-col items-center gap-3 rounded-2xl p-5 text-center ${
-        resultado.valido ? 'bg-green-50 ring-1 ring-green-200' : 'bg-red-50 ring-1 ring-red-200'
+      className={`flex flex-col items-center gap-3 rounded-xl p-5 text-center ${
+        resultado.valido
+          ? 'bg-[#E8FF47]/20 ring-1 ring-[#E8FF47]'
+          : 'bg-red-50 ring-1 ring-red-200'
       }`}
     >
-      <p className="text-5xl">{resultado.valido ? '✅' : '❌'}</p>
       {resultado.valido ? (
         <>
-          <p className="text-lg font-bold text-green-800">¡Visita registrada!</p>
-          <p className="text-sm text-green-700">
-            {resultado.usuario} → {resultado.negocio}
+          <p className="text-lg font-black text-[#0A0A0A]">Visita registrada</p>
+          <p className="text-sm text-[#0A0A0A]/70">
+            {resultado.usuario} — {resultado.negocio}
           </p>
         </>
       ) : (
         <>
-          <p className="font-bold text-red-800">No válido</p>
+          <p className="font-black text-red-800">No válido</p>
           <p className="text-sm text-red-700">{resultado.error}</p>
         </>
       )}
       <button
         onClick={onReiniciar}
-        className={`mt-1 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+        className={`mt-1 rounded-lg px-5 py-2 text-sm font-bold transition-colors ${
           resultado.valido
-            ? 'bg-green-600 text-white hover:bg-green-700'
+            ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
             : 'bg-red-600 text-white hover:bg-red-700'
         }`}
       >
-        Escanear siguiente
+        Siguiente
       </button>
     </div>
   )

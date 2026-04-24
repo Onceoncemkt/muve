@@ -43,62 +43,62 @@ export default async function DashboardPage({
   const planActivo = perfil?.plan_activo ?? false
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-16">
-      {/* Notificación: membresía recién activada por Stripe */}
+    <div className="min-h-screen bg-[#F7F7F7] pb-20">
+      {/* Membresía recién activada */}
       {recienActivada && (
-        <div className="bg-green-500 px-4 py-3 text-center text-sm font-medium text-white">
-          🎉 ¡Membresía activada! Bienvenid@ a MUVE.
+        <div className="bg-[#6B4FE8] px-4 py-3 text-center text-sm font-bold text-white">
+          Membresía activada. Bienvenid@ a MUVET.
         </div>
       )}
 
-      {/* Banner: sin membresía activa */}
+      {/* Sin membresía activa */}
       {!planActivo && !recienActivada && (
-        <div className="bg-amber-500 px-4 py-3">
+        <div className="bg-[#E8FF47] px-4 py-3">
           <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-4">
-            <p className="text-sm font-medium text-white">
-              Tu cuenta está lista. Activa tu membresía para empezar a visitar negocios.
+            <p className="text-sm font-bold text-[#0A0A0A]">
+              Tu cuenta está lista. Activa tu membresía para empezar.
             </p>
             <a
               href="/#planes"
-              className="shrink-0 rounded-full bg-white px-4 py-1.5 text-xs font-bold text-amber-600 hover:bg-amber-50 transition-colors"
+              className="shrink-0 rounded-lg bg-[#0A0A0A] px-4 py-1.5 text-xs font-bold text-[#E8FF47] hover:bg-[#222] transition-colors"
             >
-              Ver planes →
+              Ver planes
             </a>
           </div>
         </div>
       )}
 
       {/* Encabezado */}
-      <div className="bg-gradient-to-br from-indigo-600 to-violet-600 px-6 pb-8 pt-10 text-white">
-        <p className="text-sm font-medium opacity-80">
+      <div className="bg-[#0A0A0A] px-6 pb-8 pt-10 text-white">
+        <p className="text-xs font-bold uppercase tracking-widest text-white/40">
           📍 {CIUDAD_LABELS[ciudad]}
         </p>
-        <h1 className="mt-1 text-2xl font-bold">
-          ¡Hola, {nombre.split(' ')[0]}! 👋
+        <h1 className="mt-2 text-2xl font-black tracking-tight">
+          Hola, {nombre.split(' ')[0]} 👋
         </h1>
-        <p className="mt-1 text-sm opacity-75">
-          {planActivo ? 'Tu membresía MUVE está activa' : 'Bienvenid@ a MUVE'}
+        <p className="mt-1 text-sm text-white/40">
+          {planActivo ? 'Membresía activa' : 'Sin membresía activa'}
         </p>
 
-        <div className="mt-6 flex gap-4">
-          <div className="rounded-xl bg-white/20 px-4 py-3 backdrop-blur-sm">
-            <p className="text-2xl font-bold">{visitasMes ?? 0}</p>
-            <p className="text-xs opacity-80">visitas este mes</p>
+        <div className="mt-6 flex gap-3">
+          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+            <p className="text-2xl font-black text-[#E8FF47]">{visitasMes ?? 0}</p>
+            <p className="text-xs text-white/40">visitas este mes</p>
           </div>
-          <div className="rounded-xl bg-white/20 px-4 py-3 backdrop-blur-sm">
-            <p className="text-2xl font-bold">{totalVisitas ?? 0}</p>
-            <p className="text-xs opacity-80">visitas totales</p>
+          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+            <p className="text-2xl font-black text-[#E8FF47]">{totalVisitas ?? 0}</p>
+            <p className="text-xs text-white/40">visitas totales</p>
           </div>
         </div>
       </div>
 
       {/* QR del día */}
-      <div className="px-4 -mt-4">
-        <div className="rounded-2xl bg-white px-6 py-8 shadow-sm">
-          <h2 className="mb-1 text-center text-lg font-bold text-gray-900">
+      <div className="-mt-4 px-4">
+        <div className="rounded-xl bg-white px-6 py-8 shadow-sm">
+          <h2 className="mb-1 text-center text-base font-black uppercase tracking-wider text-[#0A0A0A]">
             Tu QR del día
           </h2>
-          <p className="mb-6 text-center text-xs text-gray-400">
+          <p className="mb-6 text-center text-xs text-[#888]">
             Muéstralo en recepción para registrar tu visita
           </p>
           <QRDisplay />
@@ -109,35 +109,32 @@ export default async function DashboardPage({
       <div className="mt-4 grid grid-cols-2 gap-3 px-4">
         <a
           href="/explorar"
-          className="flex flex-col items-center gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 hover:shadow-md transition-shadow"
+          className="flex flex-col gap-2 rounded-xl border border-[#E5E5E5] bg-white p-4 transition-shadow hover:shadow-sm"
         >
-          <span className="text-3xl">🗺️</span>
-          <span className="text-sm font-medium text-gray-700">Explorar negocios</span>
+          <span className="text-xs font-black uppercase tracking-widest text-[#6B4FE8]">Explorar</span>
+          <span className="text-sm font-semibold text-[#0A0A0A]">Negocios cerca de ti</span>
         </a>
         <a
           href="/historial"
-          className="flex flex-col items-center gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 hover:shadow-md transition-shadow"
+          className="flex flex-col gap-2 rounded-xl border border-[#E5E5E5] bg-white p-4 transition-shadow hover:shadow-sm"
         >
-          <span className="text-3xl">📋</span>
-          <span className="text-sm font-medium text-gray-700">Mi historial</span>
+          <span className="text-xs font-black uppercase tracking-widest text-[#6B4FE8]">Historial</span>
+          <span className="text-sm font-semibold text-[#0A0A0A]">Tus visitas registradas</span>
         </a>
       </div>
 
       {/* Gestión de membresía */}
-      {planActivo && (
+      {planActivo ? (
         <div className="mt-4 px-4">
-          <BotonPortal className="w-full rounded-2xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors" />
+          <BotonPortal className="w-full rounded-lg border border-[#E5E5E5] bg-white py-3 text-sm font-semibold text-[#888] transition-colors hover:text-[#0A0A0A]" />
         </div>
-      )}
-
-      {/* CTA suscripción cuando no hay plan */}
-      {!planActivo && (
+      ) : (
         <div className="mt-4 px-4">
           <a
             href="/#planes"
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-4 text-sm font-bold text-white hover:bg-indigo-700 transition-colors"
+            className="flex w-full items-center justify-center rounded-lg bg-[#6B4FE8] py-4 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6]"
           >
-            Activar membresía →
+            Activar membresía
           </a>
         </div>
       )}
