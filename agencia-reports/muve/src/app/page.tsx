@@ -33,7 +33,9 @@ export default function LandingPage() {
       {/* ── NAV ─────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 bg-[#0A0A0A]">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <span className="text-2xl font-black tracking-tight text-[#E8FF47]">MUVET</span>
+          <Link href="/" className="text-2xl font-black tracking-tight text-[#E8FF47]">
+            MUVET
+          </Link>
           <div className="flex items-center gap-2">
             <Link
               href="/login"

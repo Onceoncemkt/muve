@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { CIUDAD_LABELS, CATEGORIA_LABELS } from '@/types'
 import { stripe } from '@/lib/stripe'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
@@ -258,7 +259,32 @@ export default async function AdminPage({
   return (
     <div className="min-h-screen bg-[#0A0A0A] pb-16 text-white">
       <div className="border-b border-white/10 px-4 py-6">
-        <div className="flex items-start justify-between gap-3">
+        <div className="mx-auto w-full max-w-6xl">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Link
+              href="/admin"
+              className="text-lg font-black tracking-tight text-[#E8FF47] transition-colors hover:text-white"
+            >
+              MUVET
+            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/admin#usuarios"
+                className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+              >
+                Usuarios
+              </Link>
+              <Link
+                href="/admin#negocios"
+                className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+              >
+                Negocios
+              </Link>
+              <BotonCerrarSesion className="shrink-0" />
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-[#E8FF47]">Panel Admin</h1>
             <p className="mt-1 text-sm text-white/50">
@@ -270,7 +296,6 @@ export default async function AdminPage({
               </p>
             )}
           </div>
-          <BotonCerrarSesion className="shrink-0" />
         </div>
       </div>
       <div className="space-y-8 px-4 py-6">
@@ -300,7 +325,7 @@ export default async function AdminPage({
         </section>
 
         {/* Usuarios */}
-        <section>
+        <section id="usuarios">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xs font-black uppercase tracking-[0.18em] text-white/40">
               Usuarios

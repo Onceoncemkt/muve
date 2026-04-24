@@ -181,19 +181,19 @@ export default function NegocioDashboardPage() {
       <div className="bg-[#0A0A0A] px-4 py-6">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <Link
+              href="/negocio/dashboard"
+              className="text-xs font-bold uppercase tracking-widest text-[#E8FF47] transition-colors hover:text-white"
+            >
+              MUVET
+            </Link>
             <h1 className="text-2xl font-black tracking-tight text-white">Panel de negocio</h1>
             <p className="mt-1 text-sm text-white/40">Reservaciones de hoy agrupadas por horario</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
-              href="/validar"
-              className="rounded-lg bg-[#E8FF47] px-3 py-2 text-xs font-black uppercase tracking-widest text-[#0A0A0A] transition-colors hover:bg-white"
-            >
-              Escanear QR
-            </Link>
-            <Link
               href="/negocio/horarios"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-white/40"
+              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
             >
               Horarios
             </Link>
