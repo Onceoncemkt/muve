@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 type NegocioOption = {
   id: string
   nombre: string
+  activo: boolean
 }
 
 type EstadoGuardado = 'idle' | 'saving' | 'ok' | 'error'
@@ -13,7 +14,6 @@ type Props = {
   userId: string
   negocioIdActual: string | null
   negocioActualNombre: string | null
-  negocioActualActivo: boolean
   opciones: NegocioOption[]
 }
 
@@ -21,17 +21,16 @@ export default function StaffNegocioAsignadoSelect({
   userId,
   negocioIdActual,
   negocioActualNombre,
-  negocioActualActivo,
   opciones,
 }: Props) {
   const [negocioId, setNegocioId] = useState(negocioIdActual ?? '')
   const [estado, setEstado] = useState<EstadoGuardado>('idle')
   const [error, setError] = useState('')
 
-  const mostrarOpcionActualInactiva = useMemo(() => {
-    if (!negocioIdActual || !negocioActualNombre || negocioActualActivo) return false
+  const mostrarOpcionActualNoDisponible = useMemo(() => {
+    if (!negocioIdActual || !negocioActualNombre) return false
     return !opciones.some(opcion => opcion.id === negocioIdActual)
-  }, [negocioActualActivo, negocioActualNombre, negocioIdActual, opciones])
+  }, [negocioActualNombre, negocioIdActual, opciones])
 
   async function actualizarNegocio(nuevoNegocioId: string) {
     setEstado('saving')
@@ -78,14 +77,14 @@ export default function StaffNegocioAsignadoSelect({
         className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8] disabled:opacity-60"
       >
         <option value="">Sin asignar</option>
-        {mostrarOpcionActualInactiva && negocioIdActual && negocioActualNombre && (
+        {mostrarOpcionActualNoDisponible && negocioIdActual && negocioActualNombre && (
           <option value={negocioIdActual}>
-            {negocioActualNombre} (inactivo)
+            {negocioActualNombre} (no disponible)
           </option>
         )}
         {opciones.map(opcion => (
           <option key={opcion.id} value={opcion.id}>
-            {opcion.nombre}
+            {opcion.nombre}{opcion.activo ? '' : ' (inactivo)'}
           </option>
         ))}
       </select>

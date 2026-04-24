@@ -192,9 +192,8 @@ export default async function AdminPage({
   }
   const usuarios = (usuariosRaw ?? []) as UsuarioAdmin[]
   const visitasMes = (visitasRaw ?? []) as VisitaRaw[]
-  const negociosActivos = negociosAfiliados
-    .filter(negocio => negocio.activo)
-    .map(negocio => ({ id: negocio.id, nombre: negocio.nombre }))
+  const negociosParaAsignacion = negociosAfiliados
+    .map(negocio => ({ id: negocio.id, nombre: negocio.nombre, activo: negocio.activo }))
   const negociosPorId = new Map(negociosAfiliados.map(negocio => [negocio.id, negocio]))
 
   const subscriptionIds = Array.from(
@@ -463,8 +462,7 @@ export default async function AdminPage({
                             userId={usuario.id}
                             negocioIdActual={usuario.negocio_id}
                             negocioActualNombre={negocioAsignado?.nombre ?? null}
-                            negocioActualActivo={negocioAsignado?.activo ?? false}
-                            opciones={negociosActivos}
+                            opciones={negociosParaAsignacion}
                           />
                         ) : (
                           <span className="text-xs font-semibold uppercase tracking-wide text-white/40">

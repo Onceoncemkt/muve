@@ -69,12 +69,11 @@ export async function POST(
       .from('negocios')
       .select('id')
       .eq('id', negocioId)
-      .eq('activo', true)
       .maybeSingle<{ id: string }>()
 
     if (negocioError || !negocio) {
       return NextResponse.json(
-        { error: 'El negocio seleccionado no existe o está inactivo' },
+        { error: 'El negocio seleccionado no existe' },
         { status: 400 }
       )
     }
