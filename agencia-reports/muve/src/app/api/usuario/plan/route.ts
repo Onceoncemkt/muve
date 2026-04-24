@@ -8,7 +8,9 @@ import { createServiceClient } from '@/lib/supabase/service'
 type PerfilPlan = {
   plan_activo: boolean | null
   plan?: PlanMembresia | null
-  stripe_subscription_id?: string | null
+}
+type PerfilSubscription = {
+  stripe_subscription_id: string | null
 }
 
 
@@ -22,12 +24,12 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
 
   const consultaPrincipal = await supabase
     .from('users')
-    .select('plan_activo, plan, stripe_subscription_id')
+    .select('plan_activo, plan')
     .eq('id', userId)
     .maybeSingle<PerfilPlan>()
 
   if (!consultaPrincipal.error) {
-    return consultaPrincipal.data ?? { plan_activo: false, plan: null, stripe_subscription_id: null }
+    return consultaPrincipal.data ?? { plan_activo: false, plan: null }
   }
 
   const faltaColumnaPlan = mensajeColumnaNoExiste(consultaPrincipal.error, 'plan')
@@ -37,9 +39,9 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
 
   const fallback = await supabase
     .from('users')
-    .select('plan_activo, stripe_subscription_id')
+    .select('plan_activo')
     .eq('id', userId)
-    .maybeSingle<{ plan_activo: boolean | null; stripe_subscription_id: string | null }>()
+    .maybeSingle<{ plan_activo: boolean | null }>()
 
   if (fallback.error) {
     throw new Error(fallback.error.message)
@@ -48,8 +50,27 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
   return {
     plan_activo: fallback.data?.plan_activo ?? false,
     plan: null,
-    stripe_subscription_id: fallback.data?.stripe_subscription_id ?? null,
   }
+}
+
+async function obtenerStripeSubscriptionId(userId: string): Promise<string | null> {
+  const supabase = createServiceClient()
+
+  const consulta = await supabase
+    .from('users')
+    .select('stripe_subscription_id')
+    .eq('id', userId)
+    .maybeSingle<PerfilSubscription>()
+
+  if (!consulta.error) {
+    return consulta.data?.stripe_subscription_id ?? null
+  }
+
+  if (mensajeColumnaNoExiste(consulta.error, 'stripe_subscription_id')) {
+    return null
+  }
+
+  throw new Error(consulta.error.message)
 }
 
 async function planDesdeStripe(subscriptionId: string): Promise<PlanMembresia | null> {
@@ -70,10 +91,14 @@ export async function GET() {
     const perfil = await obtenerPerfilPlan(user.id)
     const planActivo = Boolean(perfil.plan_activo)
     let plan = normalizarPlan(perfil.plan ?? null)
-
-    if (planActivo && !plan && perfil.stripe_subscription_id) {
+    if (planActivo && !plan) {
       try {
-        plan = await planDesdeStripe(perfil.stripe_subscription_id)
+        const stripeSubscriptionId = await obtenerStripeSubscriptionId(user.id)
+        if (!stripeSubscriptionId) {
+          return NextResponse.json({ plan_activo: planActivo, plan: null })
+        }
+
+        plan = await planDesdeStripe(stripeSubscriptionId)
         if (plan) {
           const admin = createServiceClient()
           await admin.from('users').update({ plan }).eq('id', user.id)

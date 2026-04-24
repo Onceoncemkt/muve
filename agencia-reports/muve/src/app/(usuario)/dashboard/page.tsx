@@ -8,8 +8,23 @@ import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import PushNotificationsSetup from '@/components/push/PushNotificationsSetup'
 import RoleRedirectEffect from './RoleRedirectEffect'
 import { CIUDAD_LABELS } from '@/types'
-import type { User } from '@/types'
+import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
+import { normalizarPlan } from '@/lib/planes'
+
+type PerfilDashboard = {
+  nombre: string
+  ciudad: Ciudad
+  plan_activo: boolean
+  plan: PlanMembresia | null
+  rol: 'usuario' | 'staff' | 'admin'
+}
+
+const PLAN_BADGE_LABEL: Record<PlanMembresia, string> = {
+  basico: 'Plan Básico',
+  plus: 'Plan Plus',
+  total: 'Plan Total',
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -26,9 +41,9 @@ export default async function DashboardPage({
 
   const { data: perfil } = await supabase
     .from('users')
-    .select('*')
+    .select('nombre, ciudad, plan_activo, plan, rol')
     .eq('id', user.id)
-    .single<User>()
+    .single<PerfilDashboard>()
 
   const { count: totalVisitas } = await supabase
     .from('visitas')
@@ -49,7 +64,9 @@ export default async function DashboardPage({
   const ciudad = perfil?.ciudad ?? 'tulancingo'
   const params = await searchParams
   const recienActivada = params.membresia === 'activada'
-  const planActivo = perfil?.plan_activo ?? false
+  const planActivo = Boolean(perfil?.plan_activo)
+  const planUsuario = normalizarPlan(perfil?.plan ?? null)
+  const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
@@ -90,9 +107,19 @@ export default async function DashboardPage({
         <h1 className="mt-2 text-2xl font-black tracking-tight">
           Hola, {nombre.split(' ')[0]}
         </h1>
-        <p className="mt-1 text-sm text-white/40">
-          {planActivo ? 'Membresía activa' : 'Sin membresía activa'}
-        </p>
+        {planActivo ? (
+          <div className="mt-2">
+            {planActivoLabel ? (
+              <span className="inline-flex rounded-full bg-[#E8FF47] px-3 py-1 text-xs font-black uppercase tracking-wider text-[#0A0A0A]">
+                {planActivoLabel}
+              </span>
+            ) : (
+              <p className="text-sm text-white/40">Membresía activa</p>
+            )}
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-white/40">Sin membresía activa</p>
+        )}
 
         <div className="mt-6 flex gap-3">
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
