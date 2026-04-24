@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { DiaSemana, Rol } from '@/types'
 import { DIA_LABELS, formatHora } from '@/types'
@@ -12,7 +11,7 @@ const DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 
 interface NegocioOption {
   id: string
   nombre: string
-  ciudad: string
+  ciudad: string | null
 }
 
 interface HorarioConSpots {
@@ -26,9 +25,14 @@ interface HorarioConSpots {
   spots_ocupados: number
 }
 
+interface CargaNegociosResponse {
+  rol?: Rol
+  negocios?: NegocioOption[]
+  error?: string
+}
+
 interface PerfilActual {
   rol: Rol
-  ciudad: string | null
 }
 
 export default function NegocioHorariosPage() {
@@ -56,45 +60,18 @@ export default function NegocioHorariosPage() {
     let activo = true
 
     async function cargarInicial() {
-      const supabase = createClient()
-
-      let perfilActual: PerfilActual = { rol: 'staff', ciudad: null }
-      const { data: userData } = await supabase.auth.getUser()
-      if (userData.user) {
-        const { data: perfil } = await supabase
-          .from('users')
-          .select('rol, ciudad')
-          .eq('id', userData.user.id)
-          .single()
-
-        perfilActual = {
-          rol: (perfil?.rol as Rol) ?? 'staff',
-          ciudad: (perfil?.ciudad as string | null | undefined) ?? null,
-        }
-      }
-
-      if (activo) setRol(perfilActual.rol)
-
-      let query = supabase
-        .from('negocios')
-        .select('id, nombre, ciudad')
-        .eq('activo', true)
-        .order('ciudad')
-        .order('nombre')
-
-      if (perfilActual.rol === 'staff' && perfilActual.ciudad) {
-        query = query.eq('ciudad', perfilActual.ciudad)
-      }
-
-      const { data, error } = await query
+      const perfilActual: PerfilActual = { rol: 'staff' }
+      const res = await fetch('/api/negocio/negocios', { cache: 'no-store' })
+      const payload = (await res.json().catch(() => ({}))) as CargaNegociosResponse
       if (!activo) return
 
-      if (error) {
-        setMensaje({ tipo: 'error', texto: 'No se pudieron cargar negocios' })
+      if (!res.ok) {
+        setMensaje({ tipo: 'error', texto: payload.error ?? 'No se pudieron cargar negocios' })
         return
       }
 
-      const lista = (data ?? []) as NegocioOption[]
+      setRol(payload.rol ?? perfilActual.rol)
+      const lista = (payload.negocios ?? []) as NegocioOption[]
       setNegocios(lista)
       setNegocioId(prev => prev || lista[0]?.id || '')
     }
@@ -274,7 +251,7 @@ export default function NegocioHorariosPage() {
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
-              href="/"
+              href="/negocio/dashboard"
               className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
             >
               Inicio
@@ -298,7 +275,9 @@ export default function NegocioHorariosPage() {
               <option value="">Selecciona un negocio...</option>
               {negocios.map(n => (
                 <option key={n.id} value={n.id}>
-                  {n.nombre} — {n.ciudad.charAt(0).toUpperCase() + n.ciudad.slice(1)}
+                  {n.ciudad
+                    ? `${n.nombre} — ${n.ciudad.charAt(0).toUpperCase() + n.ciudad.slice(1)}`
+                    : n.nombre}
                 </option>
               ))}
             </select>

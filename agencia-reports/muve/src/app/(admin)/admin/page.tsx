@@ -263,7 +263,7 @@ export default async function AdminPage({
                 Negocios
               </a>
               <Link
-                href="/"
+                href="/admin"
                 className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
               >
                 Inicio
