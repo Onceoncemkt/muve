@@ -152,7 +152,7 @@ export default function LandingPage() {
       {/* ── FOOTER ──────────────────────────────────────────── */}
       <footer className="bg-[#0A0A0A] border-t border-white/10 px-6 py-8 text-center">
         <p className="text-xs text-white/30">
-          © {new Date().getFullYear()} MUVET · Bienestar para ciudades medianas de México
+          © {new Date().getFullYear()} MUVET · Todo el wellness en una app
         </p>
       </footer>
     </div>
