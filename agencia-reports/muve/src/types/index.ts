@@ -13,6 +13,7 @@ export interface User {
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   rol: Rol
+  negocio_id?: string | null
   fecha_registro: string
 }
 

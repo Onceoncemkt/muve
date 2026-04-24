@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { CIUDAD_LABELS, CATEGORIA_LABELS } from '@/types'
 import { stripe } from '@/lib/stripe'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
-import type { Ciudad, Categoria } from '@/types'
+import StaffNegocioAsignadoSelect from '@/components/admin/StaffNegocioAsignadoSelect'
+import type { Ciudad, Categoria, Rol } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 
 type PlanId = 'basico' | 'plus' | 'total'
@@ -26,6 +27,8 @@ type UsuarioAdmin = {
   email: string
   ciudad: Ciudad
   plan_activo: boolean
+  rol: Rol
+  negocio_id: string | null
   fecha_registro: string
   stripe_subscription_id: string | null
 }
@@ -142,7 +145,7 @@ export default async function AdminPage({
   ] = await Promise.all([
     supabase
       .from('users')
-      .select('id, nombre, email, ciudad, plan_activo, fecha_registro, stripe_subscription_id')
+      .select('id, nombre, email, ciudad, plan_activo, rol, negocio_id, fecha_registro, stripe_subscription_id')
       .order('fecha_registro', { ascending: false }),
     supabase
       .from('visitas')
@@ -158,6 +161,10 @@ export default async function AdminPage({
   const usuarios = (usuariosRaw ?? []) as UsuarioAdmin[]
   const visitasMes = (visitasRaw ?? []) as VisitaRaw[]
   const negociosAfiliados = (negocios ?? []) as NegocioAdmin[]
+  const negociosActivos = negociosAfiliados
+    .filter(negocio => negocio.activo)
+    .map(negocio => ({ id: negocio.id, nombre: negocio.nombre }))
+  const negociosPorId = new Map(negociosAfiliados.map(negocio => [negocio.id, negocio]))
 
   const subscriptionIds = Array.from(
     new Set(
@@ -362,60 +369,95 @@ export default async function AdminPage({
                   <th className="px-3 py-3">Nombre</th>
                   <th className="px-3 py-3">Email</th>
                   <th className="px-3 py-3">Ciudad</th>
+                  <th className="px-3 py-3">Rol</th>
                   <th className="px-3 py-3">Plan</th>
                   <th className="px-3 py-3">Plan activo</th>
                   <th className="px-3 py-3">Registro</th>
                   <th className="px-3 py-3">Visitas mes</th>
+                  <th className="px-3 py-3">Negocio asignado</th>
                   <th className="px-3 py-3">Acción</th>
                 </tr>
               </thead>
               <tbody>
-                {usuariosFiltrados.map(usuario => (
-                  <tr key={usuario.id} className="border-b border-white/10 text-sm text-white/90">
-                    <td className="px-3 py-3 font-semibold">{usuario.nombre}</td>
-                    <td className="px-3 py-3 text-white/70">{usuario.email}</td>
-                    <td className="px-3 py-3">{CIUDAD_LABELS[usuario.ciudad]}</td>
-                    <td className="px-3 py-3">
-                      <span className="rounded-md bg-[#6B4FE8]/20 px-2 py-1 text-xs font-bold text-[#CBBEFF]">
-                        {usuario.plan.nombre}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <span
-                        className={`rounded-md px-2 py-1 text-xs font-bold ${usuario.plan_activo
-                          ? 'bg-[#E8FF47] text-[#0A0A0A]'
-                          : 'bg-white/10 text-white/70'
-                          }`}
-                      >
-                        {usuario.plan_activo ? 'Sí' : 'No'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-white/70">{formatearFecha(usuario.fecha_registro)}</td>
-                    <td className="px-3 py-3 font-semibold text-[#E8FF47]">
-                      {usuario.usadasMes} / {usuario.permitidasMes}
-                    </td>
-                    <td className="px-3 py-3">
-                      <form
-                        method="POST"
-                        action={`/api/admin/users/${usuario.id}/toggle-plan`}
-                      >
-                        <input type="hidden" name="next" value={nextPath} />
-                        <button
-                          type="submit"
-                          className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${usuario.plan_activo
-                            ? 'bg-[#6B4FE8] text-white hover:bg-[#5b40cd]'
-                            : 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#d8f03f]'
+                {usuariosFiltrados.map(usuario => {
+                  const negocioAsignado = usuario.negocio_id
+                    ? (negociosPorId.get(usuario.negocio_id) ?? null)
+                    : null
+
+                  return (
+                    <tr key={usuario.id} className="border-b border-white/10 text-sm text-white/90">
+                      <td className="px-3 py-3 font-semibold">{usuario.nombre}</td>
+                      <td className="px-3 py-3 text-white/70">{usuario.email}</td>
+                      <td className="px-3 py-3">{CIUDAD_LABELS[usuario.ciudad]}</td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`rounded-md px-2 py-1 text-xs font-bold uppercase tracking-wide ${usuario.rol === 'admin'
+                            ? 'bg-[#6B4FE8]/25 text-[#CBBEFF]'
+                            : usuario.rol === 'staff'
+                              ? 'bg-[#E8FF47]/20 text-[#E8FF47]'
+                              : 'bg-white/10 text-white/70'
                             }`}
                         >
-                          {usuario.plan_activo ? 'Desactivar' : 'Activar'}
-                        </button>
-                      </form>
-                    </td>
-                  </tr>
-                ))}
+                          {usuario.rol}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="rounded-md bg-[#6B4FE8]/20 px-2 py-1 text-xs font-bold text-[#CBBEFF]">
+                          {usuario.plan.nombre}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`rounded-md px-2 py-1 text-xs font-bold ${usuario.plan_activo
+                            ? 'bg-[#E8FF47] text-[#0A0A0A]'
+                            : 'bg-white/10 text-white/70'
+                            }`}
+                        >
+                          {usuario.plan_activo ? 'Sí' : 'No'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-white/70">{formatearFecha(usuario.fecha_registro)}</td>
+                      <td className="px-3 py-3 font-semibold text-[#E8FF47]">
+                        {usuario.usadasMes} / {usuario.permitidasMes}
+                      </td>
+                      <td className="px-3 py-3">
+                        {usuario.rol === 'staff' ? (
+                          <StaffNegocioAsignadoSelect
+                            userId={usuario.id}
+                            negocioIdActual={usuario.negocio_id}
+                            negocioActualNombre={negocioAsignado?.nombre ?? null}
+                            negocioActualActivo={negocioAsignado?.activo ?? false}
+                            opciones={negociosActivos}
+                          />
+                        ) : (
+                          <span className="text-xs font-semibold uppercase tracking-wide text-white/40">
+                            No aplica
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        <form
+                          method="POST"
+                          action={`/api/admin/users/${usuario.id}/toggle-plan`}
+                        >
+                          <input type="hidden" name="next" value={nextPath} />
+                          <button
+                            type="submit"
+                            className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${usuario.plan_activo
+                              ? 'bg-[#6B4FE8] text-white hover:bg-[#5b40cd]'
+                              : 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#d8f03f]'
+                              }`}
+                          >
+                            {usuario.plan_activo ? 'Desactivar' : 'Activar'}
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  )
+                })}
                 {usuariosFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-sm text-white/50">
+                    <td colSpan={10} className="px-3 py-6 text-center text-sm text-white/50">
                       No se encontraron usuarios con ese criterio.
                     </td>
                   </tr>

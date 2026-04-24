@@ -20,6 +20,7 @@ create table public.users (
   plan_activo         boolean not null default false,
   stripe_customer_id  text,
   rol                 rol_enum not null default 'usuario',
+  negocio_id          uuid references public.negocios(id),
   fecha_registro      timestamp with time zone default now()
 );
 
@@ -66,6 +67,7 @@ create table public.qr_tokens (
 create index qr_tokens_token_idx on public.qr_tokens (token);
 create index visitas_user_id_idx on public.visitas (user_id);
 create index visitas_negocio_id_idx on public.visitas (negocio_id);
+create index users_negocio_id_idx on public.users (negocio_id);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
