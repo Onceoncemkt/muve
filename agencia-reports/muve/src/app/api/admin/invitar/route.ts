@@ -34,6 +34,11 @@ function normalizarNegocioId(value: unknown): string | null {
   return limpio.length > 0 ? limpio : null
 }
 
+function faltaColumnaNegocioId(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes('negocio_id')
+}
+
 function emailValido(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
@@ -114,20 +119,40 @@ export async function POST(request: NextRequest) {
     invitedUserId = usuarioPorEmail?.id ?? null
   }
 
+  let preasignacionAplicada = rol === 'staff' ? Boolean(negocioId) : true
+
   if (invitedUserId) {
-    const payload: { rol: Rol; negocio_id: string | null; plan_activo: boolean } = {
+    const payloadBase: { rol: Rol; plan_activo: boolean } = {
       rol,
-      negocio_id: rol === 'staff' ? negocioId : null,
       plan_activo: false,
     }
 
-    const { error: updateError } = await db
+    const payloadConNegocio: { rol: Rol; plan_activo: boolean; negocio_id?: string | null } = {
+      ...payloadBase,
+    }
+    if (rol === 'staff') {
+      payloadConNegocio.negocio_id = negocioId
+    }
+
+    const updatePrincipal = await db
       .from('users')
-      .update(payload)
+      .update(payloadConNegocio)
       .eq('id', invitedUserId)
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    if (updatePrincipal.error) {
+      if (faltaColumnaNegocioId(updatePrincipal.error) && rol === 'staff') {
+        const updateFallback = await db
+          .from('users')
+          .update(payloadBase)
+          .eq('id', invitedUserId)
+
+        if (updateFallback.error) {
+          return NextResponse.json({ error: updateFallback.error.message }, { status: 500 })
+        }
+        preasignacionAplicada = false
+      } else {
+        return NextResponse.json({ error: updatePrincipal.error.message }, { status: 500 })
+      }
     }
   }
 
@@ -135,5 +160,6 @@ export async function POST(request: NextRequest) {
     ok: true,
     invited_user_id: invitedUserId,
     redirect_to: redirectTo,
+    preasignacion_aplicada: preasignacionAplicada,
   })
 }

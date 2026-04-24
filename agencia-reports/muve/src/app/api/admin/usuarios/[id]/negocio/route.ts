@@ -17,6 +17,11 @@ function normalizarNegocioId(value: unknown): string | null {
   return limpio.length > 0 ? limpio : null
 }
 
+function faltaColumnaNegocioId(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes('negocio_id')
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -81,6 +86,12 @@ export async function PUT(
     .eq('id', id)
 
   if (updateError) {
+    if (faltaColumnaNegocioId(updateError)) {
+      return NextResponse.json(
+        { error: 'La asignación de negocio aún no está disponible en esta base de datos.' },
+        { status: 409 }
+      )
+    }
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 

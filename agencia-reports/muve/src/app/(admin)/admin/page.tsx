@@ -64,6 +64,11 @@ function faltaColumnaEdad(error: { message?: string } | null | undefined) {
   return message.includes('column') && message.includes('edad')
 }
 
+function faltaColumnaNegocioId(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes('negocio_id')
+}
+
 function normalizarEdad(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) return Math.trunc(value)
   if (typeof value === 'string') {
@@ -110,28 +115,55 @@ export default async function AdminPage({
 
   const db = admin()
 
-  const consultaUsuariosConEdad = await db
-    .from('users')
-    .select('id, nombre, email, ciudad, rol, edad, plan_activo, negocio_id, fecha_registro')
-    .order('fecha_registro', { ascending: false })
+  const consultasUsuarios = [
+    {
+      select: 'id, nombre, email, ciudad, rol, edad, plan_activo, negocio_id, fecha_registro',
+      incluyeNegocioId: true,
+    },
+    {
+      select: 'id, nombre, email, ciudad, rol, plan_activo, negocio_id, fecha_registro',
+      incluyeNegocioId: true,
+    },
+    {
+      select: 'id, nombre, email, ciudad, rol, edad, plan_activo, fecha_registro',
+      incluyeNegocioId: false,
+    },
+    {
+      select: 'id, nombre, email, ciudad, rol, plan_activo, fecha_registro',
+      incluyeNegocioId: false,
+    },
+  ] as const
+
+  type UsuarioFlexible = Omit<UsuarioAdmin, 'edad' | 'negocio_id'> & {
+    edad?: unknown
+    negocio_id?: unknown
+  }
 
   let usuarios: UsuarioAdmin[] = []
-  if (!consultaUsuariosConEdad.error) {
-    usuarios = ((consultaUsuariosConEdad.data ?? []) as Array<Omit<UsuarioAdmin, 'edad'> & { edad: unknown }>).map(usuario => ({
-      ...usuario,
-      edad: normalizarEdad(usuario.edad),
-    }))
-  } else if (faltaColumnaEdad(consultaUsuariosConEdad.error)) {
-    const fallback = await db
+  let usuariosConNegocioIdDisponible = true
+
+  for (const consulta of consultasUsuarios) {
+    const resultado = await db
       .from('users')
-      .select('id, nombre, email, ciudad, rol, plan_activo, negocio_id, fecha_registro')
+      .select(consulta.select)
       .order('fecha_registro', { ascending: false })
 
-    if (!fallback.error) {
-      usuarios = ((fallback.data ?? []) as Array<Omit<UsuarioAdmin, 'edad'>>).map(usuario => ({
+    if (!resultado.error) {
+      usuariosConNegocioIdDisponible = consulta.incluyeNegocioId
+      usuarios = ((resultado.data ?? []) as unknown as UsuarioFlexible[]).map(usuario => ({
         ...usuario,
-        edad: null,
+        edad: normalizarEdad(usuario.edad),
+        negocio_id: typeof usuario.negocio_id === 'string' ? usuario.negocio_id : null,
       }))
+      break
+    }
+
+    const errorPorColumnaOpcional = (
+      faltaColumnaEdad(resultado.error)
+      || faltaColumnaNegocioId(resultado.error)
+    )
+    if (!errorPorColumnaOpcional) {
+      break
     }
   }
 
@@ -326,13 +358,18 @@ export default async function AdminPage({
                         <div className="min-w-[16rem] space-y-2">
                           <AdminUsuarioRolControl userId={usuario.id} rolActual={usuario.rol} />
                           <AdminUsuarioPlanToggle userId={usuario.id} planActivo={usuario.plan_activo} />
-                          {usuario.rol === 'staff' && (
+                          {usuario.rol === 'staff' && usuariosConNegocioIdDisponible && (
                             <StaffNegocioAsignadoSelect
                               userId={usuario.id}
                               negocioIdActual={usuario.negocio_id}
                               negocioActualNombre={usuario.negocio_id ? (negociosPorId.get(usuario.negocio_id)?.nombre ?? null) : null}
                               opciones={negociosOpciones}
                             />
+                          )}
+                          {usuario.rol === 'staff' && !usuariosConNegocioIdDisponible && (
+                            <p className="text-[11px] font-semibold text-white/45">
+                              Asignación de negocio no disponible en este esquema.
+                            </p>
                           )}
                         </div>
                       </td>

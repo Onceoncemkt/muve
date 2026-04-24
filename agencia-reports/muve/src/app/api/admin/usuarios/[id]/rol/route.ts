@@ -18,6 +18,11 @@ function normalizarRol(value: unknown): Rol | null {
   return null
 }
 
+function faltaColumnaNegocioId(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes('negocio_id')
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -63,13 +68,24 @@ export async function PUT(
     return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
   }
 
-  const { error: updateError } = await db
+  const updatePrincipal = await db
     .from('users')
     .update(payload)
     .eq('id', id)
 
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 })
+  if (updatePrincipal.error) {
+    if (rol !== 'staff' && faltaColumnaNegocioId(updatePrincipal.error)) {
+      const updateFallback = await db
+        .from('users')
+        .update({ rol })
+        .eq('id', id)
+
+      if (updateFallback.error) {
+        return NextResponse.json({ error: updateFallback.error.message }, { status: 500 })
+      }
+    } else {
+      return NextResponse.json({ error: updatePrincipal.error.message }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ ok: true, rol })
