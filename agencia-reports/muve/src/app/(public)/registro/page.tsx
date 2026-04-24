@@ -7,6 +7,22 @@ import type { Ciudad } from '@/types'
 import { CIUDAD_LABELS } from '@/types'
 
 const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+async function enviarEmailBienvenida(payload: { email: string; nombre: string }) {
+  try {
+    const response = await fetch('/api/email/bienvenida', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null)
+      console.warn('[registro] No se pudo enviar email de bienvenida:', errorPayload)
+    }
+  } catch (error) {
+    console.warn('[registro] Error enviando email de bienvenida:', error)
+  }
+}
 
 export default function RegistroPage() {
   const [nombre, setNombre] = useState('')
@@ -39,6 +55,10 @@ export default function RegistroPage() {
         setError(error.message)
         setCargando(false)
         return
+      }
+      const emailRegistro = data.user?.email ?? email
+      if (emailRegistro) {
+        await enviarEmailBienvenida({ email: emailRegistro, nombre })
       }
 
       if (data.session) {
