@@ -84,7 +84,7 @@ export const CATEGORIA_LABELS: Record<Categoria, string> = {
   gimnasio: 'Gimnasio',
   estetica: 'Estética & Wellness',
   clases: 'Clases',
-  restaurante: 'Restaurante Saludable',
+  restaurante: 'Restaurante',
 }
 
 export const CATEGORIA_ICONS: Record<Categoria, string> = {

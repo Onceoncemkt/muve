@@ -22,6 +22,9 @@ export const PLAN_POR_PRICE_ID: Record<string, PlanMembresia> = {
   price_1TPWhLRzNt1SyOBv8EYKsGGP: 'basico',
   price_1TPS4eRzNt1SyOBv47steWqz: 'plus',
   price_1TPWhgRzNt1SyOBvrA0F50v1: 'total',
+  price_1TPwv9RzNt1SyOBvJZIhqZKT: 'basico',
+  price_1TPwxRRzNt1SyOBvIxIRS4sM: 'plus',
+  price_1TPwyuRzNt1SyOBv5lQXhhLS: 'total',
 }
 
 export function normalizarPlan(plan: unknown): PlanMembresia | null {
