@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { normalizarPlan } from '@/lib/planes'
+import {
+  PLAN_MAX_VISITAS_POR_LUGAR,
+  PLAN_VISITAS_MENSUALES,
+  normalizarPlan,
+} from '@/lib/planes'
 
 export async function POST(request: NextRequest) {
   const authClient = await createClient()
@@ -81,10 +85,44 @@ export async function POST(request: NextRequest) {
   }
 
   const usuario = qrToken.users as { nombre: string; ciudad: string; plan_activo: boolean; plan?: unknown }
-  const planUsuario = normalizarPlan(usuario?.plan ?? null)
+  const planUsuario = normalizarPlan(usuario?.plan ?? null) ?? 'basico'
 
   if (!usuario?.plan_activo) {
     return NextResponse.json({ valido: false, error: 'Membresía inactiva' })
+  }
+  const inicioMes = new Date()
+  inicioMes.setDate(1)
+  inicioMes.setHours(0, 0, 0, 0)
+
+  const [{ count: visitasMes, error: visitasMesError }, { count: visitasLugarMes, error: visitasLugarMesError }] = await Promise.all([
+    db
+      .from('visitas')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', qrToken.user_id)
+      .gte('fecha', inicioMes.toISOString()),
+    db
+      .from('visitas')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', qrToken.user_id)
+      .eq('negocio_id', negocioIdObjetivo)
+      .gte('fecha', inicioMes.toISOString()),
+  ])
+
+  if (visitasMesError || visitasLugarMesError) {
+    return NextResponse.json({ error: 'No se pudieron validar límites de visitas' }, { status: 500 })
+  }
+
+  const limiteMensual = PLAN_VISITAS_MENSUALES[planUsuario]
+  if ((visitasMes ?? 0) >= limiteMensual) {
+    return NextResponse.json({ valido: false, error: `Límite mensual alcanzado (${limiteMensual} visitas)` })
+  }
+
+  const limitePorLugar = PLAN_MAX_VISITAS_POR_LUGAR[planUsuario]
+  if ((visitasLugarMes ?? 0) >= limitePorLugar) {
+    return NextResponse.json({
+      valido: false,
+      error: `Límite por lugar alcanzado (${limitePorLugar} visitas este mes)`,
+    })
   }
 
 

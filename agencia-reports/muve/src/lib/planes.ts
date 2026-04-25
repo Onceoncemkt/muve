@@ -12,6 +12,18 @@ export const PLAN_NIVELES: Record<PlanMembresia, number> = {
   total: 3,
 }
 
+export const PLAN_VISITAS_MENSUALES: Record<PlanMembresia, number> = {
+  basico: 8,
+  plus: 14,
+  total: 20,
+}
+
+export const PLAN_MAX_VISITAS_POR_LUGAR: Record<PlanMembresia, number> = {
+  basico: 4,
+  plus: 7,
+  total: 10,
+}
+
 export const CATEGORIAS_VISIBLES_POR_PLAN: Record<PlanMembresia, Categoria[]> = {
   basico: ['clases', 'gimnasio'],
   plus: ['clases', 'gimnasio', 'estetica'],

@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { stripe } from '@/lib/stripe'
-import { normalizarPlan, planDesdePriceId } from '@/lib/planes'
+import {
+  PLAN_MAX_VISITAS_POR_LUGAR,
+  PLAN_VISITAS_MENSUALES,
+  normalizarPlan,
+  planDesdePriceId,
+} from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
 import { createServiceClient } from '@/lib/supabase/service'
 
@@ -79,12 +84,38 @@ async function planDesdeStripe(subscriptionId: string): Promise<PlanMembresia | 
   return planDesdePriceId(priceId)
 }
 
+async function contarVisitasMesActual(userId: string): Promise<number> {
+  const inicioMes = new Date()
+  inicioMes.setDate(1)
+  inicioMes.setHours(0, 0, 0, 0)
+
+  const supabase = createServiceClient()
+  const { count, error } = await supabase
+    .from('visitas')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('fecha', inicioMes.toISOString())
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return count ?? 0
+}
+
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ plan_activo: false, plan: null })
+    return NextResponse.json({
+      plan_activo: false,
+      plan: null,
+      limite_visitas_mensuales: 0,
+      max_visitas_por_lugar: 0,
+      visitas_usadas_mes: 0,
+      visitas_restantes_mes: 0,
+    })
   }
 
   try {
@@ -95,7 +126,14 @@ export async function GET() {
       try {
         const stripeSubscriptionId = await obtenerStripeSubscriptionId(user.id)
         if (!stripeSubscriptionId) {
-          return NextResponse.json({ plan_activo: planActivo, plan: null })
+          return NextResponse.json({
+            plan_activo: planActivo,
+            plan: null,
+            limite_visitas_mensuales: 0,
+            max_visitas_por_lugar: 0,
+            visitas_usadas_mes: 0,
+            visitas_restantes_mes: 0,
+          })
         }
 
         plan = await planDesdeStripe(stripeSubscriptionId)
@@ -108,7 +146,32 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ plan_activo: planActivo, plan })
+    const limiteVisitasMensuales = planActivo && plan
+      ? PLAN_VISITAS_MENSUALES[plan]
+      : 0
+    const maxVisitasPorLugar = planActivo && plan
+      ? PLAN_MAX_VISITAS_POR_LUGAR[plan]
+      : 0
+
+    let visitasUsadasMes = 0
+    if (planActivo && plan) {
+      try {
+        visitasUsadasMes = await contarVisitasMesActual(user.id)
+      } catch (error) {
+        console.error('[GET /api/usuario/plan] error contando visitas del mes:', error)
+      }
+    }
+
+    const visitasRestantesMes = Math.max(limiteVisitasMensuales - visitasUsadasMes, 0)
+
+    return NextResponse.json({
+      plan_activo: planActivo,
+      plan,
+      limite_visitas_mensuales: limiteVisitasMensuales,
+      max_visitas_por_lugar: maxVisitasPorLugar,
+      visitas_usadas_mes: visitasUsadasMes,
+      visitas_restantes_mes: visitasRestantesMes,
+    })
   } catch (error) {
     console.error('[GET /api/usuario/plan]', error)
     return NextResponse.json({ error: 'No se pudo resolver el plan del usuario' }, { status: 500 })

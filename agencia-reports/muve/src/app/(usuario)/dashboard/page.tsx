@@ -11,7 +11,7 @@ import RoleRedirectEffect from './RoleRedirectEffect'
 import { CIUDAD_LABELS } from '@/types'
 import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
-import { normalizarPlan } from '@/lib/planes'
+import { PLAN_VISITAS_MENSUALES, normalizarPlan } from '@/lib/planes'
 
 type PerfilDashboard = {
   nombre: string
@@ -68,6 +68,9 @@ export default async function DashboardPage({
   const planActivo = Boolean(perfil?.plan_activo)
   const planUsuario = normalizarPlan(perfil?.plan ?? null)
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
+  const limiteMensual = planActivo && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
+  const usadasMes = visitasMes ?? 0
+  const restantesMes = Math.max(limiteMensual - usadasMes, 0)
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
@@ -123,9 +126,16 @@ export default async function DashboardPage({
           <p className="mt-1 text-sm text-white/40">Sin membresía activa</p>
         )}
 
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap gap-3">
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-            <p className="text-2xl font-black text-[#E8FF47]">{visitasMes ?? 0}</p>
+            <p className="text-2xl font-black text-[#E8FF47]">{restantesMes}</p>
+            <p className="text-xs text-white/40">
+              visitas restantes
+              {planActivo && planUsuario ? ` de ${limiteMensual}` : ''}
+            </p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+            <p className="text-2xl font-black text-[#E8FF47]">{usadasMes}</p>
             <p className="text-xs text-white/40">visitas este mes</p>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">

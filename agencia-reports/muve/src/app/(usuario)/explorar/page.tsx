@@ -22,6 +22,10 @@ import {
 type EstadoPlanUsuario = {
   plan_activo: boolean
   plan: PlanMembresia | null
+  limite_visitas_mensuales: number
+  max_visitas_por_lugar: number
+  visitas_usadas_mes: number
+  visitas_restantes_mes: number
 }
 type FiltroCategoria = 'todas' | 'gimnasio' | 'clases' | 'wellness' | 'restaurantes'
 type HorarioExplorar = {
@@ -56,15 +60,35 @@ const FILTROS_CATEGORIA: Array<{ value: FiltroCategoria; label: string }> = [
 async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
   try {
     const res = await fetch('/api/usuario/plan', { cache: 'no-store' })
-    if (!res.ok) return { plan_activo: false, plan: null }
+    if (!res.ok) {
+      return {
+        plan_activo: false,
+        plan: null,
+        limite_visitas_mensuales: 0,
+        max_visitas_por_lugar: 0,
+        visitas_usadas_mes: 0,
+        visitas_restantes_mes: 0,
+      }
+    }
 
     const data = await res.json()
     return {
       plan_activo: Boolean(data.plan_activo),
       plan: normalizarPlan(data.plan),
+      limite_visitas_mensuales: Number.isFinite(data.limite_visitas_mensuales) ? Number(data.limite_visitas_mensuales) : 0,
+      max_visitas_por_lugar: Number.isFinite(data.max_visitas_por_lugar) ? Number(data.max_visitas_por_lugar) : 0,
+      visitas_usadas_mes: Number.isFinite(data.visitas_usadas_mes) ? Number(data.visitas_usadas_mes) : 0,
+      visitas_restantes_mes: Number.isFinite(data.visitas_restantes_mes) ? Number(data.visitas_restantes_mes) : 0,
     }
   } catch {
-    return { plan_activo: false, plan: null }
+    return {
+      plan_activo: false,
+      plan: null,
+      limite_visitas_mensuales: 0,
+      max_visitas_por_lugar: 0,
+      visitas_usadas_mes: 0,
+      visitas_restantes_mes: 0,
+    }
   }
 }
 
@@ -98,6 +122,9 @@ export default function ExplorarPage() {
   const [cargando, setCargando] = useState(true)
   const [planActivo, setPlanActivo] = useState(false)
   const [planUsuario, setPlanUsuario] = useState<PlanMembresia | null>(null)
+  const [limiteVisitasMensuales, setLimiteVisitasMensuales] = useState(0)
+  const [maxVisitasPorLugar, setMaxVisitasPorLugar] = useState(0)
+  const [visitasRestantesMes, setVisitasRestantesMes] = useState(0)
   const [filtroCiudad, setFiltroCiudad] = useState<Ciudad | 'todas'>('todas')
   const [filtroCategoria, setFiltroCategoria] = useState<FiltroCategoria>('todas')
   const [menuReservasAbiertoPorNegocioId, setMenuReservasAbiertoPorNegocioId] =
@@ -134,6 +161,9 @@ export default function ExplorarPage() {
 
       setPlanActivo(estadoPlan.plan_activo)
       setPlanUsuario(estadoPlan.plan)
+      setLimiteVisitasMensuales(estadoPlan.limite_visitas_mensuales)
+      setMaxVisitasPorLugar(estadoPlan.max_visitas_por_lugar)
+      setVisitasRestantesMes(estadoPlan.visitas_restantes_mes)
 
       if (!respuestaNegocios.ok) {
         setNegocios([])
@@ -280,6 +310,16 @@ export default function ExplorarPage() {
         <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-[#6B4FE8]">
           {planEfectivo ? `Plan ${PLAN_LABELS[planEfectivo]}` : 'Sin membresía activa'}
         </p>
+        {planEfectivo && (
+          <div className="mt-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+            <p className="text-sm font-bold text-[#0A0A0A]">
+              Visitas disponibles este mes: {visitasRestantesMes} de {limiteVisitasMensuales}
+            </p>
+            <p className="mt-1 text-xs text-[#666]">
+              Máximo {maxVisitasPorLugar} visitas por lugar con tu plan.
+            </p>
+          </div>
+        )}
 
         <div className="mt-4 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-[#777]">
