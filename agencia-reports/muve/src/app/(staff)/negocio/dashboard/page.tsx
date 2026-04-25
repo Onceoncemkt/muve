@@ -7,7 +7,14 @@ import type { DiaSemana, EstadoReserva } from '@/types'
 import { formatHora } from '@/types'
 
 type UsuarioReserva = { id: string; nombre: string; email: string }
-type HorarioReserva = { id: string; dia_semana: DiaSemana; hora_inicio: string; hora_fin: string }
+type HorarioReserva = {
+  id: string
+  dia_semana: DiaSemana
+  hora_inicio: string
+  hora_fin: string
+  nombre_coach: string | null
+  tipo_clase: string | null
+}
 
 interface ReservacionNegocio {
   id: string
@@ -465,11 +472,23 @@ export default function NegocioDashboardPage() {
             {gruposPorHorario.map(grupo => (
               <section key={grupo.key} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-black uppercase tracking-wider text-[#0A0A0A]">
-                    {grupo.horario
-                      ? `${formatHora(grupo.horario.hora_inicio)} – ${formatHora(grupo.horario.hora_fin)}`
-                      : 'Horario no disponible'}
-                  </h2>
+                  <div>
+                    <h2 className="text-sm font-black uppercase tracking-wider text-[#0A0A0A]">
+                      {grupo.horario
+                        ? `${formatHora(grupo.horario.hora_inicio)} – ${formatHora(grupo.horario.hora_fin)}`
+                        : 'Horario no disponible'}
+                    </h2>
+                    {grupo.horario?.tipo_clase && (
+                      <p className="mt-1 text-xs font-semibold text-[#444]">
+                        Clase: {grupo.horario.tipo_clase}
+                      </p>
+                    )}
+                    {grupo.horario?.nombre_coach && (
+                      <p className="text-xs text-[#666]">
+                        Coach: {grupo.horario.nombre_coach}
+                      </p>
+                    )}
+                  </div>
                   <span className="rounded-md bg-[#F7F7F7] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#666]">
                     {grupo.reservaciones.length} reservaciones
                   </span>
@@ -488,6 +507,12 @@ export default function NegocioDashboardPage() {
                               ? `${formatHora(horario.hora_inicio)} – ${formatHora(horario.hora_fin)}`
                               : 'Horario no disponible'}
                           </p>
+                          {horario?.tipo_clase && (
+                            <p className="text-[11px] text-[#666]">Tipo: {horario.tipo_clase}</p>
+                          )}
+                          {horario?.nombre_coach && (
+                            <p className="text-[11px] text-[#666]">Coach: {horario.nombre_coach}</p>
+                          )}
                         </div>
                         {reservacion.estado === 'confirmada' && (
                           <button

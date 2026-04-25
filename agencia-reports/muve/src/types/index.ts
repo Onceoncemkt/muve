@@ -41,6 +41,8 @@ export interface Horario {
   dia_semana: DiaSemana
   hora_inicio: string   // "HH:MM:SS"
   hora_fin: string
+  nombre_coach: string | null
+  tipo_clase: string | null
   capacidad_total: number
   activo: boolean
 }

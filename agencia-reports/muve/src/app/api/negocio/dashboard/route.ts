@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
       .select(`
         id, fecha, estado, created_at,
         users ( id, nombre, email ),
-        horarios!inner ( id, dia_semana, hora_inicio, hora_fin, negocio_id )
+        horarios!inner ( id, dia_semana, hora_inicio, hora_fin, nombre_coach, tipo_clase, negocio_id )
       `)
       .eq('horarios.negocio_id', negocioIdObjetivo)
       .eq('fecha', fecha)

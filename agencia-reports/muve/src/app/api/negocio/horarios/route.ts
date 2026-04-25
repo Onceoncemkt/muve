@@ -9,6 +9,12 @@ function diaSemanaDesdeFecha(fecha: string): DiaSemana | null {
   return dias[date.getDay()]
 }
 
+function normalizarTextoOpcional(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const limpio = value.trim()
+  return limpio.length > 0 ? limpio : null
+}
+
 function admin() {
   return createAdmin(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,6 +36,7 @@ export async function GET(request: NextRequest) {
   if (!negocio_id) {
     return NextResponse.json({ error: 'negocio_id requerido' }, { status: 400 })
   }
+
 
   const db = admin()
   const diaSemana = diaSemanaDesdeFecha(fecha)
@@ -96,12 +103,14 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}))
-  const { negocio_id, dia_semana, hora_inicio, hora_fin, capacidad_total } = body as {
+  const { negocio_id, dia_semana, hora_inicio, hora_fin, capacidad_total, nombre_coach, tipo_clase } = body as {
     negocio_id?: string
     dia_semana?: DiaSemana
     hora_inicio?: string
     hora_fin?: string
     capacidad_total?: number | string
+    nombre_coach?: string | null
+    tipo_clase?: string | null
   }
 
   if (!negocio_id || !dia_semana || !hora_inicio || !hora_fin) {
@@ -131,9 +140,20 @@ export async function POST(request: NextRequest) {
       : 10
   }
 
+  const nombreCoachNormalizado = normalizarTextoOpcional(nombre_coach)
+  const tipoClaseNormalizado = normalizarTextoOpcional(tipo_clase)
+
   const { data: nuevo, error } = await db
     .from('horarios')
-    .insert({ negocio_id, dia_semana, hora_inicio, hora_fin, capacidad_total: capacidadFinal })
+    .insert({
+      negocio_id,
+      dia_semana,
+      hora_inicio,
+      hora_fin,
+      capacidad_total: capacidadFinal,
+      nombre_coach: nombreCoachNormalizado,
+      tipo_clase: tipoClaseNormalizado,
+    })
     .select('*')
     .single()
 

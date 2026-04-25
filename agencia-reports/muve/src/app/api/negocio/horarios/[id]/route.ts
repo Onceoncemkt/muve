@@ -10,7 +10,13 @@ function admin() {
   )
 }
 
-// PATCH /api/negocio/horarios/[id] — editar (activo, capacidad) — solo staff/admin
+function normalizarTextoOpcional(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const limpio = value.trim()
+  return limpio.length > 0 ? limpio : null
+}
+
+// PATCH /api/negocio/horarios/[id] — editar (activo, capacidad, coach, tipo de clase) — solo staff/admin
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -33,7 +39,21 @@ export async function PATCH(
   // Solo se pueden actualizar estos campos
   const updates: Record<string, unknown> = {}
   if (typeof body.activo === 'boolean') updates.activo = body.activo
-  if (typeof body.capacidad_total === 'number') updates.capacidad_total = body.capacidad_total
+  if (typeof body.capacidad_total === 'number' && Number.isFinite(body.capacidad_total)) {
+    const capacidad = Math.trunc(body.capacidad_total)
+    if (capacidad < 1) {
+      return NextResponse.json({ error: 'capacidad_total debe ser mayor a 0' }, { status: 400 })
+    }
+    updates.capacidad_total = capacidad
+  } else if (typeof body.capacidad_total === 'string' && body.capacidad_total.trim().length > 0) {
+    const parsed = Number.parseInt(body.capacidad_total, 10)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      return NextResponse.json({ error: 'capacidad_total debe ser mayor a 0' }, { status: 400 })
+    }
+    updates.capacidad_total = parsed
+  }
+  if ('nombre_coach' in body) updates.nombre_coach = normalizarTextoOpcional(body.nombre_coach)
+  if ('tipo_clase' in body) updates.tipo_clase = normalizarTextoOpcional(body.tipo_clase)
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })

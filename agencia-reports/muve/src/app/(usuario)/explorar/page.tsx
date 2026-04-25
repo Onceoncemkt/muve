@@ -29,6 +29,8 @@ type HorarioExplorar = {
   dia_semana: DiaSemana
   hora_inicio: string
   hora_fin: string
+  nombre_coach: string | null
+  tipo_clase: string | null
   spots_disponibles?: number
 }
 type MensajeCard = { tipo: 'ok' | 'error'; texto: string }
@@ -484,7 +486,19 @@ export default function ExplorarPage() {
                                   </span>
                                   <span className="text-xs text-[#666]">
                                     Próxima fecha: {fechaProxima}
-                                    {spotsDisponibles !== null ? ` · ${spotsDisponibles} lugares` : ''}
+                                  </span>
+                                  {horario.nombre_coach && (
+                                    <span className="text-xs text-[#666]">
+                                      Coach: {horario.nombre_coach}
+                                    </span>
+                                  )}
+                                  {horario.tipo_clase && (
+                                    <span className="text-xs text-[#666]">
+                                      Tipo de clase: {horario.tipo_clase}
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-[#666]">
+                                    Spots disponibles: {spotsDisponibles !== null ? spotsDisponibles : 'N/D'}
                                   </span>
                                 </span>
                                 <span className="ml-3 shrink-0 text-xs font-bold text-[#6B4FE8]">

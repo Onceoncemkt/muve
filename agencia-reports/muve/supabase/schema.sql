@@ -300,3 +300,15 @@ where categoria = 'estetica';
 update public.negocios
 set plan_requerido = 'total'
 where categoria = 'restaurante';
+
+do $$
+begin
+  if to_regclass('public.horarios') is not null then
+    alter table public.horarios
+      add column if not exists nombre_coach text;
+
+    alter table public.horarios
+      add column if not exists tipo_clase text;
+  end if;
+end
+$$;
