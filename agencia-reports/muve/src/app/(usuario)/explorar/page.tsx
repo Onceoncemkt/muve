@@ -52,6 +52,15 @@ function normalizarHandleSocial(handle: string | null | undefined): string | nul
   return limpio.length > 0 ? limpio : null
 }
 
+function inicialesNegocio(nombre: string) {
+  return nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(fragmento => fragmento[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
 export default function ExplorarPage() {
   const [negocios, setNegocios] = useState<Negocio[]>([])
   const [cargando, setCargando] = useState(true)
@@ -119,7 +128,10 @@ export default function ExplorarPage() {
     }
 
     if (filtroCategoria === 'wellness') {
-      resultado = resultado.filter((negocio) => negocio.categoria === 'estetica')
+      resultado = resultado.filter(
+        (negocio) =>
+          negocio.categoria === 'estetica' || negocio.categoria === 'restaurante'
+      )
     } else if (filtroCategoria !== 'todas') {
       resultado = resultado.filter((negocio) => negocio.categoria === filtroCategoria)
     }
@@ -205,9 +217,24 @@ export default function ExplorarPage() {
                 : false
               const instagramHandle = normalizarHandleSocial(negocio.instagram_handle)
               const tiktokHandle = normalizarHandleSocial(negocio.tiktok_handle)
+              const iniciales = inicialesNegocio(negocio.nombre)
 
               return (
                 <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+                  <div className="mb-3 overflow-hidden rounded-lg border border-[#E5E5E5]">
+                    {negocio.imagen_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={negocio.imagen_url}
+                        alt={negocio.nombre}
+                        className="h-36 w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-36 w-full items-center justify-center bg-[#6B4FE8] text-4xl font-black tracking-tight text-[#E8FF47]">
+                        {iniciales}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-base font-black text-[#0A0A0A]">{negocio.nombre}</h2>
                     <span className="shrink-0 rounded-full bg-[#6B4FE8]/10 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#6B4FE8]">

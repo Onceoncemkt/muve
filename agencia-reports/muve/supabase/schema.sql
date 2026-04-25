@@ -153,6 +153,65 @@ create policy "usuarios gestionan sus push subscriptions" on public.push_subscri
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+-- storage (bucket público de imágenes para negocios)
+insert into storage.buckets (id, name, public)
+values ('negocios', 'negocios', true)
+on conflict (id) do update
+set public = excluded.public;
+
+create policy "negocios storage lectura publica" on storage.objects
+  for select
+  to public
+  using (bucket_id = 'negocios');
+
+create policy "negocios storage escritura staff admin" on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'negocios'
+    and exists (
+      select 1
+      from public.users u
+      where u.id = auth.uid()
+        and u.rol in ('admin', 'staff')
+    )
+  );
+
+create policy "negocios storage actualizacion staff admin" on storage.objects
+  for update
+  to authenticated
+  using (
+    bucket_id = 'negocios'
+    and exists (
+      select 1
+      from public.users u
+      where u.id = auth.uid()
+        and u.rol in ('admin', 'staff')
+    )
+  )
+  with check (
+    bucket_id = 'negocios'
+    and exists (
+      select 1
+      from public.users u
+      where u.id = auth.uid()
+        and u.rol in ('admin', 'staff')
+    )
+  );
+
+create policy "negocios storage borrado staff admin" on storage.objects
+  for delete
+  to authenticated
+  using (
+    bucket_id = 'negocios'
+    and exists (
+      select 1
+      from public.users u
+      where u.id = auth.uid()
+        and u.rol in ('admin', 'staff')
+    )
+  );
+
 -- ============================================================
 -- TRIGGER: crear perfil al registrarse
 -- Supabase llama esto cuando se crea un usuario en auth.users

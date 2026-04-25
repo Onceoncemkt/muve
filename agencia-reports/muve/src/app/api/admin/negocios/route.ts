@@ -9,8 +9,10 @@ const COLUMNAS_OPCIONALES_NEGOCIO = [
   'requiere_reserva',
   'capacidad_default',
   'instagram_handle',
+  'imagen_url',
   'visitas_permitidas_por_mes',
 ] as const
+const BUCKET_NEGOCIOS = 'negocios'
 
 function admin() {
   return createAdminClient(
@@ -58,6 +60,47 @@ function requiereValorVisitasPorMes(error: { message?: string } | null | undefin
   return message.includes('visitas_permitidas_por_mes') && message.includes('null value')
 }
 
+function obtenerArchivoImagen(value: FormDataEntryValue | null) {
+  if (!value || typeof value === 'string') return null
+  if (value.size <= 0) return null
+  return value
+}
+
+function nombreArchivoSeguro(nombre: string) {
+  const limpio = nombre
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  return limpio || `negocio-${Date.now()}.jpg`
+}
+
+async function subirImagenNegocio(
+  db: ReturnType<typeof admin>,
+  archivo: File,
+  carpeta: string
+) {
+  const nombre = nombreArchivoSeguro(archivo.name)
+  const ruta = `${carpeta}/${Date.now()}-${nombre}`
+  const bytes = Buffer.from(await archivo.arrayBuffer())
+
+  const storage = db.storage.from(BUCKET_NEGOCIOS)
+  const { error } = await storage.upload(ruta, bytes, {
+    contentType: archivo.type || 'application/octet-stream',
+    upsert: true,
+  })
+
+  if (error) {
+    return { error, publicUrl: null as string | null }
+  }
+
+  const { data } = storage.getPublicUrl(ruta)
+  return { error: null, publicUrl: data.publicUrl }
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -88,6 +131,7 @@ export async function POST(request: NextRequest) {
   const instagramRaw = texto(formData.get('instagram_handle'))
   const requiereReservaRaw = texto(formData.get('requiere_reserva')).toLowerCase()
   const capacidadDefaultRaw = texto(formData.get('capacidad_default'))
+  const fotoNegocio = obtenerArchivoImagen(formData.get('foto_negocio'))
 
   const categoria = CATEGORIAS_VALIDAS.includes(categoriaRaw as Categoria)
     ? (categoriaRaw as Categoria)
@@ -122,6 +166,31 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  let imagenUrl: string | null = null
+  if (fotoNegocio) {
+    if (!fotoNegocio.type.startsWith('image/')) {
+      return redireccionConEstado(
+        request,
+        nextPath,
+        'error',
+        'La foto del negocio debe ser una imagen válida.'
+      )
+    }
+
+    const upload = await subirImagenNegocio(db, fotoNegocio, 'admin')
+    if (upload.error || !upload.publicUrl) {
+      console.error('[POST /api/admin/negocios] storage upload error:', upload.error?.message)
+      return redireccionConEstado(
+        request,
+        nextPath,
+        'error',
+        'No se pudo subir la foto del negocio. Intenta de nuevo.'
+      )
+    }
+
+    imagenUrl = upload.publicUrl
+  }
+
   const payload: Record<string, unknown> = {
     nombre,
     categoria,
@@ -133,6 +202,9 @@ export async function POST(request: NextRequest) {
     capacidad_default: capacidadDefault,
     visitas_permitidas_por_mes: 8,
     activo: true,
+  }
+  if (imagenUrl) {
+    payload.imagen_url = imagenUrl
   }
 
   let error: { message?: string } | null = null

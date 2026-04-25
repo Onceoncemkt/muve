@@ -32,6 +32,7 @@ type NegocioAdmin = {
   categoria: Categoria
   direccion: string
   descripcion: string | null
+  imagen_url: string | null
   instagram_handle: string | null
   requiere_reserva: boolean
   capacidad_default: number | null
@@ -56,6 +57,7 @@ function faltaColumnaRequiereReserva(error: { message?: string } | null | undefi
       message.includes('requiere_reserva')
       || message.includes('capacidad_default')
       || message.includes('instagram_handle')
+      || message.includes('imagen_url')
     )
 }
 
@@ -169,7 +171,7 @@ export default async function AdminPage({
 
   const consultaNegocios = await db
     .from('negocios')
-    .select('id, nombre, ciudad, categoria, direccion, descripcion, instagram_handle, requiere_reserva, capacidad_default, activo')
+    .select('id, nombre, ciudad, categoria, direccion, descripcion, imagen_url, instagram_handle, requiere_reserva, capacidad_default, activo')
     .order('ciudad')
     .order('nombre')
 
@@ -177,7 +179,7 @@ export default async function AdminPage({
   if (!consultaNegocios.error) {
     negociosAfiliados = (consultaNegocios.data ?? []) as NegocioAdmin[]
   } else if (faltaColumnaRequiereReserva(consultaNegocios.error)) {
-    type NegocioAdminLegacy = Omit<NegocioAdmin, 'instagram_handle' | 'requiere_reserva' | 'capacidad_default'>
+    type NegocioAdminLegacy = Omit<NegocioAdmin, 'imagen_url' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default'>
     const fallback = await db
       .from('negocios')
       .select('id, nombre, ciudad, categoria, direccion, descripcion, activo')
@@ -187,6 +189,7 @@ export default async function AdminPage({
     if (!fallback.error) {
       negociosAfiliados = ((fallback.data ?? []) as NegocioAdminLegacy[]).map(negocio => ({
         ...negocio,
+        imagen_url: null,
         instagram_handle: null,
         requiere_reserva: true,
         capacidad_default: 10,
@@ -478,6 +481,7 @@ export default async function AdminPage({
                                   <div className="mt-2 w-[26rem] max-w-full rounded-lg border border-white/10 bg-[#0A0A0A] p-3">
                                     <form
                                       method="POST"
+                                      encType="multipart/form-data"
                                       action={`/api/admin/negocios/${negocio.id}`}
                                       className="grid gap-2 sm:grid-cols-2"
                                     >
@@ -564,6 +568,27 @@ export default async function AdminPage({
                                         />
                                       </div>
                                       <div className="sm:col-span-2">
+                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                          Foto del negocio
+                                        </label>
+                                        {negocio.imagen_url ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img
+                                            src={negocio.imagen_url}
+                                            alt={negocio.nombre}
+                                            className="mb-2 h-28 w-full rounded-md border border-white/10 object-cover"
+                                          />
+                                        ) : (
+                                          <p className="mb-2 text-[10px] text-white/45">Sin foto actual</p>
+                                        )}
+                                        <input
+                                          type="file"
+                                          name="foto_negocio"
+                                          accept="image/*"
+                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-[11px] text-white file:mr-3 file:rounded-md file:border-0 file:bg-[#6B4FE8] file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:tracking-wide file:text-white hover:file:bg-[#5b40cd]"
+                                        />
+                                      </div>
+                                      <div className="sm:col-span-2">
                                         <input
                                           id={`requiere-reserva-${negocio.id}`}
                                           type="checkbox"
@@ -644,7 +669,7 @@ export default async function AdminPage({
                 <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-[#E8FF47]">
                   Agregar negocio nuevo
                 </h3>
-                <form method="POST" action="/api/admin/negocios" className="space-y-3">
+                <form method="POST" encType="multipart/form-data" action="/api/admin/negocios" className="space-y-3">
                   <input type="hidden" name="next" value="/admin" />
                   <div>
                     <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
@@ -729,6 +754,18 @@ export default async function AdminPage({
                       name="instagram_handle"
                       placeholder="usuario"
                       className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                      Foto del negocio
+                    </label>
+                    <input
+                      type="file"
+                      name="foto_negocio"
+                      accept="image/*"
+                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-xs text-white file:mr-3 file:rounded-md file:border-0 file:bg-[#6B4FE8] file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:tracking-wide file:text-white hover:file:bg-[#5b40cd]"
                     />
                   </div>
 

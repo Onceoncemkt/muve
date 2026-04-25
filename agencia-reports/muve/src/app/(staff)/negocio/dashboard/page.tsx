@@ -29,6 +29,7 @@ interface NegocioDashboard {
   nombre: string
   ciudad: string
   categoria: string
+  imagen_url?: string | null
   instagram_handle?: string | null
   tiktok_handle?: string | null
 }
@@ -68,6 +69,15 @@ function normalizarHandle(input: string | null | undefined) {
   return limpio.length > 0 ? limpio : null
 }
 
+function inicialesNegocio(nombre: string) {
+  return nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(fragmento => fragmento[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
 export default function NegocioDashboardPage() {
   const [fechaHoy] = useState(hoyLocalISO())
   const [negocio, setNegocio] = useState<NegocioDashboard | null>(null)
@@ -77,6 +87,7 @@ export default function NegocioDashboardPage() {
   const [cargando, setCargando] = useState(false)
   const [completandoId, setCompletandoId] = useState<string | null>(null)
   const [guardandoPerfil, setGuardandoPerfil] = useState(false)
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [instagramHandle, setInstagramHandle] = useState('')
   const [tiktokHandle, setTiktokHandle] = useState('')
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
@@ -207,6 +218,47 @@ export default function NegocioDashboardPage() {
     }
   }
 
+  async function subirFotoNegocio(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!negocio) return
+
+    const form = event.currentTarget
+    const formData = new FormData(form)
+    const archivo = formData.get('foto_negocio')
+    if (!archivo || typeof archivo === 'string' || archivo.size <= 0) {
+      setMensaje({ tipo: 'error', texto: 'Selecciona una imagen antes de subirla.' })
+      return
+    }
+
+    setSubiendoFoto(true)
+    setMensaje(null)
+
+    try {
+      const res = await fetch('/api/negocio/imagen', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setMensaje({
+          tipo: 'error',
+          texto: typeof data.error === 'string' ? data.error : 'No se pudo actualizar la foto del negocio',
+        })
+        return
+      }
+
+      const imagenUrl = typeof data.negocio?.imagen_url === 'string' ? data.negocio.imagen_url : null
+      setNegocio(prev => prev ? { ...prev, imagen_url: imagenUrl } : prev)
+      setMensaje({ tipo: 'ok', texto: 'Foto del negocio actualizada correctamente' })
+      form.reset()
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al subir la foto del negocio' })
+    } finally {
+      setSubiendoFoto(false)
+    }
+  }
+
   const gruposPorHorario = useMemo(() => {
     const mapa = new Map<string, GrupoHorario>()
 
@@ -294,11 +346,46 @@ export default function NegocioDashboardPage() {
         {!sinNegocio && negocio && (
           <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-2">
-              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Negocio asignado</p>
-              <p className="mt-1 text-lg font-black text-[#0A0A0A]">{negocio.nombre}</p>
-              <p className="text-xs text-[#666]">
-                {negocio.ciudad.charAt(0).toUpperCase() + negocio.ciudad.slice(1)} · {negocio.categoria}
-              </p>
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mi negocio</p>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+                <div className="h-28 w-full overflow-hidden rounded-lg border border-[#E5E5E5] sm:w-40">
+                  {negocio.imagen_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={negocio.imagen_url}
+                      alt={negocio.nombre}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-[#6B4FE8] text-3xl font-black tracking-tight text-[#E8FF47]">
+                      {inicialesNegocio(negocio.nombre)}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1">
+                  <p className="text-lg font-black text-[#0A0A0A]">{negocio.nombre}</p>
+                  <p className="text-xs text-[#666]">
+                    {negocio.ciudad.charAt(0).toUpperCase() + negocio.ciudad.slice(1)} · {negocio.categoria}
+                  </p>
+
+                  <form onSubmit={subirFotoNegocio} className="mt-3 flex flex-col gap-2">
+                    <input
+                      type="file"
+                      name="foto_negocio"
+                      accept="image/*"
+                      className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs text-[#555] file:mr-3 file:rounded-md file:border-0 file:bg-[#6B4FE8] file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:tracking-wide file:text-white hover:file:bg-[#5b40cd]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={subiendoFoto}
+                      className="self-start rounded-lg bg-[#0A0A0A] px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {subiendoFoto ? 'Subiendo...' : 'Subir / cambiar foto'}
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
 
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
