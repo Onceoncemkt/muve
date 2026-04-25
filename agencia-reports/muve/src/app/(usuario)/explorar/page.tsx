@@ -1,9 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CATEGORIA_LABELS,
   CIUDAD_LABELS,
+  DIA_LABELS,
+  formatHora,
+  proximaFecha,
+  type DiaSemana,
   type Ciudad,
   type Negocio,
   type PlanMembresia,
@@ -20,6 +24,24 @@ type EstadoPlanUsuario = {
   plan: PlanMembresia | null
 }
 type FiltroCategoria = 'todas' | 'gimnasio' | 'clases' | 'wellness'
+type HorarioExplorar = {
+  id: string
+  dia_semana: DiaSemana
+  hora_inicio: string
+  hora_fin: string
+  spots_disponibles?: number
+}
+type MensajeCard = { tipo: 'ok' | 'error'; texto: string }
+
+const ORDEN_DIAS: Record<DiaSemana, number> = {
+  lunes: 1,
+  martes: 2,
+  miercoles: 3,
+  jueves: 4,
+  viernes: 5,
+  sabado: 6,
+  domingo: 7,
+}
 
 const FILTROS_CATEGORIA: Array<{ value: FiltroCategoria; label: string }> = [
   { value: 'todas', label: 'Todas' },
@@ -46,6 +68,13 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
 function planRequeridoNegocio(negocio: Negocio): PlanMembresia {
   return normalizarPlan(negocio.plan_requerido ?? null) ?? 'basico'
 }
+
+function formatearFechaISO(fecha: Date): string {
+  const anio = fecha.getFullYear()
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
+  const dia = String(fecha.getDate()).padStart(2, '0')
+  return `${anio}-${mes}-${dia}`
+}
 function normalizarHandleSocial(handle: string | null | undefined): string | null {
   if (!handle) return null
   const limpio = handle.trim().replace(/^@+/, '')
@@ -68,6 +97,17 @@ export default function ExplorarPage() {
   const [planUsuario, setPlanUsuario] = useState<PlanMembresia | null>(null)
   const [filtroCiudad, setFiltroCiudad] = useState<Ciudad | 'todas'>('todas')
   const [filtroCategoria, setFiltroCategoria] = useState<FiltroCategoria>('todas')
+  const [menuReservasAbiertoPorNegocioId, setMenuReservasAbiertoPorNegocioId] =
+    useState<Record<string, boolean>>({})
+  const [horariosPorNegocioId, setHorariosPorNegocioId] =
+    useState<Record<string, HorarioExplorar[]>>({})
+  const [cargandoHorariosPorNegocioId, setCargandoHorariosPorNegocioId] =
+    useState<Record<string, boolean>>({})
+  const [errorHorariosPorNegocioId, setErrorHorariosPorNegocioId] =
+    useState<Record<string, string | null>>({})
+  const [mensajeReservaPorNegocioId, setMensajeReservaPorNegocioId] =
+    useState<Record<string, MensajeCard | null>>({})
+  const [reservandoHorarioId, setReservandoHorarioId] = useState<string | null>(null)
 
   useEffect(() => {
     let activo = true
@@ -107,6 +147,95 @@ export default function ExplorarPage() {
       activo = false
     }
   }, [])
+
+  const cargarHorarios = useCallback(async (negocioId: string) => {
+    setCargandoHorariosPorNegocioId((prev) => ({ ...prev, [negocioId]: true }))
+    setErrorHorariosPorNegocioId((prev) => ({ ...prev, [negocioId]: null }))
+
+    try {
+      const res = await fetch(`/api/negocio/horarios?negocio_id=${encodeURIComponent(negocioId)}`, {
+        cache: 'no-store',
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setHorariosPorNegocioId((prev) => ({ ...prev, [negocioId]: [] }))
+        setErrorHorariosPorNegocioId((prev) => ({
+          ...prev,
+          [negocioId]: data.error ?? 'No se pudieron cargar horarios',
+        }))
+        return
+      }
+
+      const horariosOrdenados = ((data.horarios ?? []) as HorarioExplorar[])
+        .slice()
+        .sort((a, b) => {
+          const diferenciaDia = ORDEN_DIAS[a.dia_semana] - ORDEN_DIAS[b.dia_semana]
+          if (diferenciaDia !== 0) return diferenciaDia
+          return a.hora_inicio.localeCompare(b.hora_inicio)
+        })
+
+      setHorariosPorNegocioId((prev) => ({ ...prev, [negocioId]: horariosOrdenados }))
+    } catch {
+      setHorariosPorNegocioId((prev) => ({ ...prev, [negocioId]: [] }))
+      setErrorHorariosPorNegocioId((prev) => ({
+        ...prev,
+        [negocioId]: 'Error de conexión al cargar horarios',
+      }))
+    } finally {
+      setCargandoHorariosPorNegocioId((prev) => ({ ...prev, [negocioId]: false }))
+    }
+  }, [])
+
+  const abrirOCerrarMenuReservas = useCallback((negocioId: string, estaAbierto: boolean) => {
+    if (estaAbierto) {
+      setMenuReservasAbiertoPorNegocioId((prev) => ({ ...prev, [negocioId]: false }))
+      return
+    }
+
+    setMenuReservasAbiertoPorNegocioId((prev) => ({ ...prev, [negocioId]: true }))
+    setMensajeReservaPorNegocioId((prev) => ({ ...prev, [negocioId]: null }))
+    void cargarHorarios(negocioId)
+  }, [cargarHorarios])
+
+  const reservarHorario = useCallback(async (negocioId: string, horario: HorarioExplorar) => {
+    const fecha = formatearFechaISO(proximaFecha(horario.dia_semana))
+    setReservandoHorarioId(horario.id)
+    setMensajeReservaPorNegocioId((prev) => ({ ...prev, [negocioId]: null }))
+
+    try {
+      const res = await fetch('/api/reservaciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ horario_id: horario.id, fecha }),
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setMensajeReservaPorNegocioId((prev) => ({
+          ...prev,
+          [negocioId]: { tipo: 'error', texto: data.error ?? 'No se pudo crear la reservación' },
+        }))
+        return
+      }
+
+      setMensajeReservaPorNegocioId((prev) => ({
+        ...prev,
+        [negocioId]: {
+          tipo: 'ok',
+          texto: `Reservación confirmada para ${DIA_LABELS[horario.dia_semana]} ${formatHora(horario.hora_inicio)}`,
+        },
+      }))
+      void cargarHorarios(negocioId)
+    } catch {
+      setMensajeReservaPorNegocioId((prev) => ({
+        ...prev,
+        [negocioId]: { tipo: 'error', texto: 'Error de conexión al crear la reservación' },
+      }))
+    } finally {
+      setReservandoHorarioId(null)
+    }
+  }, [cargarHorarios])
 
   const planEfectivo = planActivo ? (planUsuario ?? 'basico') : null
   const ciudadesDisponibles = useMemo(() => {
@@ -218,6 +347,11 @@ export default function ExplorarPage() {
               const instagramHandle = normalizarHandleSocial(negocio.instagram_handle)
               const tiktokHandle = normalizarHandleSocial(negocio.tiktok_handle)
               const iniciales = inicialesNegocio(negocio.nombre)
+              const menuReservasAbierto = Boolean(menuReservasAbiertoPorNegocioId[negocio.id])
+              const cargandoHorarios = Boolean(cargandoHorariosPorNegocioId[negocio.id])
+              const horarios = horariosPorNegocioId[negocio.id] ?? []
+              const errorHorarios = errorHorariosPorNegocioId[negocio.id]
+              const mensajeReserva = mensajeReservaPorNegocioId[negocio.id]
 
               return (
                 <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
@@ -285,6 +419,8 @@ export default function ExplorarPage() {
                   </div>
 
                   <button
+                    type="button"
+                    onClick={() => abrirOCerrarMenuReservas(negocio.id, menuReservasAbierto)}
                     disabled={!puedeReservar}
                     className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
                       puedeReservar
@@ -292,8 +428,75 @@ export default function ExplorarPage() {
                         : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
                     }`}
                   >
-                    {puedeReservar ? 'Reservar' : 'Requiere membresía'}
+                    {!puedeReservar
+                      ? 'Requiere membresía'
+                      : menuReservasAbierto
+                        ? 'Ocultar horarios'
+                        : 'Reservar'}
                   </button>
+
+                  {puedeReservar && menuReservasAbierto && (
+                    <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-[#555]">
+                        Horarios disponibles
+                      </p>
+
+                      {mensajeReserva && (
+                        <div className={`mt-2 rounded-md px-3 py-2 text-xs font-semibold ${
+                          mensajeReserva.tipo === 'ok'
+                            ? 'bg-[#E8FF47]/40 text-[#0A0A0A]'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {mensajeReserva.texto}
+                        </div>
+                      )}
+
+                      {cargandoHorarios ? (
+                        <p className="mt-2 text-xs text-[#666]">Cargando horarios...</p>
+                      ) : errorHorarios ? (
+                        <p className="mt-2 text-xs font-semibold text-red-800">{errorHorarios}</p>
+                      ) : horarios.length === 0 ? (
+                        <p className="mt-2 text-xs text-[#666]">No hay horarios disponibles</p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {horarios.map((horario) => {
+                            const reservando = reservandoHorarioId === horario.id
+                            const proxima = proximaFecha(horario.dia_semana)
+                            const fechaProxima = proxima.toLocaleDateString('es-MX', {
+                              day: '2-digit',
+                              month: 'short',
+                            })
+                            const spotsDisponibles = typeof horario.spots_disponibles === 'number'
+                              ? Math.max(horario.spots_disponibles, 0)
+                              : null
+
+                            return (
+                              <button
+                                key={horario.id}
+                                type="button"
+                                onClick={() => void reservarHorario(negocio.id, horario)}
+                                disabled={reservando}
+                                className="flex w-full items-center justify-between rounded-md border border-[#E5E5E5] bg-white px-3 py-2 text-left transition-colors hover:border-[#6B4FE8] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <span className="flex flex-col">
+                                  <span className="text-sm font-semibold text-[#0A0A0A]">
+                                    {DIA_LABELS[horario.dia_semana]} · {formatHora(horario.hora_inicio)} - {formatHora(horario.hora_fin)}
+                                  </span>
+                                  <span className="text-xs text-[#666]">
+                                    Próxima fecha: {fechaProxima}
+                                    {spotsDisponibles !== null ? ` · ${spotsDisponibles} lugares` : ''}
+                                  </span>
+                                </span>
+                                <span className="ml-3 shrink-0 text-xs font-bold text-[#6B4FE8]">
+                                  {reservando ? 'Reservando...' : 'Reservar'}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}
