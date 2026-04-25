@@ -23,7 +23,7 @@ type EstadoPlanUsuario = {
   plan_activo: boolean
   plan: PlanMembresia | null
 }
-type FiltroCategoria = 'todas' | 'gimnasio' | 'clases' | 'wellness'
+type FiltroCategoria = 'todas' | 'gimnasio' | 'clases' | 'wellness' | 'restaurantes'
 type HorarioExplorar = {
   id: string
   dia_semana: DiaSemana
@@ -50,6 +50,7 @@ const FILTROS_CATEGORIA: Array<{ value: FiltroCategoria; label: string }> = [
   { value: 'gimnasio', label: 'Gimnasio' },
   { value: 'clases', label: 'Clases' },
   { value: 'wellness', label: 'Wellness' },
+  { value: 'restaurantes', label: 'Restaurantes' },
 ]
 
 async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
@@ -259,10 +260,9 @@ export default function ExplorarPage() {
     }
 
     if (filtroCategoria === 'wellness') {
-      resultado = resultado.filter(
-        (negocio) =>
-          negocio.categoria === 'estetica' || negocio.categoria === 'restaurante'
-      )
+      resultado = resultado.filter((negocio) => negocio.categoria === 'estetica')
+    } else if (filtroCategoria === 'restaurantes') {
+      resultado = resultado.filter((negocio) => negocio.categoria === 'restaurante')
     } else if (filtroCategoria !== 'todas') {
       resultado = resultado.filter((negocio) => negocio.categoria === filtroCategoria)
     }
