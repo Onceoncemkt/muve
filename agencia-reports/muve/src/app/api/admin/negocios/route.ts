@@ -101,6 +101,26 @@ async function subirImagenNegocio(
   return { error: null, publicUrl: data.publicUrl }
 }
 
+async function asegurarBucketNegocios(db: ReturnType<typeof admin>) {
+  const { data: buckets, error: listError } = await db.storage.listBuckets()
+  if (listError) return listError
+
+  const existe = (buckets ?? []).some(
+    (bucket) => bucket.id === BUCKET_NEGOCIOS || bucket.name === BUCKET_NEGOCIOS
+  )
+  if (existe) return null
+
+  const { error: createError } = await db.storage.createBucket(BUCKET_NEGOCIOS, { public: true })
+  if (!createError) return null
+
+  const message = createError.message?.toLowerCase() ?? ''
+  if (message.includes('already') || message.includes('exists') || message.includes('duplicate')) {
+    return null
+  }
+
+  return createError
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -168,6 +188,16 @@ export async function POST(request: NextRequest) {
 
   let imagenUrl: string | null = null
   if (fotoNegocio) {
+    const bucketError = await asegurarBucketNegocios(db)
+    if (bucketError) {
+      console.error('[POST /api/admin/negocios] ensure bucket error:', bucketError.message)
+      return redireccionConEstado(
+        request,
+        nextPath,
+        'error',
+        'No se pudo preparar el bucket de imágenes. Intenta de nuevo.'
+      )
+    }
     if (!fotoNegocio.type.startsWith('image/')) {
       return redireccionConEstado(
         request,

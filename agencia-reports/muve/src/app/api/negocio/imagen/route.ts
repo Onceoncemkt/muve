@@ -33,6 +33,26 @@ function faltaColumna(error: { message?: string } | null | undefined, columna: s
   return message.includes('column') && message.includes(columna.toLowerCase())
 }
 
+async function asegurarBucketNegocios(db: ReturnType<typeof createServiceClient>) {
+  const { data: buckets, error: listError } = await db.storage.listBuckets()
+  if (listError) return listError
+
+  const existe = (buckets ?? []).some(
+    (bucket) => bucket.id === BUCKET_NEGOCIOS || bucket.name === BUCKET_NEGOCIOS
+  )
+  if (existe) return null
+
+  const { error: createError } = await db.storage.createBucket(BUCKET_NEGOCIOS, { public: true })
+  if (!createError) return null
+
+  const message = createError.message?.toLowerCase() ?? ''
+  if (message.includes('already') || message.includes('exists') || message.includes('duplicate')) {
+    return null
+  }
+
+  return createError
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -69,6 +89,14 @@ export async function POST(request: Request) {
 
   if (!fotoNegocio.type.startsWith('image/')) {
     return NextResponse.json({ error: 'El archivo debe ser una imagen válida' }, { status: 400 })
+  }
+
+  const bucketError = await asegurarBucketNegocios(db)
+  if (bucketError) {
+    return NextResponse.json(
+      { error: bucketError.message ?? 'No se pudo preparar el bucket de imágenes' },
+      { status: 500 }
+    )
   }
 
   const nombre = nombreArchivoSeguro(fotoNegocio.name)
