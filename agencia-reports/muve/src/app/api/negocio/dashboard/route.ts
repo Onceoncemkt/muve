@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
-import type { Rol } from '@/types'
+import { normalizarPlan } from '@/lib/planes'
+import type { PlanMembresia, Rol } from '@/types'
 
 type Perfil = {
   rol: Rol
@@ -17,6 +18,38 @@ type NegocioDashboard = {
   instagram_handle?: string | null
   tiktok_handle?: string | null
 }
+
+type GananciasSemana = {
+  visitas_por_plan: Record<PlanMembresia, number>
+  total_por_plan: Record<PlanMembresia, number>
+  total_a_cobrar: number
+}
+
+type GananciasHistoricoMes = {
+  mes: string
+  visitas: number
+  total_ganado: number
+}
+
+type GananciasDashboard = {
+  tarifas_por_plan: Record<PlanMembresia, number>
+  semana: GananciasSemana
+  historico_mensual: GananciasHistoricoMes[]
+  nota: string
+}
+
+type VisitaGanancias = {
+  fecha: string
+  plan_usuario: string | null
+}
+
+const PLANES_MEMBRESIA: PlanMembresia[] = ['basico', 'plus', 'total']
+const TARIFA_POR_CHECKIN: Record<PlanMembresia, number> = {
+  basico: 60,
+  plus: 65,
+  total: 70,
+}
+const NOTA_GANANCIAS = 'MUVET hace corte, y te paga el total acumulado cada semana'
 
 function admin() {
   return createAdmin(
@@ -45,6 +78,47 @@ function normalizarHandle(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const limpio = value.trim().replace(/^@+/, '')
   return limpio.length > 0 ? limpio : null
+}
+
+function inicioSemanaLocal(fecha: Date) {
+  const inicio = new Date(fecha)
+  inicio.setHours(0, 0, 0, 0)
+  const diaSemana = inicio.getDay()
+  const diferencia = diaSemana === 0 ? -6 : 1 - diaSemana
+  inicio.setDate(inicio.getDate() + diferencia)
+  return inicio
+}
+
+function recordPlanInicial() {
+  return {
+    basico: 0,
+    plus: 0,
+    total: 0,
+  } satisfies Record<PlanMembresia, number>
+}
+
+function etiquetaMes(clave: string) {
+  const [anio, mes] = clave.split('-').map(Number)
+  const fecha = new Date(Date.UTC(anio, mes - 1, 1))
+  const texto = fecha.toLocaleDateString('es-MX', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
+function gananciasVacias(): GananciasDashboard {
+  return {
+    tarifas_por_plan: TARIFA_POR_CHECKIN,
+    semana: {
+      visitas_por_plan: recordPlanInicial(),
+      total_por_plan: recordPlanInicial(),
+      total_a_cobrar: 0,
+    },
+    historico_mensual: [],
+    nota: NOTA_GANANCIAS,
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -80,6 +154,7 @@ export async function GET(request: NextRequest) {
         reservaciones_hoy: 0,
         horarios_activos: 0,
       },
+      ganancias: gananciasVacias(),
     })
   }
 
@@ -170,6 +245,77 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  let visitasGanancias: VisitaGanancias[] = []
+  const visitasConPlan = await db
+    .from('visitas')
+    .select('fecha, plan_usuario')
+    .eq('negocio_id', negocioIdObjetivo)
+    .returns<VisitaGanancias[]>()
+
+  if (!visitasConPlan.error) {
+    visitasGanancias = visitasConPlan.data ?? []
+  } else if (faltaColumna(visitasConPlan.error, 'plan_usuario')) {
+    const visitasFallback = await db
+      .from('visitas')
+      .select('fecha')
+      .eq('negocio_id', negocioIdObjetivo)
+      .returns<Array<{ fecha: string }>>()
+
+    if (visitasFallback.error) {
+      return NextResponse.json(
+        { error: visitasFallback.error.message ?? 'Error al cargar ganancias' },
+        { status: 500 }
+      )
+    }
+
+    visitasGanancias = (visitasFallback.data ?? []).map((visita) => ({
+      fecha: visita.fecha,
+      plan_usuario: null,
+    }))
+  } else {
+    return NextResponse.json(
+      { error: visitasConPlan.error.message ?? 'Error al cargar ganancias' },
+      { status: 500 }
+    )
+  }
+
+  const inicioSemana = inicioSemanaLocal(new Date())
+  const finSemana = new Date(inicioSemana)
+  finSemana.setDate(finSemana.getDate() + 7)
+
+  const visitasSemana = recordPlanInicial()
+  const totalSemanaPorPlan = recordPlanInicial()
+  const historicoPorMes = new Map<string, { visitas: number; total_ganado: number }>()
+
+  for (const visita of visitasGanancias) {
+    const fechaVisita = new Date(visita.fecha)
+    if (Number.isNaN(fechaVisita.getTime())) continue
+
+    const planUsuario = normalizarPlan(visita.plan_usuario)
+    const tarifa = planUsuario ? TARIFA_POR_CHECKIN[planUsuario] : 0
+
+    if (planUsuario && fechaVisita >= inicioSemana && fechaVisita < finSemana) {
+      visitasSemana[planUsuario] += 1
+      totalSemanaPorPlan[planUsuario] += tarifa
+    }
+
+    const claveMes = `${fechaVisita.getUTCFullYear()}-${String(fechaVisita.getUTCMonth() + 1).padStart(2, '0')}`
+    const acumuladoMes = historicoPorMes.get(claveMes) ?? { visitas: 0, total_ganado: 0 }
+    acumuladoMes.visitas += 1
+    acumuladoMes.total_ganado += tarifa
+    historicoPorMes.set(claveMes, acumuladoMes)
+  }
+
+  const historicoMensual = Array.from(historicoPorMes.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([claveMes, valores]) => ({
+      mes: etiquetaMes(claveMes),
+      visitas: valores.visitas,
+      total_ganado: valores.total_ganado,
+    }))
+
+  const totalSemana = PLANES_MEMBRESIA.reduce((suma, plan) => suma + totalSemanaPorPlan[plan], 0)
+
   return NextResponse.json({
     sin_negocio: false,
     fecha,
@@ -177,6 +323,16 @@ export async function GET(request: NextRequest) {
     resumen: {
       reservaciones_hoy: (reservaciones ?? []).length,
       horarios_activos: horariosActivos ?? 0,
+    },
+    ganancias: {
+      tarifas_por_plan: TARIFA_POR_CHECKIN,
+      semana: {
+        visitas_por_plan: visitasSemana,
+        total_por_plan: totalSemanaPorPlan,
+        total_a_cobrar: totalSemana,
+      },
+      historico_mensual: historicoMensual,
+      nota: NOTA_GANANCIAS,
     },
     reservaciones: reservaciones ?? [],
   })

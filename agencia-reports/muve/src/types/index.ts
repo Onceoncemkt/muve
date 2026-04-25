@@ -62,6 +62,7 @@ export interface Visita {
   negocio_id: string
   fecha: string
   validado_por: string | null
+  plan_usuario?: PlanMembresia | null
   negocios?: Negocio
 }
 

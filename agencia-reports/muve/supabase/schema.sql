@@ -55,7 +55,8 @@ create table public.visitas (
   user_id       uuid not null references public.users(id) on delete cascade,
   negocio_id    uuid not null references public.negocios(id) on delete cascade,
   fecha         timestamp with time zone default now(),
-  validado_por  text
+  validado_por  text,
+  plan_usuario  text check (plan_usuario in ('basico', 'plus', 'total'))
 );
 
 -- ============================================================
@@ -309,6 +310,25 @@ begin
 
     alter table public.horarios
       add column if not exists tipo_clase text;
+  end if;
+end
+$$;
+
+do $$
+begin
+  if to_regclass('public.visitas') is not null then
+    alter table public.visitas
+      add column if not exists plan_usuario text;
+
+    if not exists (
+      select 1
+      from pg_constraint
+      where conname = 'visitas_plan_usuario_check'
+    ) then
+      alter table public.visitas
+        add constraint visitas_plan_usuario_check
+        check (plan_usuario in ('basico', 'plus', 'total'));
+    end if;
   end if;
 end
 $$;

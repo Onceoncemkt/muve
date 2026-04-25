@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
-import type { DiaSemana, EstadoReserva } from '@/types'
+import type { DiaSemana, EstadoReserva, PlanMembresia } from '@/types'
 import { formatHora } from '@/types'
 
 type UsuarioReserva = { id: string; nombre: string; email: string }
@@ -41,6 +41,25 @@ interface NegocioDashboard {
   tiktok_handle?: string | null
 }
 
+interface GananciasSemana {
+  visitas_por_plan: Record<PlanMembresia, number>
+  total_por_plan: Record<PlanMembresia, number>
+  total_a_cobrar: number
+}
+
+interface GananciasHistoricoMes {
+  mes: string
+  visitas: number
+  total_ganado: number
+}
+
+interface GananciasPayload {
+  tarifas_por_plan: Record<PlanMembresia, number>
+  semana: GananciasSemana
+  historico_mensual: GananciasHistoricoMes[]
+  nota: string
+}
+
 interface DashboardPayload {
   sin_negocio: boolean
   fecha: string
@@ -49,6 +68,7 @@ interface DashboardPayload {
     reservaciones_hoy: number
     horarios_activos: number
   }
+  ganancias?: GananciasPayload
   reservaciones?: ReservacionNegocio[]
   error?: string
 }
@@ -85,11 +105,49 @@ function inicialesNegocio(nombre: string) {
     .join('')
 }
 
+const PLAN_LABELS: Record<PlanMembresia, string> = {
+  basico: 'Básico',
+  plus: 'Plus',
+  total: 'Total',
+}
+
+const PLANES_MEMBRESIA: PlanMembresia[] = ['basico', 'plus', 'total']
+
+function gananciasIniciales(): GananciasPayload {
+  return {
+    tarifas_por_plan: {
+      basico: 60,
+      plus: 65,
+      total: 70,
+    },
+    semana: {
+      visitas_por_plan: {
+        basico: 0,
+        plus: 0,
+        total: 0,
+      },
+      total_por_plan: {
+        basico: 0,
+        plus: 0,
+        total: 0,
+      },
+      total_a_cobrar: 0,
+    },
+    historico_mensual: [],
+    nota: 'MUVET hace corte, y te paga el total acumulado cada semana',
+  }
+}
+
+function formatMonedaMXN(valor: number) {
+  return `$${valor.toLocaleString('es-MX')}`
+}
+
 export default function NegocioDashboardPage() {
   const [fechaHoy] = useState(hoyLocalISO())
   const [negocio, setNegocio] = useState<NegocioDashboard | null>(null)
   const [reservaciones, setReservaciones] = useState<ReservacionNegocio[]>([])
   const [resumen, setResumen] = useState({ reservaciones_hoy: 0, horarios_activos: 0 })
+  const [ganancias, setGanancias] = useState<GananciasPayload>(gananciasIniciales())
   const [sinNegocio, setSinNegocio] = useState(false)
   const [cargando, setCargando] = useState(false)
   const [completandoId, setCompletandoId] = useState<string | null>(null)
@@ -115,6 +173,7 @@ export default function NegocioDashboardPage() {
         setSinNegocio(false)
         setReservaciones([])
         setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
+        setGanancias(gananciasIniciales())
         return
       }
       const negocioPerfil = data.negocio ?? null
@@ -126,6 +185,7 @@ export default function NegocioDashboardPage() {
         setTiktokHandle('')
         setReservaciones([])
         setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
+        setGanancias(data.ganancias ?? gananciasIniciales())
         return
       }
 
@@ -138,6 +198,7 @@ export default function NegocioDashboardPage() {
         reservaciones_hoy: data.resumen?.reservaciones_hoy ?? 0,
         horarios_activos: data.resumen?.horarios_activos ?? 0,
       })
+      setGanancias(data.ganancias ?? gananciasIniciales())
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar el panel' })
       setNegocio(null)
@@ -146,6 +207,7 @@ export default function NegocioDashboardPage() {
       setSinNegocio(false)
       setReservaciones([])
       setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
+      setGanancias(gananciasIniciales())
     } finally {
       setCargando(false)
     }
@@ -403,6 +465,69 @@ export default function NegocioDashboardPage() {
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
               <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Horarios activos</p>
               <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{resumen.horarios_activos}</p>
+            </div>
+            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis ganancias</p>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Esta semana</p>
+                  <div className="mt-3 space-y-2">
+                    {PLANES_MEMBRESIA.map((plan) => {
+                      const visitasPlan = ganancias.semana.visitas_por_plan[plan] ?? 0
+                      const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
+                      const totalPlan = ganancias.semana.total_por_plan[plan] ?? (visitasPlan * tarifaPlan)
+                      return (
+                        <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
+                          <span>
+                            Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
+                          </span>
+                          <span className="font-black text-[#0A0A0A]">= {formatMonedaMXN(totalPlan)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="mt-4 rounded-lg bg-[#0A0A0A] px-4 py-3 text-center">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-white/50">Total a cobrar</p>
+                    <p className="mt-1 text-3xl font-black tracking-tight text-[#E8FF47]">
+                      {formatMonedaMXN(ganancias.semana.total_a_cobrar)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Histórico</p>
+                  {ganancias.historico_mensual.length === 0 ? (
+                    <p className="mt-4 text-sm text-[#666]">Sin registros todavía.</p>
+                  ) : (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b border-[#E5E5E5] text-left text-[11px] font-black uppercase tracking-widest text-[#888]">
+                            <th className="px-2 py-2">Mes</th>
+                            <th className="px-2 py-2">Visitas</th>
+                            <th className="px-2 py-2 text-right">Total ganado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ganancias.historico_mensual.map((fila) => (
+                            <tr key={fila.mes} className="border-b border-[#EFEFEF] text-[#0A0A0A]">
+                              <td className="px-2 py-2 font-semibold">{fila.mes}</td>
+                              <td className="px-2 py-2">{fila.visitas}</td>
+                              <td className="px-2 py-2 text-right font-black">{formatMonedaMXN(fila.total_ganado)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <p className="mt-4 rounded-lg bg-[#E8FF47]/20 px-3 py-2 text-xs font-semibold text-[#0A0A0A]">
+                {ganancias.nota}
+              </p>
             </div>
 
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">

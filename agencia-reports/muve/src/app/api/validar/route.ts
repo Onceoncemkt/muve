@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { normalizarPlan } from '@/lib/planes'
 
 export async function POST(request: NextRequest) {
   const authClient = await createClient()
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
   // Buscar el token
   const { data: qrToken } = await db
     .from('qr_tokens')
-    .select('*, users(nombre, ciudad, plan_activo)')
+    .select('*, users(nombre, ciudad, plan_activo, plan)')
     .eq('token', token)
     .single()
 
@@ -79,7 +80,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ valido: false, error: 'Token expirado' })
   }
 
-  const usuario = qrToken.users as { nombre: string; ciudad: string; plan_activo: boolean }
+  const usuario = qrToken.users as { nombre: string; ciudad: string; plan_activo: boolean; plan?: unknown }
+  const planUsuario = normalizarPlan(usuario?.plan ?? null)
 
   if (!usuario?.plan_activo) {
     return NextResponse.json({ valido: false, error: 'Membresía inactiva' })
@@ -98,6 +100,7 @@ export async function POST(request: NextRequest) {
       user_id: qrToken.user_id,
       negocio_id: negocioIdObjetivo,
       validado_por: perfil.nombre,
+      plan_usuario: planUsuario,
     }),
     db.from('qr_tokens').update({ usado: true }).eq('id', qrToken.id),
   ])
