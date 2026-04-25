@@ -28,9 +28,9 @@ const PRECIOS_POR_REGION: Record<RegionPrecios, Record<PlanId, number>> = {
 
 const PRECIOS_ANTERIORES_POR_REGION: Record<RegionPrecios, Partial<Record<PlanId, number>>> = {
   centro: {
-    basico: 699,
-    plus: 1399,
-    total: 2499,
+    basico: 750,
+    plus: 1600,
+    total: 3100,
   },
   bc: {},
 }
