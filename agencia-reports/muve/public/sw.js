@@ -1,3 +1,9 @@
+const CACHE_NAME = 'muvet-v1'
+self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME)))
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)))
+})
 self.addEventListener('push', event => {
   if (!event.data) return
 
