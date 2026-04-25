@@ -13,6 +13,9 @@ interface ResultadoValidacion {
   usuario?: string
   negocio?: string
   error?: string
+  visitas_restantes_mes?: number
+  visitas_usadas_mes?: number
+  limite_visitas_mensuales?: number
 }
 
 function ciudadLabel(ciudad: string | null | undefined) {
@@ -291,15 +294,21 @@ function ResultadoBanner({
     <div
       className={`flex flex-col items-center gap-3 rounded-xl p-5 text-center ${
         resultado.valido
-          ? 'bg-[#E8FF47]/20 ring-1 ring-[#E8FF47]'
+          ? 'bg-green-50 ring-1 ring-green-300'
           : 'bg-red-50 ring-1 ring-red-200'
       }`}
     >
       {resultado.valido ? (
         <>
-          <p className="text-lg font-black text-[#0A0A0A]">Visita registrada</p>
-          <p className="text-sm text-[#0A0A0A]/70">
+          <p className="text-lg font-black text-green-700">Visita registrada</p>
+          <p className="text-sm text-green-700">
             {resultado.usuario} — {resultado.negocio}
+          </p>
+          <p className="text-sm font-semibold text-green-700">
+            Visitas restantes: {resultado.visitas_restantes_mes ?? 0}
+            {typeof resultado.limite_visitas_mensuales === 'number'
+              ? ` de ${resultado.limite_visitas_mensuales}`
+              : ''}
           </p>
         </>
       ) : (
@@ -312,7 +321,7 @@ function ResultadoBanner({
         onClick={onReiniciar}
         className={`mt-1 rounded-lg px-5 py-2 text-sm font-bold transition-colors ${
           resultado.valido
-            ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
+            ? 'bg-green-600 text-white hover:bg-green-700'
             : 'bg-red-600 text-white hover:bg-red-700'
         }`}
       >

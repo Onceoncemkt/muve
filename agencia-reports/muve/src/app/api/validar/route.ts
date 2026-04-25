@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   const planUsuario = normalizarPlan(usuario?.plan ?? null) ?? 'basico'
 
   if (!usuario?.plan_activo) {
-    return NextResponse.json({ valido: false, error: 'Membresía inactiva' })
+    return NextResponse.json({ valido: false, error: 'Usuario sin membresía activa' })
   }
   const inicioMes = new Date()
   inicioMes.setDate(1)
@@ -114,14 +114,14 @@ export async function POST(request: NextRequest) {
 
   const limiteMensual = PLAN_VISITAS_MENSUALES[planUsuario]
   if ((visitasMes ?? 0) >= limiteMensual) {
-    return NextResponse.json({ valido: false, error: `Límite mensual alcanzado (${limiteMensual} visitas)` })
+    return NextResponse.json({ valido: false, error: 'Usuario agotó sus visitas del mes' })
   }
 
   const limitePorLugar = PLAN_MAX_VISITAS_POR_LUGAR[planUsuario]
   if ((visitasLugarMes ?? 0) >= limitePorLugar) {
     return NextResponse.json({
       valido: false,
-      error: `Límite por lugar alcanzado (${limitePorLugar} visitas este mes)`,
+      error: 'Límite de visitas en este lugar alcanzado',
     })
   }
 
@@ -147,9 +147,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error al registrar visita' }, { status: 500 })
   }
 
+  const visitasUsadasMes = (visitasMes ?? 0) + 1
+  const visitasRestantesMes = Math.max(limiteMensual - visitasUsadasMes, 0)
+
   return NextResponse.json({
     valido: true,
     usuario: usuario.nombre,
     negocio: negocio?.nombre,
+    visitas_restantes_mes: visitasRestantesMes,
+    visitas_usadas_mes: visitasUsadasMes,
+    limite_visitas_mensuales: limiteMensual,
   })
 }
