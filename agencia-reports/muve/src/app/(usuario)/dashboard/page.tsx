@@ -87,7 +87,7 @@ export default async function DashboardPage({
               Tu cuenta está lista. Activa tu membresía para empezar.
             </p>
             <Link
-              href="/#planes"
+              href="/planes"
               className="shrink-0 rounded-lg bg-[#0A0A0A] px-4 py-1.5 text-xs font-bold text-[#E8FF47] hover:bg-[#222] transition-colors"
             >
               Ver planes
@@ -175,7 +175,7 @@ export default async function DashboardPage({
       ) : (
         <div className="mt-4 px-4">
           <Link
-            href="/#planes"
+            href="/planes"
             className="flex w-full items-center justify-center rounded-lg bg-[#6B4FE8] py-4 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6]"
           >
             Activar membresía
