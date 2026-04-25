@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import PlanesPrecios from '@/components/PlanesPrecios'
+import { createClient } from '@/lib/supabase/server'
+import type { Ciudad } from '@/types'
 
 const PASOS = [
   { num: '01', titulo: 'Elige tu plan', desc: 'Desde $549/mes. Cancela cuando quieras. Sin contratos.' },
@@ -21,11 +23,32 @@ const CIUDADES = [
   { nombre: 'Tijuana',    negocios: 8 },
 ]
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  let ciudadInicial: Ciudad = 'tulancingo'
+  if (user) {
+    const { data: perfil } = await supabase
+      .from('users')
+      .select('ciudad')
+      .eq('id', user.id)
+      .single<{ ciudad: Ciudad }>()
+    ciudadInicial = perfil?.ciudad ?? 'tulancingo'
+  }
+
+  const usuarioAutenticado = Boolean(user)
   const priceIds = {
-    basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_1TPWhLRzNt1SyOBv8EYKsGGP',
-    plus:   process.env.STRIPE_PRICE_ID_PLUS   ?? 'price_1TPS4eRzNt1SyOBv47steWqz',
-    total:  process.env.STRIPE_PRICE_ID_TOTAL  ?? 'price_1TPWhgRzNt1SyOBvrA0F50v1',
+    centro: {
+      basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_1TPWhLRzNt1SyOBv8EYKsGGP',
+      plus: process.env.STRIPE_PRICE_ID_PLUS ?? 'price_1TPS4eRzNt1SyOBv47steWqz',
+      total: process.env.STRIPE_PRICE_ID_TOTAL ?? 'price_1TPWhgRzNt1SyOBvrA0F50v1',
+    },
+    bc: {
+      basico: process.env.STRIPE_PRICE_ID_BASICO_BC ?? 'price_1TPwv9RzNt1SyOBvJZIhqZKT',
+      plus: process.env.STRIPE_PRICE_ID_PLUS_BC ?? 'price_1TPwxRRzNt1SyOBvIxIRS4sM',
+      total: process.env.STRIPE_PRICE_ID_TOTAL_BC ?? 'price_1TPwyuRzNt1SyOBv5lQXhhLS',
+    },
   }
 
   return (
@@ -124,7 +147,11 @@ export default function LandingPage() {
 
       {/* ── PLANES ──────────────────────────────────────────── */}
       <div className="bg-[#F7F7F7]">
-        <PlanesPrecios priceIds={priceIds} />
+        <PlanesPrecios
+          priceIds={priceIds}
+          ciudadInicial={ciudadInicial}
+          usuarioAutenticado={usuarioAutenticado}
+        />
       </div>
 
       {/* ── CIUDADES ────────────────────────────────────────── */}

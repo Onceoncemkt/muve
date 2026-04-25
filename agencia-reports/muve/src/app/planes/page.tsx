@@ -1,11 +1,34 @@
 import Link from 'next/link'
 import PlanesPrecios from '@/components/PlanesPrecios'
+import { createClient } from '@/lib/supabase/server'
+import type { Ciudad } from '@/types'
 
-export default function PlanesPage() {
+export default async function PlanesPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  let ciudadInicial: Ciudad = 'tulancingo'
+  if (user) {
+    const { data: perfil } = await supabase
+      .from('users')
+      .select('ciudad')
+      .eq('id', user.id)
+      .single<{ ciudad: Ciudad }>()
+    ciudadInicial = perfil?.ciudad ?? 'tulancingo'
+  }
+
+  const usuarioAutenticado = Boolean(user)
   const priceIds = {
-    basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_1TPWhLRzNt1SyOBv8EYKsGGP',
-    plus: process.env.STRIPE_PRICE_ID_PLUS ?? 'price_1TPS4eRzNt1SyOBv47steWqz',
-    total: process.env.STRIPE_PRICE_ID_TOTAL ?? 'price_1TPWhgRzNt1SyOBvrA0F50v1',
+    centro: {
+      basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_1TPWhLRzNt1SyOBv8EYKsGGP',
+      plus: process.env.STRIPE_PRICE_ID_PLUS ?? 'price_1TPS4eRzNt1SyOBv47steWqz',
+      total: process.env.STRIPE_PRICE_ID_TOTAL ?? 'price_1TPWhgRzNt1SyOBvrA0F50v1',
+    },
+    bc: {
+      basico: process.env.STRIPE_PRICE_ID_BASICO_BC ?? 'price_1TPwv9RzNt1SyOBvJZIhqZKT',
+      plus: process.env.STRIPE_PRICE_ID_PLUS_BC ?? 'price_1TPwxRRzNt1SyOBvIxIRS4sM',
+      total: process.env.STRIPE_PRICE_ID_TOTAL_BC ?? 'price_1TPwyuRzNt1SyOBv5lQXhhLS',
+    },
   }
 
   return (
@@ -32,7 +55,11 @@ export default function PlanesPage() {
         </div>
       </header>
 
-      <PlanesPrecios priceIds={priceIds} />
+      <PlanesPrecios
+        priceIds={priceIds}
+        ciudadInicial={ciudadInicial}
+        usuarioAutenticado={usuarioAutenticado}
+      />
     </div>
   )
 }
