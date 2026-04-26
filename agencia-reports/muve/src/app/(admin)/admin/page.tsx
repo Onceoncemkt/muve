@@ -36,6 +36,7 @@ type NegocioAdmin = {
   instagram_handle: string | null
   requiere_reserva: boolean
   capacidad_default: number | null
+  stripe_account_id: string | null
   activo: boolean
 }
 
@@ -58,6 +59,7 @@ function faltaColumnaRequiereReserva(error: { message?: string } | null | undefi
       || message.includes('capacidad_default')
       || message.includes('instagram_handle')
       || message.includes('imagen_url')
+      || message.includes('stripe_account_id')
     )
 }
 
@@ -171,7 +173,7 @@ export default async function AdminPage({
 
   const consultaNegocios = await db
     .from('negocios')
-    .select('id, nombre, ciudad, categoria, direccion, descripcion, imagen_url, instagram_handle, requiere_reserva, capacidad_default, activo')
+    .select('id, nombre, ciudad, categoria, direccion, descripcion, imagen_url, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
     .order('ciudad')
     .order('nombre')
 
@@ -179,7 +181,7 @@ export default async function AdminPage({
   if (!consultaNegocios.error) {
     negociosAfiliados = (consultaNegocios.data ?? []) as NegocioAdmin[]
   } else if (faltaColumnaRequiereReserva(consultaNegocios.error)) {
-    type NegocioAdminLegacy = Omit<NegocioAdmin, 'imagen_url' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default'>
+    type NegocioAdminLegacy = Omit<NegocioAdmin, 'imagen_url' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default' | 'stripe_account_id'>
     const fallback = await db
       .from('negocios')
       .select('id, nombre, ciudad, categoria, direccion, descripcion, activo')
@@ -193,6 +195,7 @@ export default async function AdminPage({
         instagram_handle: null,
         requiere_reserva: true,
         capacidad_default: 10,
+        stripe_account_id: null,
       }))
     }
   }
@@ -444,6 +447,13 @@ export default async function AdminPage({
                           <td className="px-2 py-2">
                             <p className="font-semibold">{negocio.nombre}</p>
                             <p className="mt-0.5 text-xs text-white/45">{negocio.direccion}</p>
+                            <p className={`mt-1 inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              negocio.stripe_account_id
+                                ? 'bg-[#E8FF47]/20 text-[#E8FF47]'
+                                : 'bg-white/10 text-white/60'
+                            }`}>
+                              Stripe: {negocio.stripe_account_id ? 'Conectado' : 'Pendiente'}
+                            </p>
                           </td>
                           <td className="px-2 py-2">{CATEGORIA_LABELS[negocio.categoria]}</td>
                           <td className="px-2 py-2">{CIUDAD_LABELS[negocio.ciudad]}</td>
@@ -474,6 +484,15 @@ export default async function AdminPage({
                           <td className="px-2 py-2">
                             <div className="flex flex-col gap-2">
                               <div className="flex flex-wrap gap-2">
+                                <form method="POST" action={`/api/admin/negocios/${negocio.id}/stripe-connect`}>
+                                  <input type="hidden" name="next" value="/admin" />
+                                  <button
+                                    type="submit"
+                                    className="rounded-md bg-[#0A0A0A] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#E8FF47] hover:bg-[#222222]"
+                                  >
+                                    {negocio.stripe_account_id ? 'Reconectar Stripe' : 'Conectar cuenta Stripe'}
+                                  </button>
+                                </form>
                                 <details>
                                   <summary className="cursor-pointer rounded-md border border-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#CBBEFF] hover:bg-[#6B4FE8]/20">
                                     Editar

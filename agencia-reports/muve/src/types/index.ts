@@ -29,6 +29,7 @@ export interface Negocio {
   imagen_url: string | null
   instagram_handle?: string | null
   tiktok_handle?: string | null
+  stripe_account_id?: string | null
   requiere_reserva?: boolean
   capacidad_default?: number | null
   plan_requerido?: PlanMembresia | null

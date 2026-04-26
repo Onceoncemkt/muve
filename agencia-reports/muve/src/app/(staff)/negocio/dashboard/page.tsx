@@ -60,6 +60,23 @@ interface GananciasPayload {
   nota: string
 }
 
+interface PagoSemanalPayload {
+  periodo_inicio: string
+  periodo_fin: string
+  visitas_basico: number
+  visitas_plus: number
+  visitas_total: number
+  total_mxn: number
+  estado: 'pagado' | 'pendiente'
+  stripe_transfer_id: string | null
+  created_at: string | null
+}
+
+interface PagosPayload {
+  historial_semanal: PagoSemanalPayload[]
+  proximo_pago_estimado: PagoSemanalPayload
+}
+
 interface DashboardPayload {
   sin_negocio: boolean
   fecha: string
@@ -69,6 +86,7 @@ interface DashboardPayload {
     horarios_activos: number
   }
   ganancias?: GananciasPayload
+  pagos?: PagosPayload
   reservaciones?: ReservacionNegocio[]
   error?: string
 }
@@ -138,8 +156,66 @@ function gananciasIniciales(): GananciasPayload {
   }
 }
 
+function inicioSemanaLocal(fecha: Date) {
+  const inicio = new Date(fecha)
+  inicio.setHours(0, 0, 0, 0)
+  const diaSemana = inicio.getDay()
+  const diferencia = diaSemana === 0 ? -6 : 1 - diaSemana
+  inicio.setDate(inicio.getDate() + diferencia)
+  return inicio
+}
+
+function finSemanaLocal(inicioSemana: Date) {
+  const fin = new Date(inicioSemana)
+  fin.setDate(fin.getDate() + 6)
+  return fin
+}
+
+function formatoFechaISO(fecha: Date) {
+  return fecha.toISOString().split('T')[0]
+}
+
+function pagoSemanalInicial(): PagoSemanalPayload {
+  const inicio = inicioSemanaLocal(new Date())
+  const fin = finSemanaLocal(inicio)
+  return {
+    periodo_inicio: formatoFechaISO(inicio),
+    periodo_fin: formatoFechaISO(fin),
+    visitas_basico: 0,
+    visitas_plus: 0,
+    visitas_total: 0,
+    total_mxn: 0,
+    estado: 'pendiente',
+    stripe_transfer_id: null,
+    created_at: null,
+  }
+}
+
+function pagosIniciales(): PagosPayload {
+  return {
+    historial_semanal: [],
+    proximo_pago_estimado: pagoSemanalInicial(),
+  }
+}
+
 function formatMonedaMXN(valor: number) {
   return `$${valor.toLocaleString('es-MX')}`
+}
+
+function claseEstadoPago(estado: 'pagado' | 'pendiente') {
+  return estado === 'pagado'
+    ? 'bg-[#E8FF47]/20 text-[#0A0A0A]'
+    : 'bg-[#6B4FE8]/20 text-[#6B4FE8]'
+}
+
+function formatFechaCorta(fechaISO: string) {
+  const fecha = new Date(`${fechaISO}T00:00:00`)
+  if (Number.isNaN(fecha.getTime())) return fechaISO
+  return fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
+}
+
+function formatPeriodoSemanal(inicio: string, fin: string) {
+  return `${formatFechaCorta(inicio)} - ${formatFechaCorta(fin)}`
 }
 
 export default function NegocioDashboardPage() {
@@ -148,6 +224,7 @@ export default function NegocioDashboardPage() {
   const [reservaciones, setReservaciones] = useState<ReservacionNegocio[]>([])
   const [resumen, setResumen] = useState({ reservaciones_hoy: 0, horarios_activos: 0 })
   const [ganancias, setGanancias] = useState<GananciasPayload>(gananciasIniciales())
+  const [pagos, setPagos] = useState<PagosPayload>(pagosIniciales())
   const [sinNegocio, setSinNegocio] = useState(false)
   const [cargando, setCargando] = useState(false)
   const [completandoId, setCompletandoId] = useState<string | null>(null)
@@ -174,6 +251,7 @@ export default function NegocioDashboardPage() {
         setReservaciones([])
         setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
         setGanancias(gananciasIniciales())
+        setPagos(pagosIniciales())
         return
       }
       const negocioPerfil = data.negocio ?? null
@@ -186,6 +264,7 @@ export default function NegocioDashboardPage() {
         setReservaciones([])
         setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
         setGanancias(data.ganancias ?? gananciasIniciales())
+        setPagos(data.pagos ?? pagosIniciales())
         return
       }
 
@@ -199,6 +278,7 @@ export default function NegocioDashboardPage() {
         horarios_activos: data.resumen?.horarios_activos ?? 0,
       })
       setGanancias(data.ganancias ?? gananciasIniciales())
+      setPagos(data.pagos ?? pagosIniciales())
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar el panel' })
       setNegocio(null)
@@ -208,6 +288,7 @@ export default function NegocioDashboardPage() {
       setReservaciones([])
       setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
       setGanancias(gananciasIniciales())
+      setPagos(pagosIniciales())
     } finally {
       setCargando(false)
     }
@@ -528,6 +609,94 @@ export default function NegocioDashboardPage() {
               <p className="mt-4 rounded-lg bg-[#E8FF47]/20 px-3 py-2 text-xs font-semibold text-[#0A0A0A]">
                 {ganancias.nota}
               </p>
+            </div>
+
+            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis pagos</p>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Próximo pago estimado</p>
+                  <p className="mt-1 text-xs text-[#666]">
+                    Semana {formatPeriodoSemanal(
+                      pagos.proximo_pago_estimado.periodo_inicio,
+                      pagos.proximo_pago_estimado.periodo_fin
+                    )}
+                  </p>
+
+                  <div className="mt-3 space-y-2">
+                    {PLANES_MEMBRESIA.map((plan) => {
+                      const visitasPlan = plan === 'basico'
+                        ? pagos.proximo_pago_estimado.visitas_basico
+                        : plan === 'plus'
+                          ? pagos.proximo_pago_estimado.visitas_plus
+                          : pagos.proximo_pago_estimado.visitas_total
+                      const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
+                      return (
+                        <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
+                          <span>
+                            Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
+                          </span>
+                          <span className="font-black">= {formatMonedaMXN(visitasPlan * tarifaPlan)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="mt-4 rounded-lg bg-[#0A0A0A] px-4 py-3 text-center">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-white/50">Total estimado</p>
+                    <p className="mt-1 text-3xl font-black tracking-tight text-[#E8FF47]">
+                      {formatMonedaMXN(pagos.proximo_pago_estimado.total_mxn)}
+                    </p>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between rounded-lg border border-[#E5E5E5] bg-white px-3 py-2">
+                    <p className="text-xs font-bold uppercase tracking-wider text-[#555]">Estado</p>
+                    <span className={`rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${claseEstadoPago(pagos.proximo_pago_estimado.estado)}`}>
+                      {pagos.proximo_pago_estimado.estado}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Historial semanal</p>
+                  {pagos.historial_semanal.length === 0 ? (
+                    <p className="mt-4 text-sm text-[#666]">Sin pagos registrados todavía.</p>
+                  ) : (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b border-[#E5E5E5] text-left text-[11px] font-black uppercase tracking-widest text-[#888]">
+                            <th className="px-2 py-2">Semana</th>
+                            <th className="px-2 py-2">Visitas</th>
+                            <th className="px-2 py-2 text-right">Total</th>
+                            <th className="px-2 py-2 text-right">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagos.historial_semanal.map((fila) => {
+                            const totalVisitas = fila.visitas_basico + fila.visitas_plus + fila.visitas_total
+                            return (
+                              <tr key={`${fila.periodo_inicio}-${fila.periodo_fin}`} className="border-b border-[#EFEFEF] text-[#0A0A0A]">
+                                <td className="px-2 py-2 font-semibold">
+                                  {formatPeriodoSemanal(fila.periodo_inicio, fila.periodo_fin)}
+                                </td>
+                                <td className="px-2 py-2">{totalVisitas}</td>
+                                <td className="px-2 py-2 text-right font-black">{formatMonedaMXN(fila.total_mxn)}</td>
+                                <td className="px-2 py-2 text-right">
+                                  <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${claseEstadoPago(fila.estado)}`}>
+                                    {fila.estado}
+                                  </span>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">

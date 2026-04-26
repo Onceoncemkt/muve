@@ -43,6 +43,37 @@ type VisitaGanancias = {
   plan_usuario: string | null
 }
 
+type EstadoPagoDashboard = 'pagado' | 'pendiente'
+
+type PagoSemanalDashboard = {
+  periodo_inicio: string
+  periodo_fin: string
+  visitas_basico: number
+  visitas_plus: number
+  visitas_total: number
+  total_mxn: number
+  estado: EstadoPagoDashboard
+  stripe_transfer_id: string | null
+  created_at: string | null
+}
+
+type PagoNegocioDB = {
+  periodo_inicio: string
+  periodo_fin: string
+  visitas_basico: number | null
+  visitas_plus: number | null
+  visitas_total: number | null
+  total_mxn: number | null
+  estado: string | null
+  stripe_transfer_id: string | null
+  created_at: string | null
+}
+
+type PagosDashboard = {
+  historial_semanal: PagoSemanalDashboard[]
+  proximo_pago_estimado: PagoSemanalDashboard
+}
+
 const PLANES_MEMBRESIA: PlanMembresia[] = ['basico', 'plus', 'total']
 const TARIFA_POR_CHECKIN: Record<PlanMembresia, number> = {
   basico: 60,
@@ -74,6 +105,11 @@ function faltaColumna(error: { message?: string } | null | undefined, columna: s
   return message.includes('column') && message.includes(columna.toLowerCase())
 }
 
+function faltaRelacion(error: { message?: string } | null | undefined, relacion: string) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes(relacion.toLowerCase()) && message.includes('does not exist')
+}
+
 function normalizarHandle(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const limpio = value.trim().replace(/^@+/, '')
@@ -87,6 +123,16 @@ function inicioSemanaLocal(fecha: Date) {
   const diferencia = diaSemana === 0 ? -6 : 1 - diaSemana
   inicio.setDate(inicio.getDate() + diferencia)
   return inicio
+}
+
+function finSemanaLocal(inicioSemana: Date) {
+  const fin = new Date(inicioSemana)
+  fin.setDate(fin.getDate() + 6)
+  return fin
+}
+
+function formatoFechaISO(fecha: Date) {
+  return fecha.toISOString().split('T')[0]
 }
 
 function recordPlanInicial() {
@@ -118,6 +164,38 @@ function gananciasVacias(): GananciasDashboard {
     },
     historico_mensual: [],
     nota: NOTA_GANANCIAS,
+  }
+}
+
+function estadoPagoDashboard(estado: string | null | undefined): EstadoPagoDashboard {
+  return estado === 'completado' || estado === 'pagado'
+    ? 'pagado'
+    : 'pendiente'
+}
+
+function pagoSemanalVacio(periodoInicio: string, periodoFin: string): PagoSemanalDashboard {
+  return {
+    periodo_inicio: periodoInicio,
+    periodo_fin: periodoFin,
+    visitas_basico: 0,
+    visitas_plus: 0,
+    visitas_total: 0,
+    total_mxn: 0,
+    estado: 'pendiente',
+    stripe_transfer_id: null,
+    created_at: null,
+  }
+}
+
+function pagosVacios(): PagosDashboard {
+  const inicioSemana = inicioSemanaLocal(new Date())
+  const finSemana = finSemanaLocal(inicioSemana)
+  return {
+    historial_semanal: [],
+    proximo_pago_estimado: pagoSemanalVacio(
+      formatoFechaISO(inicioSemana),
+      formatoFechaISO(finSemana)
+    ),
   }
 }
 
@@ -155,6 +233,7 @@ export async function GET(request: NextRequest) {
         horarios_activos: 0,
       },
       ganancias: gananciasVacias(),
+      pagos: pagosVacios(),
     })
   }
 
@@ -316,6 +395,52 @@ export async function GET(request: NextRequest) {
 
   const totalSemana = PLANES_MEMBRESIA.reduce((suma, plan) => suma + totalSemanaPorPlan[plan], 0)
 
+  let pagosHistorico: PagoSemanalDashboard[] = []
+  const pagosResult = await db
+    .from('pagos_negocios')
+    .select('periodo_inicio, periodo_fin, visitas_basico, visitas_plus, visitas_total, total_mxn, estado, stripe_transfer_id, created_at')
+    .eq('negocio_id', negocioIdObjetivo)
+    .order('periodo_fin', { ascending: false })
+    .limit(20)
+    .returns<PagoNegocioDB[]>()
+
+  if (!pagosResult.error) {
+    pagosHistorico = (pagosResult.data ?? []).map((pago) => ({
+      periodo_inicio: pago.periodo_inicio,
+      periodo_fin: pago.periodo_fin,
+      visitas_basico: pago.visitas_basico ?? 0,
+      visitas_plus: pago.visitas_plus ?? 0,
+      visitas_total: pago.visitas_total ?? 0,
+      total_mxn: pago.total_mxn ?? 0,
+      estado: estadoPagoDashboard(pago.estado),
+      stripe_transfer_id: pago.stripe_transfer_id ?? null,
+      created_at: pago.created_at ?? null,
+    }))
+  } else if (!faltaRelacion(pagosResult.error, 'pagos_negocios')) {
+    return NextResponse.json(
+      { error: pagosResult.error.message ?? 'Error al cargar historial de pagos' },
+      { status: 500 }
+    )
+  }
+
+  const inicioSemanaActual = formatoFechaISO(inicioSemana)
+  const finSemanaActual = formatoFechaISO(finSemanaLocal(inicioSemana))
+  const proximoPagoEstimado: PagoSemanalDashboard = {
+    periodo_inicio: inicioSemanaActual,
+    periodo_fin: finSemanaActual,
+    visitas_basico: visitasSemana.basico,
+    visitas_plus: visitasSemana.plus,
+    visitas_total: visitasSemana.total,
+    total_mxn: totalSemana,
+    estado: 'pendiente',
+    stripe_transfer_id: null,
+    created_at: null,
+  }
+
+  const pagoSemanaActual = pagosHistorico.find(
+    pago => pago.periodo_inicio === inicioSemanaActual && pago.periodo_fin === finSemanaActual
+  )
+
   return NextResponse.json({
     sin_negocio: false,
     fecha,
@@ -333,6 +458,10 @@ export async function GET(request: NextRequest) {
       },
       historico_mensual: historicoMensual,
       nota: NOTA_GANANCIAS,
+    },
+    pagos: {
+      historial_semanal: pagosHistorico,
+      proximo_pago_estimado: pagoSemanaActual ?? proximoPagoEstimado,
     },
     reservaciones: reservaciones ?? [],
   })

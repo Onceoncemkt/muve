@@ -37,6 +37,7 @@ create table public.negocios (
   imagen_url                  text,
   instagram_handle            text,
   tiktok_handle               text,
+  stripe_account_id           text,
   requiere_reserva            boolean not null default true,
   capacidad_default           int default 10,
   plan_requerido              text default 'basico' check (plan_requerido in ('basico', 'plus', 'total')),
@@ -58,6 +59,25 @@ create table public.visitas (
   validado_por  text,
   plan_usuario  text check (plan_usuario in ('basico', 'plus', 'total'))
 );
+-- ============================================================
+-- TABLA: pagos_negocios
+-- ============================================================
+create table public.pagos_negocios (
+  id                 uuid primary key default gen_random_uuid(),
+  negocio_id         uuid references public.negocios(id) on delete cascade,
+  periodo_inicio     date,
+  periodo_fin        date,
+  visitas_basico     int default 0,
+  visitas_plus       int default 0,
+  visitas_total      int default 0,
+  total_mxn          int default 0,
+  stripe_transfer_id text,
+  estado             text default 'completado',
+  created_at         timestamp with time zone default now()
+);
+
+create unique index pagos_negocios_negocio_periodo_unique
+  on public.pagos_negocios (negocio_id, periodo_inicio, periodo_fin);
 
 -- ============================================================
 -- TABLA: qr_tokens
@@ -86,6 +106,8 @@ create index visitas_user_id_idx on public.visitas (user_id);
 create index visitas_negocio_id_idx on public.visitas (negocio_id);
 create index users_negocio_id_idx on public.users (negocio_id);
 create index push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
+create index pagos_negocios_negocio_id_idx on public.pagos_negocios (negocio_id);
+create index pagos_negocios_periodo_fin_idx on public.pagos_negocios (periodo_fin desc);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -93,6 +115,7 @@ create index push_subscriptions_user_id_idx on public.push_subscriptions (user_i
 alter table public.users enable row level security;
 alter table public.negocios enable row level security;
 alter table public.visitas enable row level security;
+alter table public.pagos_negocios enable row level security;
 alter table public.qr_tokens enable row level security;
 alter table public.push_subscriptions enable row level security;
 
@@ -129,6 +152,20 @@ create policy "staff registra visitas" on public.visitas
 create policy "admin ve todas las visitas" on public.visitas
   for select using (
     exists (select 1 from public.users u where u.id = auth.uid() and u.rol = 'admin')
+  );
+
+-- pagos_negocios
+create policy "staff y admin ven pagos de su negocio" on public.pagos_negocios
+  for select using (
+    exists (
+      select 1
+      from public.users u
+      where u.id = auth.uid()
+        and (
+          u.rol = 'admin'
+          or (u.rol = 'staff' and u.negocio_id = pagos_negocios.negocio_id)
+        )
+    )
   );
 
 -- qr_tokens
