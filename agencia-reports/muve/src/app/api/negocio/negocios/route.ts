@@ -13,11 +13,17 @@ type NegocioConCiudad = {
   id: string
   nombre: string
   ciudad: string | null
+  categoria?: string | null
+  monto_maximo_visita?: number | null
+  servicios_incluidos?: string | null
 }
 
 type NegocioSinCiudad = {
   id: string
   nombre: string
+  categoria?: string | null
+  monto_maximo_visita?: number | null
+  servicios_incluidos?: string | null
 }
 
 
@@ -77,13 +83,79 @@ export async function GET() {
   const filtrarPorCiudad = perfil.rol === 'staff' && !perfil.negocio_id && !!perfil.ciudad
 
   const consultasNegocios = [
-    { select: 'id, nombre, ciudad', incluyeCiudad: true, usaActivo: true },
-    { select: 'id, nombre, ciudad', incluyeCiudad: true, usaActivo: false },
-    { select: 'id, nombre', incluyeCiudad: false, usaActivo: true },
-    { select: 'id, nombre', incluyeCiudad: false, usaActivo: false },
+    {
+      select: 'id, nombre, ciudad, categoria, monto_maximo_visita, servicios_incluidos',
+      incluyeCiudad: true,
+      incluyeCategoria: true,
+      incluyeMontoMaximo: true,
+      incluyeServiciosIncluidos: true,
+      usaActivo: true,
+    },
+    {
+      select: 'id, nombre, ciudad, categoria',
+      incluyeCiudad: true,
+      incluyeCategoria: true,
+      incluyeMontoMaximo: false,
+      incluyeServiciosIncluidos: false,
+      usaActivo: true,
+    },
+    {
+      select: 'id, nombre, ciudad',
+      incluyeCiudad: true,
+      incluyeCategoria: false,
+      incluyeMontoMaximo: false,
+      incluyeServiciosIncluidos: false,
+      usaActivo: true,
+    },
+    {
+      select: 'id, nombre, categoria',
+      incluyeCiudad: false,
+      incluyeCategoria: true,
+      incluyeMontoMaximo: false,
+      incluyeServiciosIncluidos: false,
+      usaActivo: true,
+    },
+    {
+      select: 'id, nombre',
+      incluyeCiudad: false,
+      incluyeCategoria: false,
+      incluyeMontoMaximo: false,
+      incluyeServiciosIncluidos: false,
+      usaActivo: true,
+    },
+    {
+      select: 'id, nombre, ciudad, categoria, monto_maximo_visita, servicios_incluidos',
+      incluyeCiudad: true,
+      incluyeCategoria: true,
+      incluyeMontoMaximo: true,
+      incluyeServiciosIncluidos: true,
+      usaActivo: false,
+    },
+    {
+      select: 'id, nombre, ciudad, categoria',
+      incluyeCiudad: true,
+      incluyeCategoria: true,
+      incluyeMontoMaximo: false,
+      incluyeServiciosIncluidos: false,
+      usaActivo: false,
+    },
+    {
+      select: 'id, nombre',
+      incluyeCiudad: false,
+      incluyeCategoria: false,
+      incluyeMontoMaximo: false,
+      incluyeServiciosIncluidos: false,
+      usaActivo: false,
+    },
   ] as const
-
-  let negocios: Array<{ id: string; nombre: string; ciudad: string | null }> | null = null
+  let negocios: Array<{
+    id: string
+    nombre: string
+    ciudad: string | null
+    categoria: string | null
+    monto_maximo_visita: number
+    servicios_incluidos: string | null
+  }> | null = null
   let ultimoError: string | null = null
 
   for (const consulta of consultasNegocios) {
@@ -115,12 +187,30 @@ export async function GET() {
           id: negocio.id,
           nombre: negocio.nombre,
           ciudad: typeof negocio.ciudad === 'string' ? negocio.ciudad : null,
+          categoria: consulta.incluyeCategoria && typeof negocio.categoria === 'string'
+            ? negocio.categoria
+            : null,
+          monto_maximo_visita: consulta.incluyeMontoMaximo && typeof negocio.monto_maximo_visita === 'number'
+            ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
+            : 0,
+          servicios_incluidos: consulta.incluyeServiciosIncluidos && typeof negocio.servicios_incluidos === 'string'
+            ? negocio.servicios_incluidos
+            : null,
         }))
       } else {
         negocios = ((data ?? []) as unknown as NegocioSinCiudad[]).map(negocio => ({
           id: negocio.id,
           nombre: negocio.nombre,
           ciudad: null,
+          categoria: consulta.incluyeCategoria && typeof negocio.categoria === 'string'
+            ? negocio.categoria
+            : null,
+          monto_maximo_visita: consulta.incluyeMontoMaximo && typeof negocio.monto_maximo_visita === 'number'
+            ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
+            : 0,
+          servicios_incluidos: consulta.incluyeServiciosIncluidos && typeof negocio.servicios_incluidos === 'string'
+            ? negocio.servicios_incluidos
+            : null,
         }))
       }
       break
@@ -129,6 +219,9 @@ export async function GET() {
     ultimoError = error.message ?? 'Error al cargar negocios'
     const errorPorColumnaOpcional = (
       (consulta.incluyeCiudad && faltaColumna(error, 'ciudad'))
+      || (consulta.incluyeCategoria && faltaColumna(error, 'categoria'))
+      || (consulta.incluyeMontoMaximo && faltaColumna(error, 'monto_maximo_visita'))
+      || (consulta.incluyeServiciosIncluidos && faltaColumna(error, 'servicios_incluidos'))
       || (consulta.usaActivo && faltaColumna(error, 'activo'))
     )
     if (!errorPorColumnaOpcional) break

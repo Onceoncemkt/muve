@@ -11,6 +11,7 @@ import {
   type Ciudad,
   type Negocio,
   type PlanMembresia,
+  type ServicioNegocio,
 } from '@/types'
 import {
   CATEGORIAS_VISIBLES_POR_PLAN,
@@ -117,6 +118,25 @@ function inicialesNegocio(nombre: string) {
     .join('')
 }
 
+function formatMoneyMxn(monto: number) {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 0,
+  }).format(monto)
+}
+
+function serviciosWellnessVisibles(negocio: Negocio): ServicioNegocio[] {
+  return Array.isArray(negocio.servicios_disponibles)
+    ? negocio.servicios_disponibles.filter((servicio) => servicio?.activo !== false)
+    : []
+}
+
+function serviciosWellnessReservables(negocio: Negocio): ServicioNegocio[] {
+  return serviciosWellnessVisibles(negocio)
+    .filter((servicio) => typeof servicio.id === 'string' && !servicio.id.startsWith('texto-'))
+}
+
 export default function ExplorarPage() {
   const [negocios, setNegocios] = useState<Negocio[]>([])
   const [cargando, setCargando] = useState(true)
@@ -137,6 +157,8 @@ export default function ExplorarPage() {
     useState<Record<string, string | null>>({})
   const [mensajeReservaPorNegocioId, setMensajeReservaPorNegocioId] =
     useState<Record<string, MensajeCard | null>>({})
+  const [servicioSeleccionadoPorNegocioId, setServicioSeleccionadoPorNegocioId] =
+    useState<Record<string, string>>({})
   const [reservandoHorarioId, setReservandoHorarioId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -220,19 +242,44 @@ export default function ExplorarPage() {
     }
   }, [])
 
-  const abrirOCerrarMenuReservas = useCallback((negocioId: string, estaAbierto: boolean) => {
+  const abrirOCerrarMenuReservas = useCallback((negocio: Negocio, estaAbierto: boolean) => {
+    const negocioId = negocio.id
     if (estaAbierto) {
       setMenuReservasAbiertoPorNegocioId((prev) => ({ ...prev, [negocioId]: false }))
       return
+    }
+    if (negocio.categoria === 'estetica') {
+      const reservables = serviciosWellnessReservables(negocio)
+      setServicioSeleccionadoPorNegocioId((prev) => {
+        const actual = prev[negocioId] ?? ''
+        if (actual && reservables.some((servicio) => servicio.id === actual)) return prev
+        return { ...prev, [negocioId]: reservables[0]?.id ?? '' }
+      })
     }
 
     setMenuReservasAbiertoPorNegocioId((prev) => ({ ...prev, [negocioId]: true }))
     setMensajeReservaPorNegocioId((prev) => ({ ...prev, [negocioId]: null }))
     void cargarHorarios(negocioId)
   }, [cargarHorarios])
-
-  const reservarHorario = useCallback(async (negocioId: string, horario: HorarioExplorar) => {
+  const reservarHorario = useCallback(async (negocio: Negocio, horario: HorarioExplorar) => {
+    const negocioId = negocio.id
     const fecha = formatearFechaISO(proximaFecha(horario.dia_semana))
+    const payload: { horario_id: string; fecha: string; servicio_id?: string } = {
+      horario_id: horario.id,
+      fecha,
+    }
+
+    if (negocio.categoria === 'estetica') {
+      const servicioIdSeleccionado = servicioSeleccionadoPorNegocioId[negocioId] ?? ''
+      if (!servicioIdSeleccionado) {
+        setMensajeReservaPorNegocioId((prev) => ({
+          ...prev,
+          [negocioId]: { tipo: 'error', texto: 'Selecciona un servicio wellness antes de reservar' },
+        }))
+        return
+      }
+      payload.servicio_id = servicioIdSeleccionado
+    }
     setReservandoHorarioId(horario.id)
     setMensajeReservaPorNegocioId((prev) => ({ ...prev, [negocioId]: null }))
 
@@ -240,7 +287,7 @@ export default function ExplorarPage() {
       const res = await fetch('/api/reservaciones', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ horario_id: horario.id, fecha }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json().catch(() => ({}))
 
@@ -268,7 +315,7 @@ export default function ExplorarPage() {
     } finally {
       setReservandoHorarioId(null)
     }
-  }, [cargarHorarios])
+  }, [cargarHorarios, servicioSeleccionadoPorNegocioId])
 
   const planEfectivo = planActivo ? (planUsuario ?? 'basico') : null
   const ciudadesDisponibles = useMemo(() => {
@@ -394,6 +441,16 @@ export default function ExplorarPage() {
               const horarios = horariosPorNegocioId[negocio.id] ?? []
               const errorHorarios = errorHorariosPorNegocioId[negocio.id]
               const mensajeReserva = mensajeReservaPorNegocioId[negocio.id]
+              const serviciosWellness = negocio.categoria === 'estetica'
+                ? serviciosWellnessVisibles(negocio)
+                : []
+              const serviciosWellnessDisponiblesReservables = negocio.categoria === 'estetica'
+                ? serviciosWellnessReservables(negocio)
+                : []
+              const servicioSeleccionadoId = servicioSeleccionadoPorNegocioId[negocio.id] ?? ''
+              const montoMaximoRestaurante = typeof negocio.monto_maximo_visita === 'number'
+                ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
+                : 0
 
               return (
                 <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
@@ -460,9 +517,44 @@ export default function ExplorarPage() {
                     </p>
                   </div>
 
+                  {negocio.categoria === 'estetica' && (
+                    <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-[#555]">
+                        Servicios incluidos
+                      </p>
+                      {serviciosWellness.length === 0 ? (
+                        <p className="mt-1 text-xs text-[#777]">Este negocio aún no publica servicios disponibles.</p>
+                      ) : (
+                        <ul className="mt-2 space-y-1">
+                          {serviciosWellness.map((servicio) => (
+                            <li key={servicio.id} className="flex items-start justify-between gap-2 text-xs text-[#444]">
+                              <span>{servicio.nombre}</span>
+                              <span className="shrink-0 text-[#666]">
+                                {typeof servicio.precio_normal_mxn === 'number' && servicio.precio_normal_mxn > 0
+                                  ? <span className="line-through">{formatMoneyMxn(servicio.precio_normal_mxn)}</span>
+                                  : 'Incluido'}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {negocio.categoria === 'restaurante' && (
+                    <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                      <p className="text-xs font-bold text-green-800">
+                        Hasta {formatMoneyMxn(montoMaximoRestaurante)} en consumo por visita
+                      </p>
+                      <span className="rounded-full bg-green-600 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white">
+                        Crédito verde
+                      </span>
+                    </div>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => abrirOCerrarMenuReservas(negocio.id, menuReservasAbierto)}
+                    onClick={() => abrirOCerrarMenuReservas(negocio, menuReservasAbierto)}
                     disabled={!puedeReservar}
                     className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
                       puedeReservar
@@ -482,6 +574,38 @@ export default function ExplorarPage() {
                       <p className="text-[11px] font-bold uppercase tracking-wider text-[#555]">
                         Horarios disponibles
                       </p>
+                      {negocio.categoria === 'estetica' && (
+                        <div className="mt-2 rounded-md border border-[#E5E5E5] bg-white p-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-[#666]">
+                            Servicio a reservar
+                          </p>
+                          {serviciosWellnessDisponiblesReservables.length === 0 ? (
+                            <p className="mt-1 text-xs text-red-700">
+                              Este negocio aún no configuró servicios wellness reservables.
+                            </p>
+                          ) : (
+                            <select
+                              value={servicioSeleccionadoId}
+                              onChange={(event) => {
+                                const value = event.target.value
+                                setServicioSeleccionadoPorNegocioId((prev) => ({ ...prev, [negocio.id]: value }))
+                                setMensajeReservaPorNegocioId((prev) => ({ ...prev, [negocio.id]: null }))
+                              }}
+                              className="mt-2 w-full rounded-md border border-[#E5E5E5] bg-white px-2 py-2 text-xs text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                            >
+                              <option value="">Selecciona un servicio...</option>
+                              {serviciosWellnessDisponiblesReservables.map((servicio) => (
+                                <option key={servicio.id} value={servicio.id}>
+                                  {servicio.nombre}
+                                  {typeof servicio.precio_normal_mxn === 'number' && servicio.precio_normal_mxn > 0
+                                    ? ` — ${formatMoneyMxn(servicio.precio_normal_mxn)}`
+                                    : ''}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )}
 
                       {mensajeReserva && (
                         <div className={`mt-2 rounded-md px-3 py-2 text-xs font-semibold ${
@@ -511,13 +635,15 @@ export default function ExplorarPage() {
                             const spotsDisponibles = typeof horario.spots_disponibles === 'number'
                               ? Math.max(horario.spots_disponibles, 0)
                               : null
+                            const requiereServicioWellness = negocio.categoria === 'estetica'
+                            const puedeReservarHorario = !requiereServicioWellness || Boolean(servicioSeleccionadoId)
 
                             return (
                               <button
                                 key={horario.id}
                                 type="button"
-                                onClick={() => void reservarHorario(negocio.id, horario)}
-                                disabled={reservando}
+                                onClick={() => void reservarHorario(negocio, horario)}
+                                disabled={reservando || !puedeReservarHorario}
                                 className="flex w-full items-center justify-between rounded-md border border-[#E5E5E5] bg-white px-3 py-2 text-left transition-colors hover:border-[#6B4FE8] disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 <span className="flex flex-col">
@@ -542,7 +668,11 @@ export default function ExplorarPage() {
                                   </span>
                                 </span>
                                 <span className="ml-3 shrink-0 text-xs font-bold text-[#6B4FE8]">
-                                  {reservando ? 'Reservando...' : 'Reservar'}
+                                  {reservando
+                                    ? 'Reservando...'
+                                    : !puedeReservarHorario
+                                      ? 'Selecciona servicio'
+                                      : 'Reservar'}
                                 </span>
                               </button>
                             )

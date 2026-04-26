@@ -12,6 +12,14 @@ interface ResultadoValidacion {
   valido: boolean
   usuario?: string
   negocio?: string
+  categoria_negocio?: string | null
+  servicio_reservado?: {
+    id: string
+    nombre: string
+    precio_normal_mxn: number | null
+    fecha: string
+  } | null
+  monto_maximo_autorizado_mxn?: number | null
   error?: string
   visitas_restantes_mes?: number
   visitas_usadas_mes?: number
@@ -21,6 +29,14 @@ interface ResultadoValidacion {
 function ciudadLabel(ciudad: string | null | undefined) {
   if (!ciudad) return 'Sin ciudad'
   return ciudad.charAt(0).toUpperCase() + ciudad.slice(1)
+}
+
+function formatMoneyMxn(monto: number) {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 0,
+  }).format(monto)
 }
 
 export default function ValidarPage() {
@@ -304,6 +320,23 @@ function ResultadoBanner({
           <p className="text-sm text-green-700">
             {resultado.usuario} — {resultado.negocio}
           </p>
+          {resultado.categoria_negocio === 'estetica' && resultado.servicio_reservado && (
+            <div className="w-full rounded-lg border border-green-200 bg-white/80 px-3 py-2 text-left">
+              <p className="text-[11px] font-black uppercase tracking-widest text-green-700">Servicio reservado</p>
+              <p className="text-sm font-semibold text-green-800">{resultado.servicio_reservado.nombre}</p>
+              {typeof resultado.servicio_reservado.precio_normal_mxn === 'number' && (
+                <p className="text-xs text-green-700">
+                  Precio normal:{' '}
+                  <span className="line-through">{formatMoneyMxn(resultado.servicio_reservado.precio_normal_mxn)}</span>
+                </p>
+              )}
+            </div>
+          )}
+          {resultado.categoria_negocio === 'restaurante' && typeof resultado.monto_maximo_autorizado_mxn === 'number' && (
+            <p className="rounded-full bg-green-600/90 px-3 py-1 text-xs font-black uppercase tracking-widest text-white">
+              Hasta {formatMoneyMxn(resultado.monto_maximo_autorizado_mxn)} en consumo
+            </p>
+          )}
           <p className="text-sm font-semibold text-green-700">
             Visitas restantes: {resultado.visitas_restantes_mes ?? 0}
             {typeof resultado.limite_visitas_mensuales === 'number'

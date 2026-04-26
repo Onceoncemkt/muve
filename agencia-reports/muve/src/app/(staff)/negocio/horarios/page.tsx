@@ -3,8 +3,8 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
-import type { DiaSemana, Rol } from '@/types'
-import { DIA_LABELS, formatHora } from '@/types'
+import type { Categoria, DiaSemana, Rol, ServicioNegocio } from '@/types'
+import { CATEGORIA_LABELS, DIA_LABELS, formatHora } from '@/types'
 
 const DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
 const TIPOS_CLASE_OPCIONES = [
@@ -22,6 +22,8 @@ interface NegocioOption {
   id: string
   nombre: string
   ciudad: string | null
+  categoria?: Categoria | null
+  monto_maximo_visita?: number | null
 }
 
 interface HorarioConSpots {
@@ -47,6 +49,12 @@ interface PerfilActual {
   rol: Rol
 }
 
+type ServicioDraft = {
+  nombre: string
+  precio_normal_mxn: string
+  descripcion: string
+}
+
 export default function NegocioHorariosPage() {
   const [rol, setRol] = useState<Rol>('staff')
   const [negocios, setNegocios] = useState<NegocioOption[]>([])
@@ -61,6 +69,21 @@ export default function NegocioHorariosPage() {
   const [guardando, setGuardando] = useState(false)
   const [actualizandoId, setActualizandoId] = useState<string | null>(null)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+  const [servicios, setServicios] = useState<ServicioNegocio[]>([])
+  const [cargandoServicios, setCargandoServicios] = useState(false)
+  const [guardandoServicio, setGuardandoServicio] = useState(false)
+  const [actualizandoServicioId, setActualizandoServicioId] = useState<string | null>(null)
+  const [nuevoServicio, setNuevoServicio] = useState<ServicioDraft>({
+    nombre: '',
+    precio_normal_mxn: '',
+    descripcion: '',
+  })
+  const [montoMaximoVisitaDraft, setMontoMaximoVisitaDraft] = useState(0)
+  const [guardandoMontoMaximo, setGuardandoMontoMaximo] = useState(false)
+  const negocioSeleccionado = negocios.find((negocio) => negocio.id === negocioId) ?? null
+  const categoriaNegocio = negocioSeleccionado?.categoria ?? null
+  const esWellness = categoriaNegocio === 'estetica'
+  const esRestaurante = categoriaNegocio === 'restaurante'
 
   const [mostrarForm, setMostrarForm] = useState(false)
   const [nuevoHorario, setNuevoHorario] = useState({
@@ -89,7 +112,27 @@ export default function NegocioHorariosPage() {
       setRol(payload.rol ?? perfilActual.rol)
       const lista = (payload.negocios ?? []) as NegocioOption[]
       setNegocios(lista)
-      setNegocioId(prev => prev || lista[0]?.id || '')
+      const negocioInicial = lista[0] ?? null
+      setNegocioId(negocioInicial?.id ?? '')
+      setMontoMaximoVisitaDraft(
+        typeof negocioInicial?.monto_maximo_visita === 'number'
+          ? Math.max(Math.trunc(negocioInicial.monto_maximo_visita), 0)
+          : 0
+      )
+      if (negocioInicial?.categoria === 'estetica' && negocioInicial.id) {
+        const resServicios = await fetch(`/api/negocio/servicios?negocio_id=${encodeURIComponent(negocioInicial.id)}`, {
+          cache: 'no-store',
+        })
+        const payloadServicios = await resServicios.json().catch(() => ({}))
+        if (!activo) return
+        if (resServicios.ok) {
+          setServicios((payloadServicios.servicios ?? []) as ServicioNegocio[])
+        } else {
+          setServicios([])
+        }
+      } else {
+        setServicios([])
+      }
     }
 
     void cargarInicial()
@@ -137,12 +180,36 @@ export default function NegocioHorariosPage() {
     }
   }, [negocioId])
 
+  const cargarServicios = useCallback(async (negocioIdObjetivo: string) => {
+    setCargandoServicios(true)
+    try {
+      const res = await fetch(`/api/negocio/servicios?negocio_id=${encodeURIComponent(negocioIdObjetivo)}`, {
+        cache: 'no-store',
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudieron cargar servicios wellness' })
+        setServicios([])
+        return
+      }
+
+      setServicios((data.servicios ?? []) as ServicioNegocio[])
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar servicios wellness' })
+      setServicios([])
+    } finally {
+      setCargandoServicios(false)
+    }
+  }, [])
+
   useEffect(() => {
     const id = setTimeout(() => {
       void cargarHorarios()
     }, 0)
     return () => clearTimeout(id)
   }, [cargarHorarios])
+
 
   async function crearHorario() {
     if (!negocioId) {
@@ -186,6 +253,118 @@ export default function NegocioHorariosPage() {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al crear horario' })
     } finally {
       setGuardando(false)
+    }
+  }
+
+  async function crearServicioWellness() {
+    if (!negocioId || !esWellness) {
+      setMensaje({ tipo: 'error', texto: 'Selecciona un negocio wellness para agregar servicios' })
+      return
+    }
+
+    const nombre = nuevoServicio.nombre.trim()
+    const precio = Number.parseInt(nuevoServicio.precio_normal_mxn, 10)
+    if (!nombre) {
+      setMensaje({ tipo: 'error', texto: 'Nombre del servicio requerido' })
+      return
+    }
+    if (!Number.isFinite(precio) || precio < 0) {
+      setMensaje({ tipo: 'error', texto: 'Precio normal inválido' })
+      return
+    }
+
+    setGuardandoServicio(true)
+    setMensaje(null)
+    try {
+      const res = await fetch('/api/negocio/servicios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          negocio_id: negocioId,
+          nombre,
+          precio_normal_mxn: precio,
+          descripcion: nuevoServicio.descripcion.trim() || null,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudo crear el servicio wellness' })
+      } else {
+        setMensaje({ tipo: 'ok', texto: 'Servicio wellness creado' })
+        setNuevoServicio({ nombre: '', precio_normal_mxn: '', descripcion: '' })
+        void cargarServicios(negocioId)
+      }
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al crear servicio wellness' })
+    } finally {
+      setGuardandoServicio(false)
+    }
+  }
+
+  async function toggleServicioWellness(servicio: ServicioNegocio) {
+    setActualizandoServicioId(servicio.id)
+    setMensaje(null)
+    try {
+      const res = await fetch(`/api/negocio/servicios/${servicio.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activo: !servicio.activo }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudo actualizar el servicio wellness' })
+      } else {
+        setMensaje({
+          tipo: 'ok',
+          texto: servicio.activo ? 'Servicio desactivado' : 'Servicio activado',
+        })
+        if (negocioId) void cargarServicios(negocioId)
+      }
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al actualizar servicio wellness' })
+    } finally {
+      setActualizandoServicioId(null)
+    }
+  }
+
+  async function guardarMontoMaximoRestaurante() {
+    if (!negocioId || !esRestaurante) {
+      setMensaje({ tipo: 'error', texto: 'Selecciona un restaurante para guardar el monto máximo' })
+      return
+    }
+
+    const monto = Math.trunc(montoMaximoVisitaDraft)
+    if (!Number.isFinite(monto) || monto < 0) {
+      setMensaje({ tipo: 'error', texto: 'El monto máximo debe ser un entero mayor o igual a 0' })
+      return
+    }
+
+    setGuardandoMontoMaximo(true)
+    setMensaje(null)
+    try {
+      const res = await fetch('/api/negocio/configuracion', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          negocio_id: negocioId,
+          monto_maximo_visita: monto,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudo guardar el monto máximo por visita' })
+      } else {
+        setNegocios((prev) => prev.map((negocio) => (
+          negocio.id === negocioId
+            ? { ...negocio, monto_maximo_visita: monto }
+            : negocio
+        )))
+        setMensaje({ tipo: 'ok', texto: 'Monto máximo por visita actualizado' })
+      }
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al actualizar monto máximo' })
+    } finally {
+      setGuardandoMontoMaximo(false)
     }
   }
 
@@ -326,7 +505,25 @@ export default function NegocioHorariosPage() {
         <div className="space-y-3 rounded-xl border border-[#E5E5E5] bg-white p-4">
           <div>
             <label className="mb-1 block text-[11px] font-black uppercase tracking-widest text-[#888]">Negocio</label>
-            <select value={negocioId} onChange={e => setNegocioId(e.target.value)} className={inputCls}>
+            <select
+              value={negocioId}
+              onChange={(e) => {
+                const siguienteId = e.target.value
+                setNegocioId(siguienteId)
+                const negocio = negocios.find((item) => item.id === siguienteId)
+                setMontoMaximoVisitaDraft(
+                  typeof negocio?.monto_maximo_visita === 'number'
+                    ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
+                    : 0
+                )
+                if (negocio?.categoria === 'estetica' && siguienteId) {
+                  void cargarServicios(siguienteId)
+                } else {
+                  setServicios([])
+                }
+              }}
+              className={inputCls}
+            >
               <option value="">Selecciona un negocio...</option>
               {negocios.map(n => (
                 <option key={n.id} value={n.id}>
@@ -337,6 +534,22 @@ export default function NegocioHorariosPage() {
               ))}
             </select>
           </div>
+          {negocioSeleccionado && (
+            <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-xs text-[#555]">
+              <p>
+                <span className="font-bold text-[#0A0A0A]">Categoría:</span>{' '}
+                {negocioSeleccionado.categoria
+                  ? CATEGORIA_LABELS[negocioSeleccionado.categoria]
+                  : 'Sin categoría'}
+              </p>
+              {esRestaurante && (
+                <p className="mt-1">
+                  <span className="font-bold text-[#0A0A0A]">Monto máximo actual:</span>{' '}
+                  ${Math.max(Math.trunc(negocioSeleccionado.monto_maximo_visita ?? 0), 0)} MXN
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {mensaje && (
@@ -348,6 +561,138 @@ export default function NegocioHorariosPage() {
             }`}
           >
             {mensaje.texto}
+          </div>
+        )}
+
+        {negocioId && esWellness && (
+          <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+            <h2 className="text-xs font-black uppercase tracking-widest text-[#888]">
+              Servicios wellness incluidos
+            </h2>
+            <p className="mt-1 text-xs text-[#666]">
+              Agrega servicios con su precio normal y controla si están activos para reservar.
+            </p>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <div className="sm:col-span-1">
+                <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">Servicio</label>
+                <input
+                  type="text"
+                  value={nuevoServicio.nombre}
+                  onChange={(e) => setNuevoServicio((prev) => ({ ...prev, nombre: e.target.value }))}
+                  placeholder="Ej. Manicure básica"
+                  className={inputCls}
+                />
+              </div>
+              <div className="sm:col-span-1">
+                <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">Precio normal (MXN)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={nuevoServicio.precio_normal_mxn}
+                  onChange={(e) => setNuevoServicio((prev) => ({ ...prev, precio_normal_mxn: e.target.value }))}
+                  placeholder="Ej. 250"
+                  className={inputCls}
+                />
+              </div>
+              <div className="sm:col-span-1">
+                <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">Descripción (opcional)</label>
+                <input
+                  type="text"
+                  value={nuevoServicio.descripcion}
+                  onChange={(e) => setNuevoServicio((prev) => ({ ...prev, descripcion: e.target.value }))}
+                  placeholder="Ej. Incluye esmalte semipermanente"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={crearServicioWellness}
+              disabled={guardandoServicio}
+              className="mt-3 rounded-lg bg-[#6B4FE8] px-4 py-2 text-xs font-bold uppercase tracking-widest text-white transition-colors hover:bg-[#5a3fd6] disabled:opacity-40"
+            >
+              {guardandoServicio ? 'Guardando...' : 'Agregar servicio'}
+            </button>
+
+            <div className="mt-3 space-y-2">
+              {cargandoServicios ? (
+                <p className="text-sm text-[#888]">Cargando servicios...</p>
+              ) : servicios.length === 0 ? (
+                <p className="text-sm text-[#888]">Aún no hay servicios wellness registrados.</p>
+              ) : (
+                servicios.map((servicio) => (
+                  <div
+                    key={servicio.id}
+                    className="flex flex-col gap-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-[#0A0A0A]">{servicio.nombre}</p>
+                      <p className="text-xs text-[#666]">Precio normal: ${Math.max(Math.trunc(servicio.precio_normal_mxn ?? 0), 0)} MXN</p>
+                      {servicio.descripcion && (
+                        <p className="text-xs text-[#666]">{servicio.descripcion}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase ${
+                          servicio.activo ? 'bg-[#E8FF47]/40 text-[#0A0A0A]' : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {servicio.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                      <button
+                        onClick={() => void toggleServicioWellness(servicio)}
+                        disabled={actualizandoServicioId === servicio.id}
+                        className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase transition-colors ${
+                          servicio.activo
+                            ? 'bg-[#E5E5E5] text-[#666] hover:bg-red-100 hover:text-red-700'
+                            : 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
+                        } disabled:opacity-40`}
+                      >
+                        {actualizandoServicioId === servicio.id
+                          ? 'Guardando...'
+                          : servicio.activo
+                            ? 'Desactivar'
+                            : 'Activar'}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {negocioId && esRestaurante && (
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+            <h2 className="text-xs font-black uppercase tracking-widest text-green-800">
+              Consumo máximo por visita
+            </h2>
+            <p className="mt-1 text-xs text-green-800/80">
+              Define el monto máximo que el usuario puede consumir por check-in en este restaurante.
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="w-full sm:max-w-xs">
+                <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-green-900/80">
+                  Monto máximo (MXN)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={montoMaximoVisitaDraft}
+                  onChange={(e) => setMontoMaximoVisitaDraft(Number(e.target.value))}
+                  className={inputCls}
+                />
+              </div>
+              <button
+                onClick={guardarMontoMaximoRestaurante}
+                disabled={guardandoMontoMaximo}
+                className="rounded-lg bg-green-700 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white transition-colors hover:bg-green-800 disabled:opacity-40"
+              >
+                {guardandoMontoMaximo ? 'Guardando...' : 'Guardar monto'}
+              </button>
+            </div>
           </div>
         )}
 

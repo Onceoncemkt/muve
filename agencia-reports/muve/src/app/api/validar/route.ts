@@ -22,6 +22,11 @@ export async function POST(request: NextRequest) {
     return message.includes('column') && message.includes('negocio_id')
   }
 
+  function faltaColumna(error: { message?: string } | null | undefined, columna: string) {
+    const message = error?.message?.toLowerCase() ?? ''
+    return message.includes('column') && message.includes(columna.toLowerCase())
+  }
+
   // Verificar que sea staff o admin
   let perfil: { rol: string; nombre: string | null; negocio_id: string | null } | null = null
   const consultaPerfil = await db
@@ -126,11 +131,108 @@ export async function POST(request: NextRequest) {
   }
 
 
-  const { data: negocio } = await db
+  let negocio: { nombre: string; categoria: string | null; monto_maximo_visita: number | null } | null = null
+  const consultaNegocio = await db
     .from('negocios')
-    .select('nombre')
+    .select('nombre, categoria, monto_maximo_visita')
     .eq('id', negocioIdObjetivo)
-    .single()
+    .maybeSingle<{ nombre: string; categoria: string | null; monto_maximo_visita: number | null }>()
+
+  if (!consultaNegocio.error && consultaNegocio.data) {
+    negocio = consultaNegocio.data
+  } else if (faltaColumna(consultaNegocio.error, 'monto_maximo_visita')) {
+    const fallbackNegocio = await db
+      .from('negocios')
+      .select('nombre, categoria')
+      .eq('id', negocioIdObjetivo)
+      .maybeSingle<{ nombre: string; categoria: string | null }>()
+    if (!fallbackNegocio.error && fallbackNegocio.data) {
+      negocio = {
+        ...fallbackNegocio.data,
+        monto_maximo_visita: null,
+      }
+    }
+  }
+
+  if (!negocio) {
+    return NextResponse.json({ error: 'No se pudo validar el negocio' }, { status: 400 })
+  }
+
+  const categoriaNegocio = typeof negocio.categoria === 'string' ? negocio.categoria : null
+  const montoMaximoAutorizadoMxn = categoriaNegocio === 'restaurante'
+    ? Math.max(Math.trunc(negocio.monto_maximo_visita ?? 0), 0)
+    : null
+
+  let servicioReservado: { id: string; nombre: string; precio_normal_mxn: number | null; fecha: string } | null = null
+  if (categoriaNegocio === 'estetica') {
+    const hoy = new Date().toISOString().split('T')[0]
+    const { data: horariosNegocio, error: horariosError } = await db
+      .from('horarios')
+      .select('id')
+      .eq('negocio_id', negocioIdObjetivo)
+
+    if (horariosError) {
+      return NextResponse.json({ error: 'No se pudieron validar los horarios del negocio' }, { status: 500 })
+    }
+
+    const horarioIds = Array.isArray(horariosNegocio)
+      ? horariosNegocio.map((item) => item.id).filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : []
+
+    if (horarioIds.length === 0) {
+      return NextResponse.json(
+        { valido: false, error: 'Este negocio wellness no tiene horarios configurados' },
+        { status: 400 }
+      )
+    }
+
+    const { data: reservacionWellness, error: reservacionWellnessError } = await db
+      .from('reservaciones')
+      .select('id, fecha, servicio_id, servicio_nombre, servicio_precio_normal_mxn, created_at')
+      .eq('user_id', qrToken.user_id)
+      .eq('estado', 'confirmada')
+      .eq('fecha', hoy)
+      .in('horario_id', horarioIds)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<{
+        id: string
+        fecha: string
+        servicio_id: string | null
+        servicio_nombre: string | null
+        servicio_precio_normal_mxn: number | null
+        created_at: string
+      }>()
+
+    if (
+      faltaColumna(reservacionWellnessError, 'servicio_id')
+      || faltaColumna(reservacionWellnessError, 'servicio_nombre')
+      || faltaColumna(reservacionWellnessError, 'servicio_precio_normal_mxn')
+    ) {
+      return NextResponse.json(
+        { error: 'Faltan columnas de servicio en reservaciones. Ejecuta la migración 017 en Supabase.' },
+        { status: 500 }
+      )
+    }
+
+    if (reservacionWellnessError) {
+      return NextResponse.json({ error: 'No se pudo validar la reservación wellness' }, { status: 500 })
+    }
+
+    if (!reservacionWellness || !reservacionWellness.servicio_nombre) {
+      return NextResponse.json(
+        { valido: false, error: 'No hay servicio wellness reservado para hoy en este negocio' },
+        { status: 400 }
+      )
+    }
+
+    servicioReservado = {
+      id: reservacionWellness.servicio_id ?? reservacionWellness.id,
+      nombre: reservacionWellness.servicio_nombre,
+      precio_normal_mxn: reservacionWellness.servicio_precio_normal_mxn,
+      fecha: reservacionWellness.fecha,
+    }
+  }
 
   // Registrar visita y marcar token como usado
   const [{ error: visitaError }] = await Promise.all([
@@ -153,7 +255,10 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     valido: true,
     usuario: usuario.nombre,
-    negocio: negocio?.nombre,
+    negocio: negocio.nombre,
+    categoria_negocio: categoriaNegocio,
+    servicio_reservado: servicioReservado,
+    monto_maximo_autorizado_mxn: montoMaximoAutorizadoMxn,
     visitas_restantes_mes: visitasRestantesMes,
     visitas_usadas_mes: visitasUsadasMes,
     limite_visitas_mensuales: limiteMensual,

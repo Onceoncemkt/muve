@@ -4,6 +4,14 @@ export type Rol = 'usuario' | 'staff' | 'admin'
 export type PlanMembresia = 'basico' | 'plus' | 'total'
 export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
 export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada'
+export interface ServicioNegocio {
+  id: string
+  negocio_id: string
+  nombre: string
+  precio_normal_mxn: number
+  descripcion: string | null
+  activo: boolean
+}
 
 export interface User {
   id: string
@@ -30,6 +38,9 @@ export interface Negocio {
   instagram_handle?: string | null
   tiktok_handle?: string | null
   stripe_account_id?: string | null
+  monto_maximo_visita?: number | null
+  servicios_incluidos?: string | null
+  servicios_disponibles?: ServicioNegocio[]
   requiere_reserva?: boolean
   capacidad_default?: number | null
   plan_requerido?: PlanMembresia | null
@@ -54,6 +65,9 @@ export interface Reservacion {
   horario_id: string
   fecha: string         // "YYYY-MM-DD"
   estado: EstadoReserva
+  servicio_id?: string | null
+  servicio_nombre?: string | null
+  servicio_precio_normal_mxn?: number | null
   created_at: string
 }
 

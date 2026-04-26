@@ -25,6 +25,16 @@ function normalizarTextoOpcional(value: unknown): string | null {
   return limpio.length > 0 ? limpio : null
 }
 
+function faltaRelacion(error: { message?: string } | null | undefined, relation: string) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes(relation.toLowerCase()) && message.includes('does not exist')
+}
+
+function faltaColumna(error: { message?: string } | null | undefined, columna: string) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes(columna.toLowerCase())
+}
+
 function detalleHorario(tipoClase: string | null, nombreCoach: string | null) {
   const partes: string[] = []
   if (tipoClase) partes.push(`Clase: ${tipoClase}`)
@@ -182,7 +192,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
   const body = await request.json().catch(() => ({}))
-  const { horario_id, fecha } = body as { horario_id?: string; fecha?: string }
+  const { horario_id, fecha, servicio_id } = body as { horario_id?: string; fecha?: string; servicio_id?: string }
 
   if (!horario_id || !fecha) {
     return NextResponse.json({ error: 'horario_id y fecha son requeridos' }, { status: 400 })
@@ -221,6 +231,50 @@ export async function POST(request: NextRequest) {
       { error: 'Este horario no corresponde al día seleccionado' },
       { status: 400 }
     )
+  }
+
+  const { data: negocioContexto, error: negocioContextoError } = await db
+    .from('negocios')
+    .select('nombre, categoria')
+    .eq('id', horario.negocio_id)
+    .maybeSingle<{ nombre: string; categoria: string }>()
+
+  if (negocioContextoError || !negocioContexto) {
+    return NextResponse.json({ error: 'No se pudo validar el negocio de la reservación' }, { status: 400 })
+  }
+
+  const esWellness = negocioContexto.categoria === 'estetica'
+  let servicioReservado: { id: string; nombre: string; precio_normal_mxn: number } | null = null
+
+  if (esWellness) {
+    const servicioId = typeof servicio_id === 'string' ? servicio_id.trim() : ''
+    if (!servicioId) {
+      return NextResponse.json({ error: 'Selecciona un servicio para reservar tu visita wellness' }, { status: 400 })
+    }
+
+    const { data: servicio, error: servicioError } = await db
+      .from('negocio_servicios')
+      .select('id, nombre, precio_normal_mxn, activo')
+      .eq('id', servicioId)
+      .eq('negocio_id', horario.negocio_id)
+      .maybeSingle<{ id: string; nombre: string; precio_normal_mxn: number; activo: boolean }>()
+
+    if (faltaRelacion(servicioError, 'negocio_servicios')) {
+      return NextResponse.json(
+        { error: 'Falta la tabla negocio_servicios. Ejecuta la migración 017 en Supabase.' },
+        { status: 500 }
+      )
+    }
+
+    if (servicioError || !servicio || !servicio.activo) {
+      return NextResponse.json({ error: 'Servicio wellness inválido o inactivo' }, { status: 400 })
+    }
+
+    servicioReservado = {
+      id: servicio.id,
+      nombre: servicio.nombre,
+      precio_normal_mxn: Math.max(Math.trunc(servicio.precio_normal_mxn ?? 0), 0),
+    }
   }
 
   const { data: perfilUsuario, error: perfilUsuarioError } = await db
@@ -291,11 +345,29 @@ export async function POST(request: NextRequest) {
   // Crear reservación
   const { data: nueva, error: iError } = await db
     .from('reservaciones')
-    .insert({ user_id: user.id, horario_id, fecha, estado: 'confirmada' })
+    .insert({
+      user_id: user.id,
+      horario_id,
+      fecha,
+      estado: 'confirmada',
+      servicio_id: servicioReservado?.id ?? null,
+      servicio_nombre: servicioReservado?.nombre ?? null,
+      servicio_precio_normal_mxn: servicioReservado?.precio_normal_mxn ?? null,
+    })
     .select('id, fecha, estado')
     .single()
 
   if (iError) {
+    if (
+      faltaColumna(iError, 'servicio_id')
+      || faltaColumna(iError, 'servicio_nombre')
+      || faltaColumna(iError, 'servicio_precio_normal_mxn')
+    ) {
+      return NextResponse.json(
+        { error: 'Faltan columnas de servicio en reservaciones. Ejecuta la migración 017 en Supabase.' },
+        { status: 500 }
+      )
+    }
     if (iError.code === '23505') {
       return NextResponse.json({ error: 'Ya tienes una reservación en este horario' }, { status: 409 })
     }
