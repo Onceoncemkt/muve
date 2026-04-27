@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+const SERVICE_WORKER_VERSION = '2026-04-27-2'
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -33,7 +34,22 @@ export default function PushNotificationsSetup() {
       if (!vapidPublicKey) return
 
       try {
-        const registration = await navigator.serviceWorker.register('/sw.js', {
+        const serviceWorkerUrl = `/sw.js?v=${SERVICE_WORKER_VERSION}`
+        const registrations = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(
+          registrations.map((registration) => {
+            const activeUrl = registration.active?.scriptURL ?? ''
+            const waitingUrl = registration.waiting?.scriptURL ?? ''
+            const installingUrl = registration.installing?.scriptURL ?? ''
+            const scriptUrl = activeUrl || waitingUrl || installingUrl
+            if (scriptUrl.includes('/sw.js') && !scriptUrl.includes(`v=${SERVICE_WORKER_VERSION}`)) {
+              return registration.unregister()
+            }
+            return Promise.resolve(false)
+          })
+        )
+
+        const registration = await navigator.serviceWorker.register(serviceWorkerUrl, {
           scope: '/',
           updateViaCache: 'none',
         })

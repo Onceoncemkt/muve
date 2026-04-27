@@ -23,11 +23,35 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script
           dangerouslySetInnerHTML={{
             __html: `
-  if ('serviceWorker' in navigator) {
+  (function() {
+    var SW_VERSION = '2026-04-27-2';
+    var SW_PATH = '/sw.js?v=' + SW_VERSION;
+    if (!('serviceWorker' in navigator)) return;
+
     window.addEventListener('load', function() {
-      navigator.serviceWorker.register('/sw.js');
+      navigator.serviceWorker.getRegistrations()
+        .then(function(registrations) {
+          return Promise.all(
+            registrations.map(function(registration) {
+              var activeUrl = registration.active && registration.active.scriptURL ? registration.active.scriptURL : '';
+              var waitingUrl = registration.waiting && registration.waiting.scriptURL ? registration.waiting.scriptURL : '';
+              var installingUrl = registration.installing && registration.installing.scriptURL ? registration.installing.scriptURL : '';
+              var scriptUrl = activeUrl || waitingUrl || installingUrl;
+              if (scriptUrl.indexOf('/sw.js') !== -1 && scriptUrl.indexOf('v=' + SW_VERSION) === -1) {
+                return registration.unregister();
+              }
+              return Promise.resolve(false);
+            })
+          );
+        })
+        .catch(function() {
+          return undefined;
+        })
+        .finally(function() {
+          navigator.serviceWorker.register(SW_PATH, { scope: '/', updateViaCache: 'none' });
+        });
     });
-  }
+  })();
 `,
           }}
         />

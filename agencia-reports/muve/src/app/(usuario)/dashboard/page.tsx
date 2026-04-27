@@ -12,6 +12,8 @@ import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 import { PLAN_VISITAS_MENSUALES, normalizarPlan, planDesdePriceId } from '@/lib/planes'
 import { stripe } from '@/lib/stripe'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 type PerfilDashboard = {
   nombre: string
