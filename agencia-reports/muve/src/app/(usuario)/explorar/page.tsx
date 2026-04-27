@@ -522,7 +522,7 @@ export default function ExplorarPage() {
 
               return (
                 <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-                  <div className="mb-3 overflow-hidden rounded-lg border border-[#E5E5E5]">
+                  <div className="relative mb-3 overflow-hidden rounded-lg border border-[#E5E5E5]">
                     {negocio.imagen_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -535,12 +535,12 @@ export default function ExplorarPage() {
                         {iniciales}
                       </div>
                     )}
+                    <span className="absolute right-2 top-2 shrink-0 rounded-full bg-[#6B4FE8]/10 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#6B4FE8]">
+                      {PLAN_LABELS[planRequerido]}
+                    </span>
                   </div>
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-base font-black text-[#0A0A0A]">{negocio.nombre}</h2>
-                    <span className="shrink-0 rounded-full bg-[#6B4FE8]/10 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#6B4FE8]">
-                      {PLAN_LABELS[planRequerido]}
-                    </span>
                   </div>
 
                   <div className="mt-2 space-y-1 text-sm text-[#555]">
@@ -610,13 +610,13 @@ export default function ExplorarPage() {
                   )}
 
                   {negocio.categoria === 'restaurante' && (
-                    <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
-                      <p className="text-xs font-bold text-green-800">
+                    <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-green-700">
+                        Beneficio MUVET
+                      </p>
+                      <p className="mt-1 text-xs font-bold text-green-800">
                         Hasta {formatMoneyMxn(montoMaximoRestaurante)} en consumo por visita
                       </p>
-                      <span className="rounded-full bg-green-600 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white">
-                        Crédito verde
-                      </span>
                     </div>
                   )}
 
