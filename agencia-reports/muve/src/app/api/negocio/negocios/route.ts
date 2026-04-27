@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { Rol } from '@/types'
 import { createServiceClient } from '@/lib/supabase/service'
+import { normalizarCategoriaNegocio } from '@/lib/planes'
 
 type PerfilFlexible = {
   rol: Rol
@@ -190,8 +191,8 @@ export async function GET() {
           id: negocio.id,
           nombre: negocio.nombre,
           ciudad: typeof negocio.ciudad === 'string' ? negocio.ciudad : null,
-          categoria: consulta.incluyeCategoria && typeof negocio.categoria === 'string'
-            ? negocio.categoria
+          categoria: consulta.incluyeCategoria
+            ? normalizarCategoriaNegocio(negocio.categoria)
             : null,
           monto_maximo_visita: consulta.incluyeMontoMaximo && typeof negocio.monto_maximo_visita === 'number'
             ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
@@ -205,8 +206,8 @@ export async function GET() {
           id: negocio.id,
           nombre: negocio.nombre,
           ciudad: null,
-          categoria: consulta.incluyeCategoria && typeof negocio.categoria === 'string'
-            ? negocio.categoria
+          categoria: consulta.incluyeCategoria
+            ? normalizarCategoriaNegocio(negocio.categoria)
             : null,
           monto_maximo_visita: consulta.incluyeMontoMaximo && typeof negocio.monto_maximo_visita === 'number'
             ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { Negocio, ServicioNegocio } from '@/types'
+import { normalizarCategoriaNegocio } from '@/lib/planes'
 
 type ServicioFila = {
   id: string
@@ -112,6 +113,7 @@ export async function GET() {
   }
 
   const negociosConServicios = negocios.map((negocio) => {
+    const categoriaNormalizada = normalizarCategoriaNegocio(negocio.categoria)
     const serviciosTabla = serviciosPorNegocio.get(negocio.id) ?? []
     const serviciosDisponibles = serviciosTabla.length > 0
       ? serviciosTabla
@@ -119,6 +121,7 @@ export async function GET() {
 
     return {
       ...negocio,
+      categoria: categoriaNormalizada ?? negocio.categoria,
       monto_maximo_visita: typeof negocio.monto_maximo_visita === 'number'
         ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
         : 0,

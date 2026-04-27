@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import QRScanner from '@/components/QRScanner'
 import type { Negocio } from '@/types'
+import { normalizarCategoriaNegocio } from '@/lib/planes'
 
 type Tab = 'scanner' | 'manual'
 type RolValidar = 'staff' | 'admin'
@@ -306,6 +307,7 @@ function ResultadoBanner({
   resultado: ResultadoValidacion
   onReiniciar: () => void
 }) {
+  const categoriaNegocio = normalizarCategoriaNegocio(resultado.categoria_negocio)
   return (
     <div
       className={`flex flex-col items-center gap-3 rounded-xl p-5 text-center ${
@@ -320,7 +322,7 @@ function ResultadoBanner({
           <p className="text-sm text-green-700">
             {resultado.usuario} — {resultado.negocio}
           </p>
-          {resultado.categoria_negocio === 'estetica' && resultado.servicio_reservado && (
+          {categoriaNegocio === 'estetica' && resultado.servicio_reservado && (
             <div className="w-full rounded-lg border border-green-200 bg-white/80 px-3 py-2 text-left">
               <p className="text-[11px] font-black uppercase tracking-widest text-green-700">Servicio reservado</p>
               <p className="text-sm font-semibold text-green-800">{resultado.servicio_reservado.nombre}</p>
@@ -332,7 +334,7 @@ function ResultadoBanner({
               )}
             </div>
           )}
-          {resultado.categoria_negocio === 'restaurante' && typeof resultado.monto_maximo_autorizado_mxn === 'number' && (
+          {categoriaNegocio === 'restaurante' && typeof resultado.monto_maximo_autorizado_mxn === 'number' && (
             <p className="rounded-full bg-green-600/90 px-3 py-1 text-xs font-black uppercase tracking-widest text-white">
               Hasta {formatMoneyMxn(resultado.monto_maximo_autorizado_mxn)} en consumo
             </p>
