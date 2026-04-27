@@ -172,11 +172,14 @@ create policy "usuarios leen su propio perfil" on public.users
   for select using (auth.uid() = id);
 
 create policy "usuarios actualizan su propio perfil" on public.users
-  for update using (auth.uid() = id);
+  for update using (auth.uid() = id)
+  with check (auth.uid() = id);
 
 create policy "admin lee todos los usuarios" on public.users
   for select using (
-    exists (select 1 from public.users u where u.id = auth.uid() and u.rol = 'admin')
+    auth.uid() = id
+    or
+    (select rol from public.users where id = auth.uid()) = 'admin'
   );
 
 -- negocios (lectura pública para usuarios activos, escritura solo admin)
