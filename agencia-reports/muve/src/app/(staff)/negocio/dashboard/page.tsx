@@ -224,8 +224,12 @@ function formatMonedaMXN(valor: number) {
 
 function claseEstadoPago(estado: 'pagado' | 'pendiente') {
   return estado === 'pagado'
-    ? 'bg-[#E8FF47]/20 text-[#0A0A0A]'
-    : 'bg-[#6B4FE8]/20 text-[#6B4FE8]'
+    ? 'bg-[#E8FF47] text-[#0A0A0A]'
+    : 'bg-[#6B4FE8]/30 text-[#E5DEFF]'
+}
+
+function etiquetaEstadoPago(estado: 'pagado' | 'pendiente') {
+  return estado === 'pagado' ? 'Pagado' : 'Pendiente'
 }
 
 function formatFechaCorta(fechaISO: string) {
@@ -505,7 +509,6 @@ export default function NegocioDashboardPage() {
         return a.horario.hora_inicio.localeCompare(b.horario.hora_inicio)
       })
   }, [reservaciones])
-  const cuentaStripeConectada = Boolean(negocio?.stripe_account_id)
   const categoriaNegocio = normalizarCategoriaNegocio(negocio?.categoria)
   const esRestaurante = categoriaNegocio === 'restaurante'
   const esGimnasio = categoriaNegocio === 'gimnasio'
@@ -517,6 +520,40 @@ export default function NegocioDashboardPage() {
   )
   const tarifaFijaPorCheckin = ganancias.tarifas_por_plan.basico ?? 0
   const gananciasSemanaTarifaFija = totalVisitasSemana * tarifaFijaPorCheckin
+  const fechaProximoPago = useMemo(() => {
+    const fechaBase = new Date(`${fechaHoy}T00:00:00`)
+    const inicioSemana = inicioSemanaLocal(fechaBase)
+    const proximoLunes = new Date(inicioSemana)
+    proximoLunes.setDate(proximoLunes.getDate() + 7)
+    return proximoLunes
+  }, [fechaHoy])
+  const desglosePagoActual = useMemo(() => {
+    if (esClases) {
+      return PLANES_MEMBRESIA.map((plan) => {
+        const visitas = ganancias.semana.visitas_por_plan[plan] ?? 0
+        const tarifa = ganancias.tarifas_por_plan[plan] ?? 0
+        return {
+          id: plan,
+          etiqueta: `clases ${PLAN_LABELS[plan].toLowerCase()}`,
+          formula: `${visitas} × ${formatMonedaMXN(tarifa)}`,
+          total: visitas * tarifa,
+        }
+      })
+    }
+
+    const etiqueta = esGimnasio
+      ? 'gimnasio'
+      : esEstetica
+        ? 'estetica'
+        : 'restaurante'
+
+    return [{
+      id: etiqueta,
+      etiqueta,
+      formula: `${totalVisitasSemana} × ${formatMonedaMXN(tarifaFijaPorCheckin)}`,
+      total: totalVisitasSemana * tarifaFijaPorCheckin,
+    }]
+  }, [esClases, esEstetica, esGimnasio, ganancias.semana.visitas_por_plan, ganancias.tarifas_por_plan, tarifaFijaPorCheckin, totalVisitasSemana])
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-10">
@@ -760,203 +797,66 @@ export default function NegocioDashboardPage() {
                 <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{resumen.horarios_activos}</p>
               </div>
             )}
-            {esClases && (
-              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis ganancias</p>
-              <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-4 py-3">
-                <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Tarifa por visita</p>
-                <div className="mt-2 space-y-1 text-sm font-semibold text-[#0A0A0A]">
-                  <p>Plan Básico: {formatMonedaMXN(ganancias.tarifas_por_plan.basico)} por visita</p>
-                  <p>Plan Plus: {formatMonedaMXN(ganancias.tarifas_por_plan.plus)} por visita</p>
-                  <p>Plan Total: {formatMonedaMXN(ganancias.tarifas_por_plan.total)} por visita</p>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Esta semana</p>
-                  <div className="mt-3 space-y-2">
-                    {PLANES_MEMBRESIA.map((plan) => {
-                      const visitasPlan = ganancias.semana.visitas_por_plan[plan] ?? 0
-                      const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
-                      const totalPlan = ganancias.semana.total_por_plan[plan] ?? (visitasPlan * tarifaPlan)
-                      return (
-                        <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
-                          <span>
-                            Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
-                          </span>
-                          <span className="font-black text-[#0A0A0A]">= {formatMonedaMXN(totalPlan)}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  <div className="mt-4 rounded-lg bg-[#0A0A0A] px-4 py-3 text-center">
-                    <p className="text-[11px] font-black uppercase tracking-widest text-white/50">Total a cobrar</p>
-                    <p className="mt-1 text-3xl font-black tracking-tight text-[#E8FF47]">
-                      {formatMonedaMXN(ganancias.semana.total_a_cobrar)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Histórico</p>
-                  {ganancias.historico_mensual.length === 0 ? (
-                    <p className="mt-4 text-sm text-[#666]">Sin registros todavía.</p>
-                  ) : (
-                    <div className="mt-3 overflow-x-auto">
-                      <table className="min-w-full border-collapse text-sm">
-                        <thead>
-                          <tr className="border-b border-[#E5E5E5] text-left text-[11px] font-black uppercase tracking-widest text-[#888]">
-                            <th className="px-2 py-2">Mes</th>
-                            <th className="px-2 py-2">Visitas</th>
-                            <th className="px-2 py-2 text-right">Total ganado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ganancias.historico_mensual.map((fila) => (
-                            <tr key={fila.mes} className="border-b border-[#EFEFEF] text-[#0A0A0A]">
-                              <td className="px-2 py-2 font-semibold">{fila.mes}</td>
-                              <td className="px-2 py-2">{fila.visitas}</td>
-                              <td className="px-2 py-2 text-right font-black">{formatMonedaMXN(fila.total_ganado)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <p className="mt-4 rounded-lg bg-[#E8FF47]/20 px-3 py-2 text-xs font-semibold text-[#0A0A0A]">
-                {ganancias.nota}
-              </p>
-              </div>
-            )}
-
-            {esClases && (
-              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
-              {!cuentaStripeConectada ? (
-                <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">
-                    Conecta tu cuenta para recibir pagos
-                  </p>
-                  <p className="mt-2 text-sm text-[#555]">
-                    Conecta tu cuenta bancaria a través de Stripe para recibir tus pagos semanales automáticamente cada lunes.
-                  </p>
-                  <a
-                    href="/api/negocio/stripe-connect"
-                    className="mt-4 inline-flex rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222]"
-                  >
-                    Conectar cuenta
-                  </a>
-                  <p className="mt-3 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-semibold text-[#0A0A0A]">
-                    Pagos automáticos cada lunes · Directo a tu cuenta bancaria · Sin comisiones de MUVET
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-2">
-                      <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis pagos</p>
-                      <span className="rounded-full bg-[#DCFCE7] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-[#166534]">
-                        Cuenta conectada
+            <div className="md:col-span-4 space-y-3">
+              <div className="rounded-xl border border-[#D5E63A] bg-[#E8FF47] p-5 text-[#0A0A0A]">
+                <p className="text-[11px] font-black uppercase tracking-widest">Pago acumulado actual</p>
+                <div className="mt-3 space-y-2">
+                  {desglosePagoActual.map((item) => (
+                    <div key={item.id} className="flex flex-col gap-1 rounded-lg border border-[#CFDF3D] bg-[#F3FF95] px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+                      <span className="font-semibold uppercase tracking-wide text-[#0A0A0A]">
+                        {item.etiqueta}: {item.formula}
                       </span>
+                      <span className="font-black text-[#0A0A0A]">= {formatMonedaMXN(item.total)}</span>
                     </div>
-                    <a
-                      href="/api/negocio/stripe-connect?modo=gestionar"
-                      className="inline-flex rounded-lg border border-[#6B4FE8] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white"
-                    >
-                      Gestionar cuenta
-                    </a>
-                  </div>
+                  ))}
+                </div>
+                <p className="mt-4 text-3xl font-black tracking-tight">
+                  A cobrar este lunes: {formatMonedaMXN(ganancias.semana.total_a_cobrar)}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[#0A0A0A]/70">
+                  Próximo pago: lunes {fechaProximoPago.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
+                </p>
+              </div>
 
-                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                    <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
-                      <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Próximo pago estimado</p>
-                      <p className="mt-1 text-xs text-[#666]">
-                        Semana {formatPeriodoSemanal(
-                          pagos.proximo_pago_estimado.periodo_inicio,
-                          pagos.proximo_pago_estimado.periodo_fin
-                        )}
-                      </p>
-                      <div className="mt-3 space-y-2">
-                        {PLANES_MEMBRESIA.map((plan) => {
-                          const visitasPlan = plan === 'basico'
-                            ? pagos.proximo_pago_estimado.visitas_basico
-                            : plan === 'plus'
-                              ? pagos.proximo_pago_estimado.visitas_plus
-                              : pagos.proximo_pago_estimado.visitas_total
-                          const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
+              <div className="rounded-xl bg-[#0A0A0A] p-5 text-white">
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#E8FF47]">Historial de pagos</p>
+                {pagos.historial_semanal.length === 0 ? (
+                  <p className="mt-3 text-sm text-white/70">Tu primer pago llegará el próximo lunes</p>
+                ) : (
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="min-w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-white/20 text-left text-[11px] font-black uppercase tracking-widest text-white/60">
+                          <th className="px-2 py-2">Semana (del - al)</th>
+                          <th className="px-2 py-2">Visitas totales</th>
+                          <th className="px-2 py-2 text-right">Monto pagado</th>
+                          <th className="px-2 py-2 text-right">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pagos.historial_semanal.map((fila) => {
+                          const totalVisitas = fila.visitas_basico + fila.visitas_plus + fila.visitas_total
                           return (
-                            <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
-                              <span>
-                                Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
-                              </span>
-                              <span className="font-black">= {formatMonedaMXN(visitasPlan * tarifaPlan)}</span>
-                            </div>
+                            <tr key={`${fila.periodo_inicio}-${fila.periodo_fin}`} className="border-b border-white/10 text-white">
+                              <td className="px-2 py-2 font-semibold">
+                                {formatPeriodoSemanal(fila.periodo_inicio, fila.periodo_fin)}
+                              </td>
+                              <td className="px-2 py-2">{totalVisitas}</td>
+                              <td className="px-2 py-2 text-right font-black">{formatMonedaMXN(fila.total_mxn)}</td>
+                              <td className="px-2 py-2 text-right">
+                                <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${claseEstadoPago(fila.estado)}`}>
+                                  {etiquetaEstadoPago(fila.estado)}
+                                </span>
+                              </td>
+                            </tr>
                           )
                         })}
-                      </div>
-
-                      <div className="mt-4 rounded-lg bg-[#0A0A0A] px-4 py-3 text-center">
-                        <p className="text-[11px] font-black uppercase tracking-widest text-white/50">Total estimado</p>
-                        <p className="mt-1 text-3xl font-black tracking-tight text-[#E8FF47]">
-                          {formatMonedaMXN(pagos.proximo_pago_estimado.total_mxn)}
-                        </p>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between rounded-lg border border-[#E5E5E5] bg-white px-3 py-2">
-                        <p className="text-xs font-bold uppercase tracking-wider text-[#555]">Estado</p>
-                        <span className={`rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${claseEstadoPago(pagos.proximo_pago_estimado.estado)}`}>
-                          {pagos.proximo_pago_estimado.estado}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
-                      <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Últimos pagos recibidos</p>
-                      {pagos.historial_semanal.length === 0 ? (
-                        <p className="mt-4 text-sm text-[#666]">Sin pagos registrados todavía.</p>
-                      ) : (
-                        <div className="mt-3 overflow-x-auto">
-                          <table className="min-w-full border-collapse text-sm">
-                            <thead>
-                              <tr className="border-b border-[#E5E5E5] text-left text-[11px] font-black uppercase tracking-widest text-[#888]">
-                                <th className="px-2 py-2">Semana</th>
-                                <th className="px-2 py-2">Visitas</th>
-                                <th className="px-2 py-2 text-right">Total</th>
-                                <th className="px-2 py-2 text-right">Estado</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {pagos.historial_semanal.map((fila) => {
-                                const totalVisitas = fila.visitas_basico + fila.visitas_plus + fila.visitas_total
-                                return (
-                                  <tr key={`${fila.periodo_inicio}-${fila.periodo_fin}`} className="border-b border-[#EFEFEF] text-[#0A0A0A]">
-                                    <td className="px-2 py-2 font-semibold">
-                                      {formatPeriodoSemanal(fila.periodo_inicio, fila.periodo_fin)}
-                                    </td>
-                                    <td className="px-2 py-2">{totalVisitas}</td>
-                                    <td className="px-2 py-2 text-right font-black">{formatMonedaMXN(fila.total_mxn)}</td>
-                                    <td className="px-2 py-2 text-right">
-                                      <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${claseEstadoPago(fila.estado)}`}>
-                                        {fila.estado}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                      </tbody>
+                    </table>
                   </div>
-                </>
-              )}
+                )}
               </div>
-            )}
+            </div>
 
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
               <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-[#888]">Escáner QR</p>
