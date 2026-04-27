@@ -7,15 +7,7 @@ const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 export const metadata: Metadata = {
   title: 'MUVET — Membresía de bienestar',
   description: 'Un pase. Todo el bienestar. Gimnasios, clases, estéticas y restaurantes saludables en tu ciudad.',
-  manifest: '/manifest.json?v=2',
-  icons: {
-    icon: [
-      { url: '/favicon.ico?v=2' },
-      { url: '/favicon-32x32.png?v=2', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon-16x16.png?v=2', sizes: '16x16', type: 'image/png' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png?v=2' }],
-  },
+  manifest: '/manifest.json',
   themeColor: '#E8FF47',
   appleWebApp: {
     capable: true,

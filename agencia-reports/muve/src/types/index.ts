@@ -30,6 +30,8 @@ export interface User {
   stripe_subscription_id: string | null
   plan?: PlanMembresia | null
   creditos_extra?: number | null
+  wallet_apple_agregado?: boolean | null
+  wallet_google_agregado?: boolean | null
   fecha_inicio_ciclo?: string | null
   fecha_fin_plan?: string | null
   rol: Rol
@@ -91,13 +93,6 @@ export interface Visita {
   negocios?: Negocio
 }
 
-export interface QRToken {
-  id: string
-  user_id: string
-  token: string
-  fecha_expiracion: string
-  usado: boolean
-}
 
 export const CIUDAD_LABELS: Record<Ciudad, string> = {
   tulancingo: 'Tulancingo',

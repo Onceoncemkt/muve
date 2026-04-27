@@ -1,8 +1,21 @@
-const CACHE_NAME = 'muvet-v1'
-self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME)))
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)))
+const CACHE_NAME = 'muvet-v2'
+self.addEventListener('install', event => {
+  event.waitUntil(self.skipWaiting())
+})
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(cacheNames => Promise.all(
+        cacheNames
+          .filter(cacheName => cacheName !== CACHE_NAME)
+          .map(cacheName => caches.delete(cacheName))
+      ))
+      .then(() => self.clients.claim())
+  )
+})
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return
+  event.respondWith(fetch(event.request))
 })
 self.addEventListener('push', event => {
   if (!event.data) return

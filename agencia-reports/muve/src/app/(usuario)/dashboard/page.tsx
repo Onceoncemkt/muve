@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import QRDisplay from '@/components/QRDisplay'
+import WalletPassCard from '@/components/WalletPassCard'
 import BotonPortal from '@/components/BotonPortal'
 import MisReservaciones from '@/components/MisReservaciones'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
@@ -12,6 +12,8 @@ import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 import { PLAN_VISITAS_MENSUALES, normalizarPlan, planDesdePriceId } from '@/lib/planes'
 import { stripe } from '@/lib/stripe'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 type PerfilDashboard = {
   nombre: string
@@ -21,6 +23,8 @@ type PerfilDashboard = {
   plan: PlanMembresia | null
   rol: 'usuario' | 'staff' | 'admin'
   creditos_extra?: number | null
+  wallet_apple_agregado?: boolean | null
+  wallet_google_agregado?: boolean | null
   fecha_inicio_ciclo?: string | null
   fecha_fin_plan?: string | null
 }
@@ -105,7 +109,7 @@ export default async function DashboardPage({
 
   const consultaPerfil = await supabase
     .from('users')
-    .select('nombre, ciudad, foto_url, plan_activo, plan, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo')
+    .select('nombre, ciudad, foto_url, plan_activo, plan, rol, creditos_extra, wallet_apple_agregado, wallet_google_agregado, fecha_fin_plan, fecha_inicio_ciclo')
     .eq('id', user.id)
     .single<PerfilDashboard>()
   let perfil = consultaPerfil.data ?? null
@@ -152,6 +156,8 @@ export default async function DashboardPage({
   const nombre = perfil?.nombre ?? user.email?.split('@')[0] ?? 'Muver'
   const ciudad = perfil?.ciudad ?? 'tulancingo'
   const fotoUrl = typeof perfil?.foto_url === 'string' ? perfil.foto_url : null
+  const walletAppleAgregado = parseBooleanSegura(perfil?.wallet_apple_agregado) === true
+  const walletGoogleAgregado = parseBooleanSegura(perfil?.wallet_google_agregado) === true
   const inicialesUsuario = inicialesDesdeNombre(nombre)
   const params = await searchParams
   const recienActivada = params.membresia === 'activada'
@@ -363,16 +369,20 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      {/* QR del día */}
+      {/* Wallet */}
       <div className="-mt-4 px-4">
         <div className="rounded-xl bg-white px-6 py-8 shadow-sm">
           <h2 className="mb-1 text-center text-base font-black uppercase tracking-wider text-[#0A0A0A]">
-            Tu QR del día
+            Tu pase Wallet
           </h2>
           <p className="mb-6 text-center text-xs text-[#888]">
-            Muéstralo en recepción para registrar tu visita
+            Agrégalo para registrar tu visita.
           </p>
-          <QRDisplay />
+          <WalletPassCard
+            userId={user.id}
+            appleWalletAgregado={walletAppleAgregado}
+            googleWalletAgregado={walletGoogleAgregado}
+          />
         </div>
       </div>
 

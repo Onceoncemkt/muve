@@ -406,7 +406,7 @@ export async function GET(request: NextRequest) {
     db
       .from('reservaciones')
       .select(`
-        id, fecha, estado, created_at,
+        id, fecha, estado, created_at, servicio_id, servicio_nombre,
         users ( id, nombre, email ),
         horarios!inner ( id, dia_semana, hora_inicio, hora_fin, nombre_coach, tipo_clase, negocio_id )
       `)

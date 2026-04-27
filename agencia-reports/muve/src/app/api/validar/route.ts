@@ -72,46 +72,56 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Buscar el token
-  const { data: qrToken, error: qrTokenError } = await db
-    .from('qr_tokens')
-    .select('*, users(nombre, ciudad, plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra)')
-    .eq('token', token)
-    .single()
+  const tokenNormalizado = token.toLowerCase()
+  const { data: usuarioPorHash, error: usuarioPorHashError } = await db
+    .rpc('buscar_usuario_por_qr_hash', { p_hash: tokenNormalizado })
+    .maybeSingle<{
+      user_id: string
+      nombre: string
+      ciudad: string
+      plan_activo: boolean
+      plan?: unknown
+      fecha_inicio_ciclo?: string | null
+      fecha_fin_plan?: string | null
+      creditos_extra?: number | null
+    }>()
 
-  if (faltaColumna(qrTokenError, 'fecha_inicio_ciclo')) {
-    return NextResponse.json(
-      { error: 'Falta la columna users.fecha_inicio_ciclo. Ejecuta la migración 019 en Supabase.' },
-      { status: 500 }
-    )
-  }
-  if (faltaColumna(qrTokenError, 'creditos_extra')) {
-    return NextResponse.json(
-      { error: 'Falta la columna users.creditos_extra. Ejecuta la migración 020 en Supabase.' },
-      { status: 500 }
-    )
+  if (usuarioPorHashError) {
+    const message = usuarioPorHashError.message?.toLowerCase() ?? ''
+    if (message.includes('buscar_usuario_por_qr_hash')) {
+      return NextResponse.json(
+        { error: 'Falta la función buscar_usuario_por_qr_hash. Ejecuta la migración 024 en Supabase.' },
+        { status: 500 }
+      )
+    }
+    if (faltaColumna(usuarioPorHashError, 'fecha_inicio_ciclo')) {
+      return NextResponse.json(
+        { error: 'Falta la columna users.fecha_inicio_ciclo. Ejecuta la migración 019 en Supabase.' },
+        { status: 500 }
+      )
+    }
+    if (faltaColumna(usuarioPorHashError, 'creditos_extra')) {
+      return NextResponse.json(
+        { error: 'Falta la columna users.creditos_extra. Ejecuta la migración 020 en Supabase.' },
+        { status: 500 }
+      )
+    }
+    return NextResponse.json({ error: 'No se pudo validar el pase del usuario' }, { status: 500 })
   }
 
-  if (!qrToken) {
+  if (!usuarioPorHash) {
     return NextResponse.json({ valido: false, error: 'Token no encontrado' }, { status: 404 })
   }
 
-  if (qrToken.usado) {
-    return NextResponse.json({ valido: false, error: 'Token ya fue utilizado' })
-  }
-
-  if (new Date(qrToken.fecha_expiracion) < new Date()) {
-    return NextResponse.json({ valido: false, error: 'Token expirado' })
-  }
-
-  const usuario = qrToken.users as {
-    nombre: string
-    ciudad: string
-    plan_activo: boolean
-    plan?: unknown
-    fecha_inicio_ciclo?: string | null
-    fecha_fin_plan?: string | null
-    creditos_extra?: number | null
+  const usuarioId = usuarioPorHash.user_id
+  const usuario = {
+    nombre: usuarioPorHash.nombre,
+    ciudad: usuarioPorHash.ciudad,
+    plan_activo: usuarioPorHash.plan_activo,
+    plan: usuarioPorHash.plan,
+    fecha_inicio_ciclo: usuarioPorHash.fecha_inicio_ciclo,
+    fecha_fin_plan: usuarioPorHash.fecha_fin_plan,
+    creditos_extra: usuarioPorHash.creditos_extra,
   }
   const planUsuario = normalizarPlan(usuario?.plan ?? null) ?? 'basico'
 
@@ -123,7 +133,7 @@ export async function POST(request: NextRequest) {
     await db
       .from('users')
       .update({ plan_activo: false })
-      .eq('id', qrToken.user_id)
+      .eq('id', usuarioId)
 
     return NextResponse.json({ valido: false, error: 'Membresía expirada' })
   }
@@ -145,7 +155,7 @@ export async function POST(request: NextRequest) {
       await db
         .from('users')
         .update(actualizacionCiclo)
-        .eq('id', qrToken.user_id)
+        .eq('id', usuarioId)
     }
   }
 
@@ -153,13 +163,13 @@ export async function POST(request: NextRequest) {
     db
       .from('visitas')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', qrToken.user_id)
+      .eq('user_id', usuarioId)
       .gte('fecha', ciclo.inicio.toISOString())
       .lt('fecha', ciclo.fin.toISOString()),
     db
       .from('visitas')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', qrToken.user_id)
+      .eq('user_id', usuarioId)
       .eq('negocio_id', negocioIdObjetivo)
       .gte('fecha', ciclo.inicio.toISOString())
       .lt('fecha', ciclo.fin.toISOString()),
@@ -247,7 +257,7 @@ export async function POST(request: NextRequest) {
     const { data: reservacionWellness, error: reservacionWellnessError } = await db
       .from('reservaciones')
       .select('id, fecha, servicio_id, servicio_nombre, servicio_precio_normal_mxn, created_at')
-      .eq('user_id', qrToken.user_id)
+      .eq('user_id', usuarioId)
       .eq('estado', 'confirmada')
       .eq('fecha', hoy)
       .in('horario_id', horarioIds)
@@ -292,9 +302,9 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Registrar visita y marcar token como usado
+  // Registrar visita y actualizar último check-in
   const payloadVisita = {
-    user_id: qrToken.user_id,
+    user_id: usuarioId,
     negocio_id: negocioIdObjetivo,
     validado_por: perfil.nombre,
     plan_usuario: planUsuario,
@@ -321,13 +331,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error al registrar visita' }, { status: 500 })
   }
 
-  const [{ error: tokenError }, { error: ultimoCheckinError }] = await Promise.all([
-    db.from('qr_tokens').update({ usado: true }).eq('id', qrToken.id),
-    db.from('users').update({ ultimo_checkin: new Date().toISOString() }).eq('id', qrToken.user_id),
-  ])
-  if (tokenError) {
-    return NextResponse.json({ error: 'Error al marcar token como usado' }, { status: 500 })
-  }
+  const { error: ultimoCheckinError } = await db
+    .from('users')
+    .update({ ultimo_checkin: new Date().toISOString() })
+    .eq('id', usuarioId)
   if (ultimoCheckinError && !faltaColumna(ultimoCheckinError, 'ultimo_checkin')) {
     console.warn('[POST /api/validar] No se pudo actualizar ultimo_checkin', ultimoCheckinError)
   }

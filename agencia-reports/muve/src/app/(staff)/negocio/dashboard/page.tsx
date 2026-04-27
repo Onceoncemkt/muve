@@ -22,6 +22,7 @@ interface ReservacionNegocio {
   fecha: string
   estado: EstadoReserva | string
   created_at: string
+  servicio_nombre?: string | null
   users: UsuarioReserva | UsuarioReserva[] | null
   horarios: HorarioReserva | HorarioReserva[] | null
 }
@@ -527,7 +528,9 @@ export default function NegocioDashboardPage() {
   const categoriaNegocio = normalizarCategoriaNegocio(negocio?.categoria)
   const esEstetica = categoriaNegocio === 'estetica' || serviciosDisponibles.length > 0
   const esRestaurante = categoriaNegocio === 'restaurante'
-  const usaPanelCheckins = esEstetica || esRestaurante
+  const esGimnasio = categoriaNegocio === 'gimnasio'
+  const esClases = categoriaNegocio === 'clases'
+  const usaPanelSimplificado = esEstetica || esRestaurante || esGimnasio
   const totalVisitasSemana = PLANES_MEMBRESIA.reduce(
     (acumulado, plan) => acumulado + (ganancias.semana.visitas_por_plan[plan] ?? 0),
     0
@@ -554,11 +557,13 @@ export default function NegocioDashboardPage() {
             </Link>
             <h1 className="text-2xl font-black tracking-tight text-white">Panel de negocio</h1>
             <p className="mt-1 text-sm text-white/40">
-              {esEstetica
-                ? 'Check-ins del día, servicios disponibles y operación wellness'
-                : esRestaurante
+              {esRestaurante
                 ? 'Control de entradas y resumen de visitas del restaurante'
-                : 'Reservaciones de hoy y operación de tu negocio asignado'}
+                : esEstetica
+                  ? 'Reservaciones wellness y servicios disponibles'
+                  : esGimnasio
+                    ? 'Check-ins diarios y ganancias del gimnasio'
+                    : 'Horarios, reservaciones y operación de clases'}
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -568,7 +573,7 @@ export default function NegocioDashboardPage() {
             >
               Inicio
             </Link>
-            {!esRestaurante && (
+            {esClases && (
               <Link
                 href="/negocio/horarios"
                 className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
@@ -614,17 +619,13 @@ export default function NegocioDashboardPage() {
 
         {!sinNegocio && negocio && (
           <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            {usaPanelCheckins && (
+            {(esRestaurante || esGimnasio) && (
               <>
-                <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-2">
+                <div className={`rounded-xl border border-[#E5E5E5] bg-white p-4 ${esGimnasio ? 'md:col-span-3' : 'md:col-span-2'}`}>
                   <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Check-ins del día</p>
                   <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{checkinsHoy.length}</p>
                   {checkinsHoy.length === 0 ? (
-                    <p className="mt-2 text-sm text-[#666]">
-                      {esEstetica
-                        ? 'Aún no hay check-ins registrados hoy.'
-                        : 'Aún no hay entradas validadas hoy.'}
-                    </p>
+                    <p className="mt-2 text-sm text-[#666]">Aún no hay entradas validadas hoy.</p>
                   ) : (
                     <ul className="mt-3 space-y-2">
                       {checkinsHoy.map((checkin) => (
@@ -632,10 +633,7 @@ export default function NegocioDashboardPage() {
                           key={checkin.id}
                           className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2"
                         >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-[#0A0A0A]">{checkin.usuario_nombre}</p>
-                            <p className="truncate text-[11px] text-[#666]">{checkin.usuario_email ?? 'Sin email'}</p>
-                          </div>
+                          <p className="truncate text-sm font-bold text-[#0A0A0A]">{checkin.usuario_nombre}</p>
                           <span className="shrink-0 text-xs font-semibold text-[#6B4FE8]">
                             {formatHoraCheckin(checkin.fecha)}
                           </span>
@@ -645,8 +643,56 @@ export default function NegocioDashboardPage() {
                   )}
                 </div>
 
+                {esRestaurante && (
+                  <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Visitas de la semana</p>
+                    <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{totalVisitasSemana}</p>
+                  </div>
+                )}
+
                 <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Check-ins de la semana</p>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Ganancias</p>
+                  <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{formatMonedaMXN(gananciasSemanaTarifaFija)}</p>
+                  <p className="mt-1 text-xs text-[#666]">
+                    {totalVisitasSemana} × {formatMonedaMXN(tarifaFijaPorCheckin)}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {esEstetica && (
+              <>
+                <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-2">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Reservaciones del día</p>
+                  <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{reservaciones.length}</p>
+                  {reservaciones.length === 0 ? (
+                    <p className="mt-2 text-sm text-[#666]">Aún no hay reservaciones wellness para hoy.</p>
+                  ) : (
+                    <ul className="mt-3 space-y-2">
+                      {reservaciones.map((reservacion) => {
+                        const usuario = obtenerRelacion(reservacion.users)
+                        const horario = obtenerRelacion(reservacion.horarios)
+                        return (
+                          <li
+                            key={reservacion.id}
+                            className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold text-[#0A0A0A]">{usuario?.nombre ?? 'Usuario'}</p>
+                              <p className="truncate text-[11px] text-[#666]">{reservacion.servicio_nombre ?? 'Servicio no especificado'}</p>
+                            </div>
+                            <span className="shrink-0 text-xs font-semibold text-[#6B4FE8]">
+                              {horario ? formatHora(horario.hora_inicio) : '--:--'}
+                            </span>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Visitas de la semana</p>
                   <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{totalVisitasSemana}</p>
                 </div>
 
@@ -658,33 +704,31 @@ export default function NegocioDashboardPage() {
                   </p>
                 </div>
 
-                {esEstetica && (
-                  <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
-                    <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">
-                      Servicios disponibles
+                <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">
+                    Servicios disponibles
+                  </p>
+                  {serviciosDisponibles.length === 0 ? (
+                    <p className="mt-2 text-sm text-[#666]">
+                      Este negocio aún no tiene servicios activos publicados.
                     </p>
-                    {serviciosDisponibles.length === 0 ? (
-                      <p className="mt-2 text-sm text-[#666]">
-                        Este negocio aún no tiene servicios activos publicados.
-                      </p>
-                    ) : (
-                      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {serviciosDisponibles.map((servicio) => (
-                          <li
-                            key={servicio.id}
-                            className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#0A0A0A]"
-                          >
-                            {servicio.nombre}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
+                  ) : (
+                    <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {serviciosDisponibles.map((servicio) => (
+                        <li
+                          key={servicio.id}
+                          className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#0A0A0A]"
+                        >
+                          {servicio.nombre}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </>
             )}
 
-            {!usaPanelCheckins && (
+            {esClases && (
               <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-2">
                 <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mi negocio</p>
                 <div className="mt-2 flex flex-col gap-3 sm:flex-row">
@@ -1025,15 +1069,15 @@ export default function NegocioDashboardPage() {
           </section>
         )}
 
-        {!usaPanelCheckins && cargando && <p className="text-center text-sm text-[#888]">Cargando reservaciones...</p>}
+        {esClases && cargando && <p className="text-center text-sm text-[#888]">Cargando reservaciones...</p>}
 
-        {!usaPanelCheckins && !cargando && !sinNegocio && negocio && gruposPorHorario.length === 0 && (
+        {esClases && !cargando && !sinNegocio && negocio && gruposPorHorario.length === 0 && (
           <div className="rounded-xl border border-dashed border-[#E5E5E5] bg-white p-6 text-center">
             <p className="text-sm font-semibold text-[#0A0A0A]">Sin reservaciones para hoy</p>
             <p className="mt-1 text-xs text-[#888]">{negocio.nombre} no tiene reservaciones confirmadas/completadas hoy.</p>
           </div>
         )}
-        {!usaPanelCheckins && !cargando && gruposPorHorario.length > 0 && (
+        {esClases && !cargando && gruposPorHorario.length > 0 && (
           <div className="space-y-3">
             {gruposPorHorario.map(grupo => (
               <section key={grupo.key} className="rounded-xl border border-[#E5E5E5] bg-white p-4">

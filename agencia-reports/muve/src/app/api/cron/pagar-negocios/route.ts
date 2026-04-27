@@ -55,13 +55,13 @@ function planTarifaParaVisita({
   categoria: string | null | undefined
   planUsuario: string | null | undefined
 }) {
-  const planNormalizado = normalizarPlan(planUsuario)
-  if (planNormalizado) return planNormalizado
 
   const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
   if (categoriaNormalizada && categoriaNormalizada !== 'clases') {
     return 'basico'
   }
+  const planNormalizado = normalizarPlan(planUsuario)
+  if (planNormalizado) return planNormalizado
 
   return null
 }

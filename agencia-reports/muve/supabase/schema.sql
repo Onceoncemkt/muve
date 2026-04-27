@@ -2,6 +2,7 @@
 -- MUVE — Schema para Supabase
 -- Correr en: Supabase Dashboard > SQL Editor
 -- ============================================================
+create extension if not exists pgcrypto;
 
 -- Enums
 create type ciudad_enum as enum ('tulancingo', 'pachuca', 'ensenada', 'tijuana');
@@ -22,6 +23,8 @@ create table public.users (
   plan                text check (plan in ('basico', 'plus', 'total')),
   creditos_extra      int not null default 0,
   rol                 rol_enum not null default 'usuario',
+  wallet_apple_agregado boolean not null default false,
+  wallet_google_agregado boolean not null default false,
   fecha_inicio_ciclo  timestamp with time zone,
   fecha_fin_plan      timestamp with time zone,
   ultimo_checkin      timestamp with time zone,
@@ -118,16 +121,6 @@ create table public.descuentos (
   created_at        timestamp with time zone default now()
 );
 
--- ============================================================
--- TABLA: qr_tokens
--- ============================================================
-create table public.qr_tokens (
-  id                uuid primary key default gen_random_uuid(),
-  user_id           uuid not null references public.users(id) on delete cascade,
-  token             text not null unique,
-  fecha_expiracion  timestamp with time zone not null,
-  usado             boolean not null default false
-);
 
 -- ============================================================
 -- TABLA: push_subscriptions
@@ -139,11 +132,11 @@ create table public.push_subscriptions (
   created_at    timestamp default now()
 );
 
--- Índice para búsqueda rápida por token
-create index qr_tokens_token_idx on public.qr_tokens (token);
+-- Índices
 create index visitas_user_id_idx on public.visitas (user_id);
 create index visitas_negocio_id_idx on public.visitas (negocio_id);
 create index users_negocio_id_idx on public.users (negocio_id);
+create index users_qr_hash_idx on public.users ((encode(digest((id)::text, 'sha256'), 'hex')));
 create index descuentos_user_id_idx on public.descuentos (user_id);
 create index descuentos_expiracion_idx on public.descuentos (fecha_expiracion);
 create index creditos_historial_user_id_idx on public.creditos_historial (user_id);
@@ -164,10 +157,63 @@ alter table public.visitas enable row level security;
 alter table public.pagos_negocios enable row level security;
 alter table public.descuentos enable row level security;
 alter table public.creditos_historial enable row level security;
-alter table public.qr_tokens enable row level security;
 alter table public.push_subscriptions enable row level security;
 
 -- users
+create or replace function public.is_admin_user(p_user_id uuid)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1
+    from public.users u
+    where u.id = p_user_id
+      and u.rol = 'admin'
+  );
+end;
+$$;
+
+revoke all on function public.is_admin_user(uuid) from public;
+grant execute on function public.is_admin_user(uuid) to authenticated;
+grant execute on function public.is_admin_user(uuid) to anon;
+
+create or replace function public.buscar_usuario_por_qr_hash(p_hash text)
+returns table (
+  user_id uuid,
+  nombre text,
+  ciudad ciudad_enum,
+  plan_activo boolean,
+  plan text,
+  fecha_inicio_ciclo timestamp with time zone,
+  fecha_fin_plan timestamp with time zone,
+  creditos_extra int
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    u.id as user_id,
+    u.nombre,
+    u.ciudad,
+    u.plan_activo,
+    u.plan,
+    u.fecha_inicio_ciclo,
+    u.fecha_fin_plan,
+    u.creditos_extra
+  from public.users u
+  where encode(digest(u.id::text, 'sha256'), 'hex') = lower(trim(p_hash))
+  limit 1;
+$$;
+
+revoke all on function public.buscar_usuario_por_qr_hash(text) from public;
+grant execute on function public.buscar_usuario_por_qr_hash(text) to authenticated;
+grant execute on function public.buscar_usuario_por_qr_hash(text) to anon;
 create policy "usuarios leen su propio perfil" on public.users
   for select using (auth.uid() = id);
 
@@ -178,8 +224,7 @@ create policy "usuarios actualizan su propio perfil" on public.users
 create policy "admin lee todos los usuarios" on public.users
   for select using (
     auth.uid() = id
-    or
-    (select rol from public.users where id = auth.uid()) = 'admin'
+    or (select public.is_admin_user(auth.uid()))
   );
 
 -- negocios (lectura pública para usuarios activos, escritura solo admin)
@@ -240,22 +285,6 @@ create policy "usuarios ven sus descuentos" on public.descuentos
 create policy "usuarios ven su historial de creditos" on public.creditos_historial
   for select using (auth.uid() = user_id);
 
--- qr_tokens
-create policy "usuarios ven sus tokens" on public.qr_tokens
-  for select using (auth.uid() = user_id);
-
-create policy "usuarios crean sus tokens" on public.qr_tokens
-  for insert with check (auth.uid() = user_id);
-
-create policy "staff lee tokens para validar" on public.qr_tokens
-  for select using (
-    exists (select 1 from public.users u where u.id = auth.uid() and u.rol in ('staff', 'admin'))
-  );
-
-create policy "staff actualiza tokens (marcar usado)" on public.qr_tokens
-  for update using (
-    exists (select 1 from public.users u where u.id = auth.uid() and u.rol in ('staff', 'admin'))
-  );
 
 -- push_subscriptions
 create policy "usuarios gestionan sus push subscriptions" on public.push_subscriptions
