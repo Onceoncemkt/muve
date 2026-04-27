@@ -140,6 +140,9 @@ export default async function DashboardPage({
       console.error('[dashboard] No se pudo reconciliar membresía desde Stripe:', error)
     }
   }
+  if (planActivo && !planUsuario) {
+    planUsuario = 'basico'
+  }
 
   const hasActiveMembership = planActivo
 
@@ -180,7 +183,7 @@ export default async function DashboardPage({
 
     const { count: visitasCiclo } = await supabase
       .from('visitas')
-      .select('*', { count: 'exact' })
+      .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .gte('fecha', cicloInicioIso)
       .lt('fecha', cicloFinIso)
@@ -217,7 +220,7 @@ export default async function DashboardPage({
       )}
 
       {/* Sin membresía activa */}
-      {!perfil?.plan_activo && (
+      {!hasActiveMembership && (
         <div className="bg-[#E8FF47] px-4 py-3">
           <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-4">
             <p className="text-sm font-bold text-[#0A0A0A]">
