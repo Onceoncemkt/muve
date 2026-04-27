@@ -16,6 +16,7 @@ import {
 } from '@/types'
 import {
   PLAN_LABELS,
+  normalizarCategoriaNegocio,
   normalizarPlan,
   puedeReservarConPlan,
 } from '@/lib/planes'
@@ -106,8 +107,9 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
 }
 
 function planRequeridoNegocio(negocio: Negocio): PlanMembresia {
-  if (negocio.categoria === 'estetica') return 'plus'
-  if (negocio.categoria === 'restaurante') return 'total'
+  const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
+  if (categoriaNegocio === 'estetica') return 'plus'
+  if (categoriaNegocio === 'restaurante') return 'total'
   return normalizarPlan(negocio.plan_requerido ?? null) ?? 'basico'
 }
 
@@ -292,11 +294,12 @@ export default function ExplorarPage() {
 
   const abrirOCerrarMenuReservas = useCallback((negocio: Negocio, estaAbierto: boolean) => {
     const negocioId = negocio.id
+    const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
     if (estaAbierto) {
       setMenuReservasAbiertoPorNegocioId((prev) => ({ ...prev, [negocioId]: false }))
       return
     }
-    if (negocio.categoria === 'estetica') {
+    if (categoriaNegocio === 'estetica') {
       const reservables = serviciosWellnessReservables(negocio)
       setServicioSeleccionadoPorNegocioId((prev) => {
         const actual = prev[negocioId] ?? ''
@@ -311,13 +314,13 @@ export default function ExplorarPage() {
   }, [cargarHorarios])
   const reservarHorario = useCallback(async (negocio: Negocio, horario: HorarioExplorar) => {
     const negocioId = negocio.id
+    const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
     const fecha = formatearFechaISO(proximaFecha(horario.dia_semana))
     const payload: { horario_id: string; fecha: string; servicio_id?: string } = {
       horario_id: horario.id,
       fecha,
     }
-
-    if (negocio.categoria === 'estetica') {
+    if (categoriaNegocio === 'estetica') {
       const servicioIdSeleccionado = servicioSeleccionadoPorNegocioId[negocioId] ?? ''
       if (!servicioIdSeleccionado) {
         setMensajeReservaPorNegocioId((prev) => ({
@@ -381,11 +384,11 @@ export default function ExplorarPage() {
     }
 
     if (filtroCategoria === 'wellness') {
-      resultado = resultado.filter((negocio) => negocio.categoria === 'estetica')
+      resultado = resultado.filter((negocio) => normalizarCategoriaNegocio(negocio.categoria) === 'estetica')
     } else if (filtroCategoria === 'restaurantes') {
-      resultado = resultado.filter((negocio) => negocio.categoria === 'restaurante')
+      resultado = resultado.filter((negocio) => normalizarCategoriaNegocio(negocio.categoria) === 'restaurante')
     } else if (filtroCategoria !== 'todas') {
-      resultado = resultado.filter((negocio) => negocio.categoria === filtroCategoria)
+      resultado = resultado.filter((negocio) => normalizarCategoriaNegocio(negocio.categoria) === filtroCategoria)
     }
 
     return resultado
@@ -509,23 +512,25 @@ export default function ExplorarPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {negociosFiltrados.map((negocio) => {
+              const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
               const planRequerido = planRequeridoNegocio(negocio)
               const puedeReservar = planEfectivo
                 ? puedeReservarConPlan(planEfectivo, planRequerido)
                 : false
               const instagramHandle = normalizarHandleSocial(negocio.instagram_handle)
               const tiktokHandle = normalizarHandleSocial(negocio.tiktok_handle)
-              const esRestaurante = negocio.categoria === 'restaurante'
+              const esWellness = categoriaNegocio === 'estetica'
+              const esRestaurante = categoriaNegocio === 'restaurante'
               const iniciales = inicialesNegocio(negocio.nombre)
               const menuReservasAbierto = Boolean(menuReservasAbiertoPorNegocioId[negocio.id])
               const cargandoHorarios = Boolean(cargandoHorariosPorNegocioId[negocio.id])
               const horarios = horariosPorNegocioId[negocio.id] ?? []
               const errorHorarios = errorHorariosPorNegocioId[negocio.id]
               const mensajeReserva = mensajeReservaPorNegocioId[negocio.id]
-              const serviciosWellness = negocio.categoria === 'estetica'
+              const serviciosWellness = esWellness
                 ? serviciosWellnessVisibles(negocio)
                 : []
-              const serviciosWellnessDisponiblesReservables = negocio.categoria === 'estetica'
+              const serviciosWellnessDisponiblesReservables = esWellness
                 ? serviciosWellnessReservables(negocio)
                 : []
               const servicioSeleccionadoId = servicioSeleccionadoPorNegocioId[negocio.id] ?? ''
@@ -584,7 +589,7 @@ export default function ExplorarPage() {
                   ) : (
                     <div className="mt-2 space-y-1 text-sm text-[#555]">
                       <p>
-                        <span className="font-semibold text-[#0A0A0A]">Categoría:</span> {CATEGORIA_LABELS[negocio.categoria]}
+                        <span className="font-semibold text-[#0A0A0A]">Categoría:</span> {categoriaNegocio ? CATEGORIA_LABELS[categoriaNegocio] : 'Sin categoría'}
                       </p>
                       <p>
                         <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {CIUDAD_LABELS[negocio.ciudad]}
@@ -625,7 +630,7 @@ export default function ExplorarPage() {
                     </div>
                   )}
 
-                  {negocio.categoria === 'estetica' && (
+                  {esWellness && (
                     <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] font-black uppercase tracking-widest text-[#555]">
@@ -677,10 +682,10 @@ export default function ExplorarPage() {
                       {!puedeReservar
                         ? 'Requiere membresía'
                         : menuReservasAbierto
-                          ? negocio.categoria === 'estetica'
+                          ? esWellness
                             ? 'Ocultar disponibilidad'
                             : 'Ocultar horarios'
-                          : negocio.categoria === 'estetica'
+                          : esWellness
                             ? 'Reservar servicio'
                             : 'Reservar clase'}
                     </button>
@@ -689,11 +694,11 @@ export default function ExplorarPage() {
                   {!esRestaurante && puedeReservar && menuReservasAbierto && (
                     <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-[#555]">
-                        {negocio.categoria === 'estetica'
+                        {esWellness
                           ? 'Disponibilidad de agenda'
                           : 'Horarios disponibles'}
                       </p>
-                      {negocio.categoria === 'estetica' && (
+                      {esWellness && (
                         <div className="mt-2 rounded-md border border-[#E5E5E5] bg-white p-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-[#666]">
                             Servicio a reservar
@@ -742,7 +747,7 @@ export default function ExplorarPage() {
                         <p className="mt-2 text-xs font-semibold text-red-800">{errorHorarios}</p>
                       ) : horarios.length === 0 ? (
                         <p className="mt-2 text-xs text-[#666]">
-                          {negocio.categoria === 'estetica'
+                          {esWellness
                             ? 'No hay disponibilidad de agenda'
                             : 'No hay horarios disponibles'}
                         </p>
@@ -758,7 +763,7 @@ export default function ExplorarPage() {
                             const spotsDisponibles = typeof horario.spots_disponibles === 'number'
                               ? Math.max(horario.spots_disponibles, 0)
                               : null
-                            const requiereServicioWellness = negocio.categoria === 'estetica'
+                            const requiereServicioWellness = esWellness
                             const puedeReservarHorario = !requiereServicioWellness || Boolean(servicioSeleccionadoId)
 
                             return (
@@ -776,12 +781,12 @@ export default function ExplorarPage() {
                                   <span className="text-xs text-[#666]">
                                     Próxima fecha: {fechaProxima}
                                   </span>
-                                  {negocio.categoria !== 'estetica' && horario.nombre_coach && (
+                                  {!esWellness && horario.nombre_coach && (
                                     <span className="text-xs text-[#666]">
                                       Coach: {horario.nombre_coach}
                                     </span>
                                   )}
-                                  {negocio.categoria !== 'estetica' && horario.tipo_clase && (
+                                  {!esWellness && horario.tipo_clase && (
                                     <span className="text-xs text-[#666]">
                                       Tipo de clase: {horario.tipo_clase}
                                     </span>

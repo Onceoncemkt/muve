@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { Categoria, DiaSemana, Rol, ServicioNegocio } from '@/types'
 import { CATEGORIA_LABELS, DIA_LABELS, formatHora, proximaFecha } from '@/types'
+import { normalizarCategoriaNegocio } from '@/lib/planes'
 
 const DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
 const TIPOS_CLASE_OPCIONES = [
@@ -100,7 +101,7 @@ export default function NegocioHorariosPage() {
   const [montoMaximoVisitaDraft, setMontoMaximoVisitaDraft] = useState(0)
   const [guardandoMontoMaximo, setGuardandoMontoMaximo] = useState(false)
   const negocioSeleccionado = negocios.find((negocio) => negocio.id === negocioId) ?? null
-  const categoriaNegocio = negocioSeleccionado?.categoria ?? null
+  const categoriaNegocio = normalizarCategoriaNegocio(negocioSeleccionado?.categoria)
   const esWellness = categoriaNegocio === 'estetica'
   const esRestaurante = categoriaNegocio === 'restaurante'
 
@@ -138,7 +139,7 @@ export default function NegocioHorariosPage() {
           ? Math.max(Math.trunc(negocioInicial.monto_maximo_visita), 0)
           : 0
       )
-      if (negocioInicial?.categoria === 'estetica' && negocioInicial.id) {
+      if (normalizarCategoriaNegocio(negocioInicial?.categoria) === 'estetica' && negocioInicial.id) {
         const resServicios = await fetch(`/api/negocio/servicios?negocio_id=${encodeURIComponent(negocioInicial.id)}`, {
           cache: 'no-store',
         })
@@ -550,7 +551,7 @@ export default function NegocioHorariosPage() {
                     ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
                     : 0
                 )
-                if (negocio?.categoria === 'estetica' && siguienteId) {
+                if (normalizarCategoriaNegocio(negocio?.categoria) === 'estetica' && siguienteId) {
                   void cargarServicios(siguienteId)
                 } else {
                   setServicios([])
@@ -572,8 +573,8 @@ export default function NegocioHorariosPage() {
             <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-xs text-[#555]">
               <p>
                 <span className="font-bold text-[#0A0A0A]">Categoría:</span>{' '}
-                {negocioSeleccionado.categoria
-                  ? CATEGORIA_LABELS[negocioSeleccionado.categoria]
+                {categoriaNegocio
+                  ? CATEGORIA_LABELS[categoriaNegocio]
                   : 'Sin categoría'}
               </p>
               {esRestaurante && (
