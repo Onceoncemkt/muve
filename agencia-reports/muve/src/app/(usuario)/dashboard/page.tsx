@@ -6,7 +6,6 @@ import BotonPortal from '@/components/BotonPortal'
 import MisReservaciones from '@/components/MisReservaciones'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import PushNotificationsSetup from '@/components/push/PushNotificationsSetup'
-import BannerInstalarApp from '@/components/BannerInstalarApp'
 import RoleRedirectEffect from './RoleRedirectEffect'
 import { CIUDAD_LABELS } from '@/types'
 import type { Ciudad, PlanMembresia } from '@/types'
@@ -169,7 +168,6 @@ export default async function DashboardPage({
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
       <RoleRedirectEffect />
       <PushNotificationsSetup />
-      <BannerInstalarApp />
       {/* Membresía recién activada */}
       {recienActivada && (
         <div className="bg-[#6B4FE8] px-4 py-3 text-center text-sm font-bold text-white">

@@ -4,9 +4,12 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 export default function BannerInstalarApp() {
-  const [mostrar, setMostrar] = useState(false)
+  const [mostrar, setMostrar] = useState(true)
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return
+    }
     const media = window.matchMedia('(display-mode: standalone)')
     const actualizar = () => {
       setMostrar(!media.matches)
