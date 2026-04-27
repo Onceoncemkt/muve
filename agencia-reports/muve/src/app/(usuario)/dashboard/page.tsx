@@ -15,7 +15,7 @@ import { PLAN_VISITAS_MENSUALES, normalizarPlan } from '@/lib/planes'
 type PerfilDashboard = {
   nombre: string
   ciudad: Ciudad
-  plan_activo: boolean
+  plan_activo: boolean | string | number | null
   plan: PlanMembresia | null
   rol: 'usuario' | 'staff' | 'admin'
   creditos_extra?: number | null
@@ -42,6 +42,21 @@ function parseFechaSegura(value: string | null | undefined) {
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return null
   return parsed
+}
+function parseBooleanSegura(value: unknown): boolean | null {
+  if (value === true) return true
+  if (value === false) return false
+  if (typeof value === 'number') {
+    if (value === 1) return true
+    if (value === 0) return false
+    return null
+  }
+  if (typeof value === 'string') {
+    const normalizado = value.trim().toLowerCase()
+    if (normalizado === 'true' || normalizado === '1') return true
+    if (normalizado === 'false' || normalizado === '0') return false
+  }
+  return null
 }
 
 export default async function DashboardPage({
@@ -107,13 +122,17 @@ export default async function DashboardPage({
   const recienActivada = params.membresia === 'activada'
 
   let planUsuario = normalizarPlan(perfil?.plan ?? null)
-  const planActivo = perfil?.plan_activo === true
+  const planActivoFlag = parseBooleanSegura(perfil?.plan_activo)
+  let planActivo = planActivoFlag === true
+  if (!planActivo && planActivoFlag !== false && Boolean(planUsuario)) {
+    planActivo = true
+  }
   if (planActivo && !planUsuario) {
     planUsuario = 'basico'
   }
 
   const hasActiveMembership = planActivo
-  const mostrarBannerActivacion = perfil?.plan_activo === false
+  const mostrarBannerActivacion = planActivoFlag === false
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
   const limiteMensual = hasActiveMembership && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
