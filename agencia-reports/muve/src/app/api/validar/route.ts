@@ -60,6 +60,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Falta token' }, { status: 400 })
   }
 
+  if (
+    perfil.rol === 'staff'
+    && perfil.negocio_id
+    && negocioIdBody
+    && negocioIdBody !== perfil.negocio_id
+  ) {
+    return NextResponse.json(
+      { error: 'No puedes validar visitas de otro negocio' },
+      { status: 403 }
+    )
+  }
+
   const negocioIdObjetivo = perfil.rol === 'staff' ? (perfil.negocio_id ?? '') : negocioIdBody
   if (!negocioIdObjetivo) {
     return NextResponse.json(
@@ -193,27 +205,60 @@ export async function POST(request: NextRequest) {
       error: 'Límite de visitas en este lugar alcanzado',
     })
   }
-
-
-  let negocio: { nombre: string; categoria: string | null; monto_maximo_visita: number | null } | null = null
+  let negocio: {
+    nombre: string
+    categoria: string | null
+    monto_maximo_visita: number | null
+    requiere_reserva: boolean
+  } | null = null
   const consultaNegocio = await db
     .from('negocios')
-    .select('nombre, categoria, monto_maximo_visita')
+    .select('nombre, categoria, monto_maximo_visita, requiere_reserva')
     .eq('id', negocioIdObjetivo)
-    .maybeSingle<{ nombre: string; categoria: string | null; monto_maximo_visita: number | null }>()
+    .maybeSingle<{
+      nombre: string
+      categoria: string | null
+      monto_maximo_visita: number | null
+      requiere_reserva: boolean
+    }>()
 
   if (!consultaNegocio.error && consultaNegocio.data) {
     negocio = consultaNegocio.data
-  } else if (faltaColumna(consultaNegocio.error, 'monto_maximo_visita')) {
+  } else if (
+    faltaColumna(consultaNegocio.error, 'monto_maximo_visita')
+    || faltaColumna(consultaNegocio.error, 'requiere_reserva')
+  ) {
+    const faltaMontoMaximoVisita = faltaColumna(consultaNegocio.error, 'monto_maximo_visita')
+    const faltaRequiereReserva = faltaColumna(consultaNegocio.error, 'requiere_reserva')
+    const columnasFallback = ['nombre', 'categoria']
+    if (!faltaMontoMaximoVisita) {
+      columnasFallback.push('monto_maximo_visita')
+    }
+    if (!faltaRequiereReserva) {
+      columnasFallback.push('requiere_reserva')
+    }
     const fallbackNegocio = await db
       .from('negocios')
-      .select('nombre, categoria')
+      .select(columnasFallback.join(', '))
       .eq('id', negocioIdObjetivo)
-      .maybeSingle<{ nombre: string; categoria: string | null }>()
+      .maybeSingle<{
+        nombre: string
+        categoria: string | null
+        monto_maximo_visita?: number | null
+        requiere_reserva?: boolean
+      }>()
     if (!fallbackNegocio.error && fallbackNegocio.data) {
+      const categoriaFallback = typeof fallbackNegocio.data.categoria === 'string'
+        ? fallbackNegocio.data.categoria
+        : null
       negocio = {
         ...fallbackNegocio.data,
-        monto_maximo_visita: null,
+        monto_maximo_visita: typeof fallbackNegocio.data.monto_maximo_visita === 'number'
+          ? fallbackNegocio.data.monto_maximo_visita
+          : null,
+        requiere_reserva: typeof fallbackNegocio.data.requiere_reserva === 'boolean'
+          ? fallbackNegocio.data.requiere_reserva
+          : categoriaFallback !== 'restaurante',
       }
     }
   }
@@ -230,82 +275,119 @@ export async function POST(request: NextRequest) {
   const montoMaximoAutorizadoMxn = categoriaNegocio === 'restaurante'
     ? Math.max(Math.trunc(negocio.monto_maximo_visita ?? 0), 0)
     : null
+  const hoy = new Date().toISOString().split('T')[0]
+  const permiteVisitaDirecta = categoriaNegocio === 'restaurante' && !negocio.requiere_reserva
+  let reservacionACompletarId: string | null = null
 
   let servicioReservado: { id: string; nombre: string; precio_normal_mxn: number | null; fecha: string } | null = null
-  if (categoriaNegocio === 'estetica') {
-    const hoy = new Date().toISOString().split('T')[0]
-    const { data: horariosNegocio, error: horariosError } = await db
-      .from('horarios')
-      .select('id')
-      .eq('negocio_id', negocioIdObjetivo)
+  const { data: horariosNegocio, error: horariosError } = await db
+    .from('horarios')
+    .select('id')
+    .eq('negocio_id', negocioIdObjetivo)
 
-    if (horariosError) {
-      return NextResponse.json({ error: 'No se pudieron validar los horarios del negocio' }, { status: 500 })
+  if (horariosError) {
+    return NextResponse.json({ error: 'No se pudieron validar los horarios del negocio' }, { status: 500 })
+  }
+
+  const horarioIds = Array.isArray(horariosNegocio)
+    ? horariosNegocio.map((item) => item.id).filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : []
+
+  if (horarioIds.length === 0 && !permiteVisitaDirecta) {
+    return NextResponse.json(
+      {
+        valido: false,
+        error: categoriaNegocio === 'estetica'
+          ? 'Este negocio wellness no tiene horarios configurados'
+          : 'Este negocio requiere reservación para validar visitas',
+      },
+      { status: 400 }
+    )
+  }
+
+  if (horarioIds.length > 0) {
+    if (categoriaNegocio === 'estetica') {
+      const { data: reservacionWellness, error: reservacionWellnessError } = await db
+        .from('reservaciones')
+        .select('id, fecha, servicio_id, servicio_nombre, servicio_precio_normal_mxn, created_at')
+        .eq('user_id', usuarioId)
+        .eq('estado', 'confirmada')
+        .eq('fecha', hoy)
+        .in('horario_id', horarioIds)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle<{
+          id: string
+          fecha: string
+          servicio_id: string | null
+          servicio_nombre: string | null
+          servicio_precio_normal_mxn: number | null
+          created_at: string
+        }>()
+
+      if (
+        faltaColumna(reservacionWellnessError, 'servicio_id')
+        || faltaColumna(reservacionWellnessError, 'servicio_nombre')
+        || faltaColumna(reservacionWellnessError, 'servicio_precio_normal_mxn')
+      ) {
+        return NextResponse.json(
+          { error: 'Faltan columnas de servicio en reservaciones. Ejecuta la migración 017 en Supabase.' },
+          { status: 500 }
+        )
+      }
+
+      if (reservacionWellnessError) {
+        return NextResponse.json({ error: 'No se pudo validar la reservación wellness' }, { status: 500 })
+      }
+
+      if (reservacionWellness && reservacionWellness.servicio_nombre) {
+        reservacionACompletarId = reservacionWellness.id
+        servicioReservado = {
+          id: reservacionWellness.servicio_id ?? reservacionWellness.id,
+          nombre: reservacionWellness.servicio_nombre,
+          precio_normal_mxn: reservacionWellness.servicio_precio_normal_mxn,
+          fecha: reservacionWellness.fecha,
+        }
+      }
+    } else {
+      const { data: reservacionConfirmada, error: reservacionConfirmadaError } = await db
+        .from('reservaciones')
+        .select('id, fecha, created_at')
+        .eq('user_id', usuarioId)
+        .eq('estado', 'confirmada')
+        .eq('fecha', hoy)
+        .in('horario_id', horarioIds)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle<{ id: string; fecha: string; created_at: string }>()
+
+      if (reservacionConfirmadaError) {
+        return NextResponse.json({ error: 'No se pudo validar la reservación del usuario' }, { status: 500 })
+      }
+
+      if (reservacionConfirmada) {
+        reservacionACompletarId = reservacionConfirmada.id
+      }
     }
+  }
 
-    const horarioIds = Array.isArray(horariosNegocio)
-      ? horariosNegocio.map((item) => item.id).filter((id): id is string => typeof id === 'string' && id.length > 0)
-      : []
-
-    if (horarioIds.length === 0) {
-      return NextResponse.json(
-        { valido: false, error: 'Este negocio wellness no tiene horarios configurados' },
-        { status: 400 }
-      )
-    }
-
-    const { data: reservacionWellness, error: reservacionWellnessError } = await db
-      .from('reservaciones')
-      .select('id, fecha, servicio_id, servicio_nombre, servicio_precio_normal_mxn, created_at')
-      .eq('user_id', usuarioId)
-      .eq('estado', 'confirmada')
-      .eq('fecha', hoy)
-      .in('horario_id', horarioIds)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle<{
-        id: string
-        fecha: string
-        servicio_id: string | null
-        servicio_nombre: string | null
-        servicio_precio_normal_mxn: number | null
-        created_at: string
-      }>()
-
-    if (
-      faltaColumna(reservacionWellnessError, 'servicio_id')
-      || faltaColumna(reservacionWellnessError, 'servicio_nombre')
-      || faltaColumna(reservacionWellnessError, 'servicio_precio_normal_mxn')
-    ) {
-      return NextResponse.json(
-        { error: 'Faltan columnas de servicio en reservaciones. Ejecuta la migración 017 en Supabase.' },
-        { status: 500 }
-      )
-    }
-
-    if (reservacionWellnessError) {
-      return NextResponse.json({ error: 'No se pudo validar la reservación wellness' }, { status: 500 })
-    }
-
-    if (!reservacionWellness || !reservacionWellness.servicio_nombre) {
-      return NextResponse.json(
-        { valido: false, error: 'No hay servicio wellness reservado para hoy en este negocio' },
-        { status: 400 }
-      )
-    }
-
-    servicioReservado = {
-      id: reservacionWellness.servicio_id ?? reservacionWellness.id,
-      nombre: reservacionWellness.servicio_nombre,
-      precio_normal_mxn: reservacionWellness.servicio_precio_normal_mxn,
-      fecha: reservacionWellness.fecha,
-    }
+  if (!reservacionACompletarId && !permiteVisitaDirecta) {
+    return NextResponse.json(
+      {
+        valido: false,
+        error: categoriaNegocio === 'estetica'
+          ? 'No hay servicio wellness reservado para hoy en este negocio'
+          : 'No hay reservación confirmada para hoy en este negocio',
+      },
+      { status: 400 }
+    )
   }
 
   // Registrar visita y actualizar último check-in
   const payloadVisita = {
     user_id: usuarioId,
     negocio_id: negocioIdObjetivo,
+    fecha: new Date().toISOString(),
     validado_por: perfil.nombre,
     plan_usuario: planUsuario,
   }
@@ -329,6 +411,20 @@ export async function POST(request: NextRequest) {
 
   if (visitaError) {
     return NextResponse.json({ error: 'Error al registrar visita' }, { status: 500 })
+  }
+
+  if (reservacionACompletarId) {
+    const { error: completarReservacionError } = await db
+      .from('reservaciones')
+      .update({ estado: 'completada' })
+      .eq('id', reservacionACompletarId)
+      .eq('user_id', usuarioId)
+      .eq('estado', 'confirmada')
+      .in('horario_id', horarioIds)
+
+    if (completarReservacionError) {
+      console.warn('[POST /api/validar] No se pudo completar la reservación', completarReservacionError)
+    }
   }
 
   const { error: ultimoCheckinError } = await db
