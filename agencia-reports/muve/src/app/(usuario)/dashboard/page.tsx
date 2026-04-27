@@ -10,16 +10,13 @@ import RoleRedirectEffect from './RoleRedirectEffect'
 import { CIUDAD_LABELS } from '@/types'
 import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
-import { PLAN_VISITAS_MENSUALES, normalizarPlan, planDesdePriceId } from '@/lib/planes'
-import { resolverVentanaCiclo } from '@/lib/ciclos'
-import { stripe } from '@/lib/stripe'
+import { PLAN_VISITAS_MENSUALES, normalizarPlan } from '@/lib/planes'
 
 type PerfilDashboard = {
   nombre: string
   ciudad: Ciudad
   plan_activo: boolean
   plan: PlanMembresia | null
-  stripe_subscription_id?: string | null
   rol: 'usuario' | 'staff' | 'admin'
   creditos_extra?: number | null
   fecha_inicio_ciclo?: string | null
@@ -40,11 +37,11 @@ function formatearFecha(value: Date) {
     year: 'numeric',
   }).format(value)
 }
-
-function finVisibleCiclo(fechaFin: Date) {
-  const out = new Date(fechaFin)
-  out.setUTCDate(out.getUTCDate() - 1)
-  return out
+function parseFechaSegura(value: string | null | undefined) {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed
 }
 
 export default async function DashboardPage({
@@ -62,7 +59,7 @@ export default async function DashboardPage({
 
   const consultaPerfil = await supabase
     .from('users')
-    .select('nombre, ciudad, plan_activo, plan, stripe_subscription_id, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo')
+    .select('nombre, ciudad, plan_activo, plan, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo')
     .eq('id', user.id)
     .single<PerfilDashboard>()
   let perfil = consultaPerfil.data ?? null
@@ -70,7 +67,7 @@ export default async function DashboardPage({
   if (!perfil) {
     const fallbackConCiclo = await supabase
       .from('users')
-      .select('nombre, ciudad, plan_activo, plan, stripe_subscription_id, rol, fecha_fin_plan, fecha_inicio_ciclo')
+      .select('nombre, ciudad, plan_activo, plan, rol, fecha_fin_plan, fecha_inicio_ciclo')
       .eq('id', user.id)
       .single<Omit<PerfilDashboard, 'creditos_extra'>>()
 
@@ -85,7 +82,7 @@ export default async function DashboardPage({
   if (!perfil) {
     const fallbackMinimo = await supabase
       .from('users')
-      .select('nombre, ciudad, plan_activo, plan, stripe_subscription_id, rol')
+      .select('nombre, ciudad, plan_activo, plan, rol')
       .eq('id', user.id)
       .single<Omit<PerfilDashboard, 'creditos_extra' | 'fecha_inicio_ciclo' | 'fecha_fin_plan'>>()
 
@@ -110,41 +107,13 @@ export default async function DashboardPage({
   const recienActivada = params.membresia === 'activada'
 
   let planUsuario = normalizarPlan(perfil?.plan ?? null)
-  let planActivo = Boolean(perfil?.plan_activo)
-
-  const stripeSubscriptionId = typeof perfil?.stripe_subscription_id === 'string'
-    ? perfil.stripe_subscription_id
-    : null
-
-  if (stripeSubscriptionId && (!planActivo || !planUsuario)) {
-    try {
-      const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
-      const estadoStripeActivo = subscription.status === 'active' || subscription.status === 'trialing'
-      if (estadoStripeActivo) {
-        planActivo = true
-        const planStripe = planDesdePriceId(subscription.items.data[0]?.price?.id)
-        if (planStripe) {
-          planUsuario = planStripe
-          await supabase
-            .from('users')
-            .update({ plan_activo: true, plan: planStripe })
-            .eq('id', user.id)
-        } else {
-          await supabase
-            .from('users')
-            .update({ plan_activo: true })
-            .eq('id', user.id)
-        }
-      }
-    } catch (error) {
-      console.error('[dashboard] No se pudo reconciliar membresía desde Stripe:', error)
-    }
-  }
+  const planActivo = perfil?.plan_activo === true
   if (planActivo && !planUsuario) {
     planUsuario = 'basico'
   }
 
   const hasActiveMembership = planActivo
+  const mostrarBannerActivacion = perfil?.plan_activo === false
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
   const limiteMensual = hasActiveMembership && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
@@ -154,43 +123,25 @@ export default async function DashboardPage({
   let cicloNuevoTexto = '—'
 
   if (hasActiveMembership && planUsuario) {
-    const inicioFallback = new Date()
-    inicioFallback.setUTCDate(inicioFallback.getUTCDate() - 30)
-    const inicioCicloBase = perfil?.fecha_inicio_ciclo ?? inicioFallback.toISOString()
-    const ciclo = resolverVentanaCiclo({
-      fechaInicioCiclo: inicioCicloBase,
-      fechaFinPlan: perfil?.fecha_fin_plan ?? null,
-    })
+    const ahora = new Date()
+    const inicioCiclo = parseFechaSegura(perfil?.fecha_inicio_ciclo)
+      ?? new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const finPlan = parseFechaSegura(perfil?.fecha_fin_plan) ?? ahora
+    const finCiclo = finPlan.getTime() > inicioCiclo.getTime() ? finPlan : ahora
 
-    const cicloInicioIso = ciclo.inicio.toISOString()
-    const cicloFinIso = ciclo.fin.toISOString()
-
-    if (!perfil?.fecha_inicio_ciclo || !perfil?.fecha_fin_plan) {
-      const actualizacionCiclo: Record<string, string> = {}
-      if (!perfil?.fecha_inicio_ciclo) {
-        actualizacionCiclo.fecha_inicio_ciclo = cicloInicioIso
-      }
-      if (!perfil?.fecha_fin_plan) {
-        actualizacionCiclo.fecha_fin_plan = cicloFinIso
-      }
-      if (Object.keys(actualizacionCiclo).length > 0) {
-        await supabase
-          .from('users')
-          .update(actualizacionCiclo)
-          .eq('id', user.id)
-      }
-    }
+    const cicloInicioIso = inicioCiclo.toISOString()
+    const cicloFinIso = finCiclo.toISOString()
 
     const { count: visitasCiclo } = await supabase
       .from('visitas')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .gte('fecha', cicloInicioIso)
-      .lt('fecha', cicloFinIso)
+      .lte('fecha', cicloFinIso)
 
     usadasCiclo = visitasCiclo ?? 0
-    cicloActualTexto = `${formatearFecha(ciclo.inicio)} — ${formatearFecha(finVisibleCiclo(ciclo.fin))}`
-    cicloNuevoTexto = formatearFecha(ciclo.fin)
+    cicloActualTexto = `${formatearFecha(inicioCiclo)} — ${formatearFecha(finCiclo)}`
+    cicloNuevoTexto = formatearFecha(finCiclo)
   }
 
   const restantesCiclo = Math.max(limiteMensual - usadasCiclo, 0)
@@ -199,12 +150,12 @@ export default async function DashboardPage({
     : 0
   const barraProgresoColor = restantesCiclo <= 1
     ? 'bg-[#EF4444]'
-    : restantesCiclo <= 3
+    : restantesCiclo === 2
       ? 'bg-[#FACC15]'
       : 'bg-[#22C55E]'
   const textoRestantesColor = restantesCiclo <= 1
     ? 'text-[#FCA5A5]'
-    : restantesCiclo <= 3
+    : restantesCiclo === 2
       ? 'text-[#FDE68A]'
       : 'text-[#86EFAC]'
 
@@ -220,7 +171,7 @@ export default async function DashboardPage({
       )}
 
       {/* Sin membresía activa */}
-      {!hasActiveMembership && (
+      {mostrarBannerActivacion && (
         <div className="bg-[#E8FF47] px-4 py-3">
           <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-4">
             <p className="text-sm font-bold text-[#0A0A0A]">
@@ -264,7 +215,7 @@ export default async function DashboardPage({
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 sm:col-span-2">
             <p className="text-xs text-white/40">
-              {usadasCiclo} de {limiteMensual} visitas usadas este ciclo
+              {usadasCiclo} de {limiteMensual} visitas usadas
             </p>
             <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
               <div

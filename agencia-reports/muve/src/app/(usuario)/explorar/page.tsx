@@ -15,7 +15,6 @@ import {
   type ServicioNegocio,
 } from '@/types'
 import {
-  CATEGORIAS_VISIBLES_POR_PLAN,
   PLAN_LABELS,
   normalizarPlan,
   puedeReservarConPlan,
@@ -97,6 +96,8 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
 }
 
 function planRequeridoNegocio(negocio: Negocio): PlanMembresia {
+  if (negocio.categoria === 'estetica') return 'plus'
+  if (negocio.categoria === 'restaurante') return 'total'
   return normalizarPlan(negocio.plan_requerido ?? null) ?? 'basico'
 }
 
@@ -358,11 +359,7 @@ export default function ExplorarPage() {
   }, [negocios])
 
   const negociosFiltrados = useMemo(() => {
-    let resultado = planEfectivo
-      ? negocios.filter((negocio) =>
-          new Set(CATEGORIAS_VISIBLES_POR_PLAN[planEfectivo]).has(negocio.categoria)
-        )
-      : negocios
+    let resultado = negocios
 
     if (filtroCiudad !== 'todas') {
       resultado = resultado.filter((negocio) => negocio.ciudad === filtroCiudad)
@@ -377,7 +374,7 @@ export default function ExplorarPage() {
     }
 
     return resultado
-  }, [negocios, planEfectivo, filtroCiudad, filtroCategoria])
+  }, [negocios, filtroCiudad, filtroCategoria])
   const regresarOInicio = useCallback(() => {
     if (window.history.length > 1) {
       router.back()
@@ -519,6 +516,20 @@ export default function ExplorarPage() {
               const montoMaximoRestaurante = typeof negocio.monto_maximo_visita === 'number'
                 ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
                 : 0
+              const planBeneficioCategoria: PlanMembresia | null = negocio.categoria === 'estetica'
+                ? 'plus'
+                : negocio.categoria === 'restaurante'
+                  ? 'total'
+                  : null
+              const tieneBeneficioCategoria = planBeneficioCategoria
+                ? Boolean(planEfectivo && puedeReservarConPlan(planEfectivo, planBeneficioCategoria))
+                : false
+              const textoBadgeBeneficioCategoria = planBeneficioCategoria
+                ? `${tieneBeneficioCategoria ? 'Beneficio' : 'Requiere'} ${planBeneficioCategoria === 'plus' ? 'Plus' : 'Total'}`
+                : null
+              const claseBadgeBeneficioCategoria = tieneBeneficioCategoria
+                ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]'
+                : 'bg-[#E5E7EB] text-[#6B7280]'
 
               return (
                 <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
@@ -587,9 +598,16 @@ export default function ExplorarPage() {
 
                   {negocio.categoria === 'estetica' && (
                     <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
-                      <p className="text-[11px] font-black uppercase tracking-widest text-[#555]">
-                        Servicios incluidos
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-black uppercase tracking-widest text-[#555]">
+                          Servicios incluidos
+                        </p>
+                        {textoBadgeBeneficioCategoria && (
+                          <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${claseBadgeBeneficioCategoria}`}>
+                            {textoBadgeBeneficioCategoria}
+                          </span>
+                        )}
+                      </div>
                       {serviciosWellness.length === 0 ? (
                         <p className="mt-1 text-xs text-[#777]">Este negocio aún no publica servicios disponibles.</p>
                       ) : (
@@ -610,11 +628,13 @@ export default function ExplorarPage() {
                   )}
 
                   {negocio.categoria === 'restaurante' && (
-                    <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-green-700">
-                        Beneficio MUVET
-                      </p>
-                      <p className="mt-1 text-xs font-bold text-green-800">
+                    <div className={`mt-3 rounded-lg border px-3 py-2 ${tieneBeneficioCategoria ? 'border-[#D9CEF8] bg-[#F6F1FF]' : 'border-[#E5E7EB] bg-[#F3F4F6]'}`}>
+                      {textoBadgeBeneficioCategoria && (
+                        <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${claseBadgeBeneficioCategoria}`}>
+                          {textoBadgeBeneficioCategoria}
+                        </span>
+                      )}
+                      <p className={`mt-1 text-xs font-bold ${tieneBeneficioCategoria ? 'text-[#4A2CA3]' : 'text-[#6B7280]'}`}>
                         Hasta {formatMoneyMxn(montoMaximoRestaurante)} en consumo por visita
                       </p>
                     </div>
