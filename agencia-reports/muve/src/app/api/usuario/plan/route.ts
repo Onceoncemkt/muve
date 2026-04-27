@@ -16,6 +16,7 @@ type PerfilPlan = {
   plan?: PlanMembresia | null
   fecha_inicio_ciclo?: string | null
   fecha_fin_plan?: string | null
+  creditos_extra?: number | null
 }
 type PerfilSubscription = {
   stripe_subscription_id: string | null
@@ -31,7 +32,7 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
 
   const consultaPrincipal = await supabase
     .from('users')
-    .select('plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan')
+    .select('plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
     .eq('id', userId)
     .maybeSingle<PerfilPlan>()
 
@@ -41,6 +42,7 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
       plan: null,
       fecha_inicio_ciclo: null,
       fecha_fin_plan: null,
+      creditos_extra: 0,
     }
   }
 
@@ -55,12 +57,13 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
 
   const fallback = await supabase
     .from('users')
-    .select('plan_activo, fecha_inicio_ciclo, fecha_fin_plan')
+    .select('plan_activo, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
     .eq('id', userId)
     .maybeSingle<{
       plan_activo: boolean | null
       fecha_inicio_ciclo: string | null
       fecha_fin_plan: string | null
+      creditos_extra: number | null
     }>()
 
   if (mensajeColumnaNoExiste(fallback.error, 'fecha_inicio_ciclo')) {
@@ -76,6 +79,7 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
     plan: null,
     fecha_inicio_ciclo: fallback.data?.fecha_inicio_ciclo ?? null,
     fecha_fin_plan: fallback.data?.fecha_fin_plan ?? null,
+    creditos_extra: Math.max(Math.trunc(fallback.data?.creditos_extra ?? 0), 0),
   }
 }
 
@@ -191,6 +195,7 @@ export async function GET() {
       : 0
 
     let visitasUsadasCiclo = 0
+    const creditosExtra = Math.max(Math.trunc(perfil.creditos_extra ?? 0), 0)
     let fechaInicioCiclo: string | null = null
     let fechaFinCiclo: string | null = null
 
@@ -226,14 +231,17 @@ export async function GET() {
       }
     }
 
-    const visitasRestantesCiclo = Math.max(limiteVisitasMensuales - visitasUsadasCiclo, 0)
+    const visitasDisponibles = limiteVisitasMensuales + creditosExtra
+    const visitasRestantesCiclo = Math.max(visitasDisponibles - visitasUsadasCiclo, 0)
 
     return NextResponse.json({
       plan_activo: planActivo,
       plan,
+      creditos_extra: creditosExtra,
       fecha_inicio_ciclo: fechaInicioCiclo,
       fecha_fin_ciclo: fechaFinCiclo,
       limite_visitas_mensuales: limiteVisitasMensuales,
+      visitas_disponibles: visitasDisponibles,
       max_visitas_por_lugar: maxVisitasPorLugar,
       visitas_usadas_mes: visitasUsadasCiclo,
       visitas_restantes_mes: visitasRestantesCiclo,

@@ -2,6 +2,8 @@ export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana'
 export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante'
 export type Rol = 'usuario' | 'staff' | 'admin'
 export type PlanMembresia = 'basico' | 'plus' | 'total'
+export type GeneroPerfil = 'masculino' | 'femenino' | 'prefiero_no_decir'
+export type ObjetivoFitness = 'perder_peso' | 'ganar_musculo' | 'bienestar' | 'flexibilidad' | 'energia' | 'social'
 export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
 export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada'
 export interface ServicioNegocio {
@@ -18,10 +20,16 @@ export interface User {
   nombre: string
   email: string
   ciudad: Ciudad
+  foto_url?: string | null
+  telefono?: string | null
+  fecha_nacimiento?: string | null
+  genero?: GeneroPerfil | null
+  objetivo?: ObjetivoFitness | null
   plan_activo: boolean
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   plan?: PlanMembresia | null
+  creditos_extra?: number | null
   fecha_inicio_ciclo?: string | null
   fecha_fin_plan?: string | null
   rol: Rol

@@ -280,13 +280,14 @@ export async function POST(request: NextRequest) {
 
   const { data: perfilUsuario, error: perfilUsuarioError } = await db
     .from('users')
-    .select('plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan')
+    .select('plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
     .eq('id', user.id)
     .maybeSingle<{
       plan_activo: boolean
       plan: string | null
       fecha_inicio_ciclo: string | null
       fecha_fin_plan: string | null
+      creditos_extra: number | null
     }>()
 
   if (faltaColumna(perfilUsuarioError, 'fecha_inicio_ciclo')) {
@@ -297,6 +298,12 @@ export async function POST(request: NextRequest) {
   }
 
   if (perfilUsuarioError) {
+    if (faltaColumna(perfilUsuarioError, 'creditos_extra')) {
+      return NextResponse.json(
+        { error: 'Falta la columna users.creditos_extra. Ejecuta la migración 020 en Supabase.' },
+        { status: 500 }
+      )
+    }
     return NextResponse.json({ error: 'No se pudo validar tu membresía' }, { status: 500 })
   }
 
@@ -355,9 +362,11 @@ export async function POST(request: NextRequest) {
   }
 
   const limiteMensual = PLAN_VISITAS_MENSUALES[planUsuario]
-  if ((visitasCiclo ?? 0) >= limiteMensual) {
+  const creditosExtra = Math.max(Math.trunc(perfilUsuario.creditos_extra ?? 0), 0)
+  const visitasDisponibles = limiteMensual + creditosExtra
+  if ((visitasCiclo ?? 0) >= visitasDisponibles) {
     return NextResponse.json(
-      { error: `Ya alcanzaste tu límite del ciclo actual de ${limiteMensual} visitas` },
+      { error: `Ya alcanzaste tu límite del ciclo actual de ${visitasDisponibles} visitas` },
       { status: 400 }
     )
   }

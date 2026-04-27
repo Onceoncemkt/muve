@@ -74,13 +74,19 @@ export async function POST(request: NextRequest) {
   // Buscar el token
   const { data: qrToken, error: qrTokenError } = await db
     .from('qr_tokens')
-    .select('*, users(nombre, ciudad, plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan)')
+    .select('*, users(nombre, ciudad, plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra)')
     .eq('token', token)
     .single()
 
   if (faltaColumna(qrTokenError, 'fecha_inicio_ciclo')) {
     return NextResponse.json(
       { error: 'Falta la columna users.fecha_inicio_ciclo. Ejecuta la migración 019 en Supabase.' },
+      { status: 500 }
+    )
+  }
+  if (faltaColumna(qrTokenError, 'creditos_extra')) {
+    return NextResponse.json(
+      { error: 'Falta la columna users.creditos_extra. Ejecuta la migración 020 en Supabase.' },
       { status: 500 }
     )
   }
@@ -104,6 +110,7 @@ export async function POST(request: NextRequest) {
     plan?: unknown
     fecha_inicio_ciclo?: string | null
     fecha_fin_plan?: string | null
+    creditos_extra?: number | null
   }
   const planUsuario = normalizarPlan(usuario?.plan ?? null) ?? 'basico'
 
@@ -162,7 +169,9 @@ export async function POST(request: NextRequest) {
   }
 
   const limiteMensual = PLAN_VISITAS_MENSUALES[planUsuario]
-  if ((visitasCiclo ?? 0) >= limiteMensual) {
+  const creditosExtra = Math.max(Math.trunc(usuario.creditos_extra ?? 0), 0)
+  const visitasDisponibles = limiteMensual + creditosExtra
+  if ((visitasCiclo ?? 0) >= visitasDisponibles) {
     return NextResponse.json({ valido: false, error: 'Usuario agotó sus visitas del ciclo actual' })
   }
 
@@ -301,7 +310,7 @@ export async function POST(request: NextRequest) {
   }
 
   const visitasUsadasCiclo = (visitasCiclo ?? 0) + 1
-  const visitasRestantesCiclo = Math.max(limiteMensual - visitasUsadasCiclo, 0)
+  const visitasRestantesCiclo = Math.max(visitasDisponibles - visitasUsadasCiclo, 0)
 
   return NextResponse.json({
     valido: true,
@@ -313,6 +322,7 @@ export async function POST(request: NextRequest) {
     visitas_restantes_mes: visitasRestantesCiclo,
     visitas_usadas_mes: visitasUsadasCiclo,
     limite_visitas_mensuales: limiteMensual,
+    visitas_disponibles: visitasDisponibles,
     visitas_restantes_ciclo: visitasRestantesCiclo,
     visitas_usadas_ciclo: visitasUsadasCiclo,
     ciclo_inicio: ciclo.inicio.toISOString(),

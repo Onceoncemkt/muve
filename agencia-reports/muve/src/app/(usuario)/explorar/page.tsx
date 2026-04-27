@@ -23,6 +23,8 @@ import {
 type EstadoPlanUsuario = {
   plan_activo: boolean
   plan: PlanMembresia | null
+  creditos_extra: number
+  visitas_disponibles: number
   limite_visitas_mensuales: number
   max_visitas_por_lugar: number
   visitas_usadas_mes: number
@@ -67,6 +69,8 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
       return {
         plan_activo: false,
         plan: null,
+        creditos_extra: 0,
+        visitas_disponibles: 0,
         limite_visitas_mensuales: 0,
         max_visitas_por_lugar: 0,
         visitas_usadas_mes: 0,
@@ -78,6 +82,10 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
     return {
       plan_activo: Boolean(data.plan_activo),
       plan: normalizarPlan(data.plan),
+      creditos_extra: Number.isFinite(data.creditos_extra) ? Number(data.creditos_extra) : 0,
+      visitas_disponibles: Number.isFinite(data.visitas_disponibles)
+        ? Number(data.visitas_disponibles)
+        : 0,
       limite_visitas_mensuales: Number.isFinite(data.limite_visitas_mensuales) ? Number(data.limite_visitas_mensuales) : 0,
       max_visitas_por_lugar: Number.isFinite(data.max_visitas_por_lugar) ? Number(data.max_visitas_por_lugar) : 0,
       visitas_usadas_mes: Number.isFinite(data.visitas_usadas_mes) ? Number(data.visitas_usadas_mes) : 0,
@@ -87,6 +95,8 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
     return {
       plan_activo: false,
       plan: null,
+      creditos_extra: 0,
+      visitas_disponibles: 0,
       limite_visitas_mensuales: 0,
       max_visitas_por_lugar: 0,
       visitas_usadas_mes: 0,
@@ -147,7 +157,7 @@ export default function ExplorarPage() {
   const [cargando, setCargando] = useState(true)
   const [planActivo, setPlanActivo] = useState(false)
   const [planUsuario, setPlanUsuario] = useState<PlanMembresia | null>(null)
-  const [limiteVisitasMensuales, setLimiteVisitasMensuales] = useState(0)
+  const [visitasDisponiblesMes, setVisitasDisponiblesMes] = useState(0)
   const [maxVisitasPorLugar, setMaxVisitasPorLugar] = useState(0)
   const [visitasRestantesMes, setVisitasRestantesMes] = useState(0)
   const [filtroCiudad, setFiltroCiudad] = useState<Ciudad | 'todas'>('todas')
@@ -219,7 +229,7 @@ export default function ExplorarPage() {
 
       setPlanActivo(estadoPlan.plan_activo)
       setPlanUsuario(estadoPlan.plan)
-      setLimiteVisitasMensuales(estadoPlan.limite_visitas_mensuales)
+      setVisitasDisponiblesMes(estadoPlan.visitas_disponibles || estadoPlan.limite_visitas_mensuales)
       setMaxVisitasPorLugar(estadoPlan.max_visitas_por_lugar)
       setVisitasRestantesMes(estadoPlan.visitas_restantes_mes)
       setNegocios(negociosCargados)
@@ -403,7 +413,7 @@ export default function ExplorarPage() {
         {planEfectivo && (
           <div className="mt-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
             <p className="text-sm font-bold text-[#0A0A0A]">
-              Visitas disponibles este mes: {visitasRestantesMes} de {limiteVisitasMensuales}
+              Visitas disponibles este mes: {visitasRestantesMes} de {visitasDisponiblesMes}
             </p>
             <p className="mt-1 text-xs text-[#666]">
               Máximo {maxVisitasPorLugar} visitas por lugar con tu plan.

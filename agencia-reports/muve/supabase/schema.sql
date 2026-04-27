@@ -20,6 +20,7 @@ create table public.users (
   plan_activo         boolean not null default false,
   stripe_customer_id  text,
   plan                text check (plan in ('basico', 'plus', 'total')),
+  creditos_extra      int not null default 0,
   rol                 rol_enum not null default 'usuario',
   fecha_inicio_ciclo  timestamp with time zone,
   fecha_fin_plan      timestamp with time zone,
@@ -57,6 +58,17 @@ create table public.negocio_servicios (
   descripcion       text,
   activo            boolean not null default true,
   created_at        timestamp with time zone default now()
+);
+
+-- ============================================================
+-- TABLA: creditos_historial
+-- ============================================================
+create table public.creditos_historial (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.users(id) on delete cascade,
+  cantidad int not null,
+  motivo text not null,
+  created_at timestamp with time zone default now()
 );
 
 alter table public.users
@@ -134,6 +146,8 @@ create index visitas_negocio_id_idx on public.visitas (negocio_id);
 create index users_negocio_id_idx on public.users (negocio_id);
 create index descuentos_user_id_idx on public.descuentos (user_id);
 create index descuentos_expiracion_idx on public.descuentos (fecha_expiracion);
+create index creditos_historial_user_id_idx on public.creditos_historial (user_id);
+create index creditos_historial_created_at_idx on public.creditos_historial (created_at desc);
 create index push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
 create index negocio_servicios_negocio_id_idx on public.negocio_servicios (negocio_id);
 create index negocio_servicios_activo_idx on public.negocio_servicios (negocio_id, activo);
@@ -149,6 +163,7 @@ alter table public.negocio_servicios enable row level security;
 alter table public.visitas enable row level security;
 alter table public.pagos_negocios enable row level security;
 alter table public.descuentos enable row level security;
+alter table public.creditos_historial enable row level security;
 alter table public.qr_tokens enable row level security;
 alter table public.push_subscriptions enable row level security;
 
@@ -217,6 +232,9 @@ create policy "staff y admin ven pagos de su negocio" on public.pagos_negocios
 
 -- descuentos
 create policy "usuarios ven sus descuentos" on public.descuentos
+  for select using (auth.uid() = user_id);
+
+create policy "usuarios ven su historial de creditos" on public.creditos_historial
   for select using (auth.uid() = user_id);
 
 -- qr_tokens
@@ -409,6 +427,46 @@ begin
     alter table public.negocios
       add constraint negocios_monto_maximo_visita_check
       check (monto_maximo_visita >= 0);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if to_regclass('public.users') is not null then
+    alter table public.users
+      add column if not exists creditos_extra int not null default 0;
+  end if;
+
+  create table if not exists public.creditos_historial (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid references public.users(id) on delete cascade,
+    cantidad int not null,
+    motivo text not null,
+    created_at timestamp with time zone default now()
+  );
+
+  create index if not exists creditos_historial_user_id_idx
+    on public.creditos_historial (user_id);
+
+  create index if not exists creditos_historial_created_at_idx
+    on public.creditos_historial (created_at desc);
+end
+$$;
+
+do $$
+begin
+  alter table public.creditos_historial enable row level security;
+
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'creditos_historial'
+      and policyname = 'usuarios ven su historial de creditos'
+  ) then
+    create policy "usuarios ven su historial de creditos" on public.creditos_historial
+      for select using (auth.uid() = user_id);
   end if;
 end
 $$;
