@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   CATEGORIA_LABELS,
   CIUDAD_LABELS,
@@ -57,6 +58,8 @@ const FILTROS_CATEGORIA: Array<{ value: FiltroCategoria; label: string }> = [
   { value: 'wellness', label: 'Wellness' },
   { value: 'restaurantes', label: 'Restaurantes' },
 ]
+const MAX_INTENTOS_CARGA_NEGOCIOS = 3
+const RETRASO_BASE_REINTENTO_MS = 700
 
 async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
   try {
@@ -138,6 +141,7 @@ function serviciosWellnessReservables(negocio: Negocio): ServicioNegocio[] {
 }
 
 export default function ExplorarPage() {
+  const router = useRouter()
   const [negocios, setNegocios] = useState<Negocio[]>([])
   const [cargando, setCargando] = useState(true)
   const [planActivo, setPlanActivo] = useState(false)
@@ -160,24 +164,55 @@ export default function ExplorarPage() {
   const [servicioSeleccionadoPorNegocioId, setServicioSeleccionadoPorNegocioId] =
     useState<Record<string, string>>({})
   const [reservandoHorarioId, setReservandoHorarioId] = useState<string | null>(null)
+  const [errorCargaNegocios, setErrorCargaNegocios] = useState<string | null>(null)
+  const [reintentandoNegocios, setReintentandoNegocios] = useState(false)
+  const [intentoActualCargaNegocios, setIntentoActualCargaNegocios] = useState(1)
+  const [tokenRecargaNegocios, setTokenRecargaNegocios] = useState(0)
 
   useEffect(() => {
     let activo = true
 
     async function cargarNegociosYPlan() {
       setCargando(true)
+      setErrorCargaNegocios(null)
+      setReintentandoNegocios(false)
+      setIntentoActualCargaNegocios(1)
 
-      const [respuestaNegocios, estadoPlan] = await Promise.all([
-        fetch('/api/explorar/negocios', { cache: 'no-store' }),
-        obtenerEstadoPlanUsuario(),
-      ])
+      const estadoPlan = await obtenerEstadoPlanUsuario()
+      let negociosCargados: Negocio[] = []
+      let ultimoErrorNegocios: string | null = null
 
-      const payloadNegocios = await respuestaNegocios.json().catch(() => ({ negocios: [], error: 'Respuesta inválida' }))
+      for (let intento = 1; intento <= MAX_INTENTOS_CARGA_NEGOCIOS; intento += 1) {
+        setIntentoActualCargaNegocios(intento)
+        setReintentandoNegocios(intento > 1)
 
-      console.log('[explorar] resultado query negocios activos', {
-        data: payloadNegocios.negocios ?? [],
-        error: payloadNegocios.error ?? null,
-      })
+        const respuestaNegocios = await fetch('/api/explorar/negocios', { cache: 'no-store' })
+        const payloadNegocios = await respuestaNegocios
+          .json()
+          .catch(() => ({ negocios: [], error: 'Respuesta inválida' }))
+
+        console.log('[explorar] resultado query negocios activos', {
+          intento,
+          data: payloadNegocios.negocios ?? [],
+          error: payloadNegocios.error ?? null,
+          ok: respuestaNegocios.ok,
+          status: respuestaNegocios.status,
+        })
+
+        if (respuestaNegocios.ok) {
+          negociosCargados = (payloadNegocios.negocios ?? []) as Negocio[]
+          ultimoErrorNegocios = null
+          break
+        }
+
+        ultimoErrorNegocios = payloadNegocios.error
+          ?? `Error ${respuestaNegocios.status} al cargar negocios`
+
+        if (intento < MAX_INTENTOS_CARGA_NEGOCIOS) {
+          const retraso = RETRASO_BASE_REINTENTO_MS * intento
+          await new Promise((resolve) => setTimeout(resolve, retraso))
+        }
+      }
 
       if (!activo) return
 
@@ -186,12 +221,9 @@ export default function ExplorarPage() {
       setLimiteVisitasMensuales(estadoPlan.limite_visitas_mensuales)
       setMaxVisitasPorLugar(estadoPlan.max_visitas_por_lugar)
       setVisitasRestantesMes(estadoPlan.visitas_restantes_mes)
-
-      if (!respuestaNegocios.ok) {
-        setNegocios([])
-      } else {
-        setNegocios((payloadNegocios.negocios ?? []) as Negocio[])
-      }
+      setNegocios(negociosCargados)
+      setErrorCargaNegocios(ultimoErrorNegocios)
+      setReintentandoNegocios(false)
 
       setCargando(false)
     }
@@ -201,7 +233,7 @@ export default function ExplorarPage() {
     return () => {
       activo = false
     }
-  }, [])
+  }, [tokenRecargaNegocios])
 
   const cargarHorarios = useCallback(async (negocioId: string) => {
     setCargandoHorariosPorNegocioId((prev) => ({ ...prev, [negocioId]: true }))
@@ -346,10 +378,24 @@ export default function ExplorarPage() {
 
     return resultado
   }, [negocios, planEfectivo, filtroCiudad, filtroCategoria])
+  const regresarOInicio = useCallback(() => {
+    if (window.history.length > 1) {
+      router.back()
+      return
+    }
+    router.push('/dashboard')
+  }, [router])
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
       <div className="bg-white px-4 py-6 shadow-sm">
+        <button
+          type="button"
+          onClick={regresarOInicio}
+          className="mb-3 inline-flex items-center rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold uppercase tracking-wider text-[#555] hover:border-[#0A0A0A] hover:text-[#0A0A0A]"
+        >
+          ← Regresar / Inicio
+        </button>
         <h1 className="text-2xl font-black tracking-tight text-[#0A0A0A]">Explorar</h1>
         <p className="mt-1 text-sm text-[#888]">
           {negociosFiltrados.length} {negociosFiltrados.length === 1 ? 'lugar' : 'lugares'} disponibles
@@ -421,10 +467,32 @@ export default function ExplorarPage() {
 
       <div className="p-4">
         {cargando ? (
-          <p className="mt-8 text-center text-sm text-[#888]">Cargando negocios...</p>
+          <p className="mt-8 text-center text-sm text-[#888]">
+            {reintentandoNegocios
+              ? `Reintentando conexión... intento ${intentoActualCargaNegocios} de ${MAX_INTENTOS_CARGA_NEGOCIOS}`
+              : 'Cargando negocios...'}
+          </p>
         ) : negociosFiltrados.length === 0 ? (
           <div className="mt-16 text-center">
-            <p className="font-bold text-[#0A0A0A]">No hay negocios disponibles aún</p>
+            {errorCargaNegocios ? (
+              <div className="mx-auto max-w-xl rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-left">
+                <p className="text-sm font-black text-red-800">
+                  Error al cargar negocios
+                </p>
+                <p className="mt-1 text-xs text-red-700">
+                  {errorCargaNegocios}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setTokenRecargaNegocios((prev) => prev + 1)}
+                  className="mt-3 rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-800"
+                >
+                  Reintentar ahora
+                </button>
+              </div>
+            ) : (
+              <p className="font-bold text-[#0A0A0A]">No hay negocios disponibles aún</p>
+            )}
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

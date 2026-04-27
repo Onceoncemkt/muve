@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import type { Negocio, ServicioNegocio } from '@/types'
 
 type ServicioFila = {
@@ -10,10 +11,21 @@ type ServicioFila = {
   descripcion: string | null
   activo: boolean | null
 }
+async function consultarNegocios(cliente: ReturnType<typeof createServiceClient>) {
+  let consulta = await cliente.from('negocios').select('*').eq('activo', true)
+  if (faltaColumna(consulta.error, 'activo')) {
+    consulta = await cliente.from('negocios').select('*')
+  }
+  return consulta
+}
 
 function faltaRelacion(error: { message?: string } | null | undefined, relation: string) {
   const message = error?.message?.toLowerCase() ?? ''
   return message.includes(relation.toLowerCase()) && message.includes('does not exist')
+}
+function faltaColumna(error: { message?: string } | null | undefined, column: string) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes(column.toLowerCase()) && message.includes('does not exist')
 }
 
 function parseServiciosTexto(negocioId: string, serviciosIncluidos: string | null | undefined): ServicioNegocio[] {
@@ -34,8 +46,29 @@ function parseServiciosTexto(negocioId: string, serviciosIncluidos: string | nul
 
 export async function GET() {
   const supabase = await createClient()
-  const consulta = await supabase.from('negocios').select('*').eq('activo', true)
+  let clienteLectura = supabase
 
+  let consulta = await consultarNegocios(supabase as unknown as ReturnType<typeof createServiceClient>)
+  const negociosPrimeraConsulta = (consulta.data ?? []) as Negocio[]
+
+  if (consulta.error || negociosPrimeraConsulta.length === 0) {
+    const serviceClient = createServiceClient()
+    const consultaService = await consultarNegocios(serviceClient)
+    const negociosService = (consultaService.data ?? []) as Negocio[]
+
+    if (!consultaService.error && (consulta.error || negociosService.length > 0)) {
+      consulta = consultaService
+      clienteLectura = serviceClient
+      if (negociosService.length > 0 && negociosPrimeraConsulta.length === 0) {
+        console.warn('[GET /api/explorar/negocios] fallback service role por resultado vacío de cliente normal')
+      }
+    } else if (consulta.error && consultaService.error) {
+      return NextResponse.json(
+        { error: consultaService.error.message || consulta.error.message, negocios: [] },
+        { status: 500 }
+      )
+    }
+  }
   if (consulta.error) {
     return NextResponse.json(
       { error: consulta.error.message, negocios: [] },
@@ -47,7 +80,7 @@ export async function GET() {
   const serviciosPorNegocio = new Map<string, ServicioNegocio[]>()
 
   if (negocioIds.length > 0) {
-    const consultaServicios = await supabase
+    const consultaServicios = await clienteLectura
       .from('negocio_servicios')
       .select('id, negocio_id, nombre, precio_normal_mxn, descripcion, activo')
       .in('negocio_id', negocioIds)
