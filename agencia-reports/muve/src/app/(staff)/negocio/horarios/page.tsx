@@ -6,7 +6,6 @@ import { useCallback, useEffect, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { Categoria, DiaSemana, Rol, ServicioNegocio } from '@/types'
 import { CATEGORIA_LABELS, DIA_LABELS, formatHora, proximaFecha } from '@/types'
-import { normalizarCategoriaNegocio } from '@/lib/planes'
 
 const DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
 const TIPOS_CLASE_OPCIONES = [
@@ -25,6 +24,7 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('es-MX', {
   month: 'short',
   year: 'numeric',
 })
+
 function formatFechaCorta(fecha: Date): string {
   const partes = DATE_FORMATTER.formatToParts(fecha)
   const dia = partes.find((parte) => parte.type === 'day')?.value ?? ''
