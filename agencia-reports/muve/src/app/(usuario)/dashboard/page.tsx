@@ -10,7 +10,8 @@ import RoleRedirectEffect from './RoleRedirectEffect'
 import { CIUDAD_LABELS } from '@/types'
 import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
-import { PLAN_VISITAS_MENSUALES, normalizarPlan } from '@/lib/planes'
+import { PLAN_VISITAS_MENSUALES, normalizarPlan, planDesdePriceId } from '@/lib/planes'
+import { stripe } from '@/lib/stripe'
 
 type PerfilDashboard = {
   nombre: string
@@ -21,6 +22,9 @@ type PerfilDashboard = {
   creditos_extra?: number | null
   fecha_inicio_ciclo?: string | null
   fecha_fin_plan?: string | null
+}
+type PerfilStripeSuscripcion = {
+  stripe_subscription_id: string | null
 }
 
 const PLAN_BADGE_LABEL: Record<PlanMembresia, string> = {
@@ -127,12 +131,36 @@ export default async function DashboardPage({
   if (!planActivo && planActivoFlag !== false && Boolean(planUsuario)) {
     planActivo = true
   }
+  if (!planActivo || !planUsuario) {
+    try {
+      const { data: perfilStripe } = await supabase
+        .from('users')
+        .select('stripe_subscription_id')
+        .eq('id', user.id)
+        .maybeSingle<PerfilStripeSuscripcion>()
+
+      const stripeSubscriptionId = perfilStripe?.stripe_subscription_id
+      if (stripeSubscriptionId) {
+        const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
+        const stripeActivo = subscription.status === 'active' || subscription.status === 'trialing'
+        if (stripeActivo) {
+          planActivo = true
+          const planStripe = planDesdePriceId(subscription.items.data[0]?.price?.id)
+          if (planStripe) {
+            planUsuario = planStripe
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[dashboard] No se pudo resolver membresía por Stripe fallback:', error)
+    }
+  }
   if (planActivo && !planUsuario) {
     planUsuario = 'basico'
   }
 
   const hasActiveMembership = planActivo
-  const mostrarBannerActivacion = planActivoFlag === false
+  const mostrarBannerActivacion = planActivoFlag === false && !hasActiveMembership
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
   const visitasIncluidasPlan = planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
