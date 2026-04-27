@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { stripe } from '@/lib/stripe'
-import { normalizarPlan } from '@/lib/planes'
+import { normalizarPlan, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
 
 export const runtime = 'nodejs'
@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
 type NegocioConStripe = {
   id: string
   nombre: string
+  categoria: string | null
   stripe_account_id: string | null
 }
 
@@ -34,11 +35,6 @@ type RegistroPago = {
   estado: 'completado' | 'pendiente'
 }
 
-const TARIFA_POR_PLAN: Record<PlanMembresia, number> = {
-  basico: 60,
-  plus: 65,
-  total: 70,
-}
 
 function admin() {
   return createAdminClient(
@@ -95,11 +91,14 @@ function obtenerPeriodoSemanal() {
   }
 }
 
-function calcularTotalMXN(resumen: Record<PlanMembresia, number>) {
+function calcularTotalMXN(
+  resumen: Record<PlanMembresia, number>,
+  tarifasPorPlan: Record<PlanMembresia, number>
+) {
   return (
-    (resumen.basico * TARIFA_POR_PLAN.basico)
-    + (resumen.plus * TARIFA_POR_PLAN.plus)
-    + (resumen.total * TARIFA_POR_PLAN.total)
+    (resumen.basico * tarifasPorPlan.basico)
+    + (resumen.plus * tarifasPorPlan.plus)
+    + (resumen.total * tarifasPorPlan.total)
   )
 }
 
@@ -130,7 +129,7 @@ export async function GET(request: NextRequest) {
 
   const { data: negocios, error: negociosError } = await db
     .from('negocios')
-    .select('id, nombre, stripe_account_id')
+    .select('id, nombre, categoria, stripe_account_id')
     .not('stripe_account_id', 'is', null)
     .returns<NegocioConStripe[]>()
 
@@ -247,7 +246,8 @@ export async function GET(request: NextRequest) {
 
   for (const negocio of negociosPendientes) {
     const resumen = resumenPorNegocio.get(negocio.id) ?? crearResumenVacio()
-    const totalMXN = calcularTotalMXN(resumen)
+    const tarifasPorPlan = obtenerTarifasNegocioPorPlan(negocio.categoria)
+    const totalMXN = calcularTotalMXN(resumen, tarifasPorPlan)
 
     if (totalMXN <= 0) {
       continue

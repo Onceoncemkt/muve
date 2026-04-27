@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
-import { normalizarPlan } from '@/lib/planes'
+import { normalizarPlan, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
 import type { PlanMembresia, Rol } from '@/types'
 
 type Perfil = {
@@ -76,11 +76,6 @@ type PagosDashboard = {
 }
 
 const PLANES_MEMBRESIA: PlanMembresia[] = ['basico', 'plus', 'total']
-const TARIFA_POR_CHECKIN: Record<PlanMembresia, number> = {
-  basico: 60,
-  plus: 65,
-  total: 70,
-}
 const NOTA_GANANCIAS = 'MUVET hace corte, y te paga el total acumulado cada semana'
 
 function admin() {
@@ -156,8 +151,9 @@ function etiquetaMes(clave: string) {
 }
 
 function gananciasVacias(): GananciasDashboard {
+  const tarifasPorPlan = obtenerTarifasNegocioPorPlan('clases')
   return {
-    tarifas_por_plan: TARIFA_POR_CHECKIN,
+    tarifas_por_plan: tarifasPorPlan,
     semana: {
       visitas_por_plan: recordPlanInicial(),
       total_por_plan: recordPlanInicial(),
@@ -365,6 +361,7 @@ export async function GET(request: NextRequest) {
   const inicioSemana = inicioSemanaLocal(new Date())
   const finSemana = new Date(inicioSemana)
   finSemana.setDate(finSemana.getDate() + 7)
+  const tarifasPorPlan = obtenerTarifasNegocioPorPlan(negocio.categoria)
 
   const visitasSemana = recordPlanInicial()
   const totalSemanaPorPlan = recordPlanInicial()
@@ -375,7 +372,7 @@ export async function GET(request: NextRequest) {
     if (Number.isNaN(fechaVisita.getTime())) continue
 
     const planUsuario = normalizarPlan(visita.plan_usuario)
-    const tarifa = planUsuario ? TARIFA_POR_CHECKIN[planUsuario] : 0
+    const tarifa = planUsuario ? tarifasPorPlan[planUsuario] : 0
 
     if (planUsuario && fechaVisita >= inicioSemana && fechaVisita < finSemana) {
       visitasSemana[planUsuario] += 1
@@ -454,7 +451,7 @@ export async function GET(request: NextRequest) {
       horarios_activos: horariosActivos ?? 0,
     },
     ganancias: {
-      tarifas_por_plan: TARIFA_POR_CHECKIN,
+      tarifas_por_plan: tarifasPorPlan,
       semana: {
         visitas_por_plan: visitasSemana,
         total_por_plan: totalSemanaPorPlan,

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { DiaSemana, EstadoReserva, PlanMembresia } from '@/types'
 import { formatHora } from '@/types'
+import { normalizarCategoriaNegocio } from '@/lib/planes'
 
 type UsuarioReserva = { id: string; nombre: string; email: string }
 type HorarioReserva = {
@@ -217,6 +218,26 @@ function formatFechaCorta(fechaISO: string) {
 
 function formatPeriodoSemanal(inicio: string, fin: string) {
   return `${formatFechaCorta(inicio)} - ${formatFechaCorta(fin)}`
+}
+
+function textoTarifaFijaPorCategoria(
+  categoria: string | null | undefined,
+  tarifasPorPlan: Record<PlanMembresia, number>
+) {
+  const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
+  const tarifaFija = tarifasPorPlan.basico
+
+  if (categoriaNormalizada === 'gimnasio') {
+    return `Recibes ${formatMonedaMXN(tarifaFija)} por cada visita MUVET`
+  }
+  if (categoriaNormalizada === 'estetica') {
+    return `Recibes ${formatMonedaMXN(tarifaFija)} por cada visita MUVET`
+  }
+  if (categoriaNormalizada === 'restaurante') {
+    return `Recibes ${formatMonedaMXN(tarifaFija)} por cada visita MUVET`
+  }
+
+  return null
 }
 
 export default function NegocioDashboardPage() {
@@ -460,6 +481,8 @@ export default function NegocioDashboardPage() {
       })
   }, [reservaciones])
   const cuentaStripeConectada = Boolean(negocio?.stripe_account_id)
+  const categoriaNegocio = normalizarCategoriaNegocio(negocio?.categoria)
+  const mensajeTarifaFija = textoTarifaFijaPorCategoria(negocio?.categoria, ganancias.tarifas_por_plan)
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-10">
@@ -574,6 +597,20 @@ export default function NegocioDashboardPage() {
             </div>
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
               <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis ganancias</p>
+              <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-4 py-3">
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Tarifa por visita</p>
+                {categoriaNegocio === 'clases' ? (
+                  <div className="mt-2 space-y-1 text-sm font-semibold text-[#0A0A0A]">
+                    <p>Plan Básico: {formatMonedaMXN(ganancias.tarifas_por_plan.basico)} por visita</p>
+                    <p>Plan Plus: {formatMonedaMXN(ganancias.tarifas_por_plan.plus)} por visita</p>
+                    <p>Plan Total: {formatMonedaMXN(ganancias.tarifas_por_plan.total)} por visita</p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm font-semibold text-[#0A0A0A]">
+                    {mensajeTarifaFija ?? `Recibes ${formatMonedaMXN(ganancias.tarifas_por_plan.basico)} por cada visita MUVET`}
+                  </p>
+                )}
+              </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">

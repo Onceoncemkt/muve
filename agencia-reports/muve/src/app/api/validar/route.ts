@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import {
+  calcularMontoNegocioPorVisita,
   PLAN_MAX_VISITAS_POR_LUGAR,
   PLAN_VISITAS_MENSUALES,
   normalizarPlan,
@@ -212,6 +213,10 @@ export async function POST(request: NextRequest) {
   }
 
   const categoriaNegocio = typeof negocio.categoria === 'string' ? negocio.categoria : null
+  const montoNegocioMxn = calcularMontoNegocioPorVisita({
+    categoria: categoriaNegocio,
+    planUsuario,
+  })
   const montoMaximoAutorizadoMxn = categoriaNegocio === 'restaurante'
     ? Math.max(Math.trunc(negocio.monto_maximo_visita ?? 0), 0)
     : null
@@ -288,20 +293,38 @@ export async function POST(request: NextRequest) {
   }
 
   // Registrar visita y marcar token como usado
-  const [{ error: visitaError }, { error: tokenError }, { error: ultimoCheckinError }] = await Promise.all([
-    db.from('visitas').insert({
-      user_id: qrToken.user_id,
-      negocio_id: negocioIdObjetivo,
-      validado_por: perfil.nombre,
-      plan_usuario: planUsuario,
-    }),
-    db.from('qr_tokens').update({ usado: true }).eq('id', qrToken.id),
-    db.from('users').update({ ultimo_checkin: new Date().toISOString() }).eq('id', qrToken.user_id),
-  ])
+  const payloadVisita = {
+    user_id: qrToken.user_id,
+    negocio_id: negocioIdObjetivo,
+    validado_por: perfil.nombre,
+    plan_usuario: planUsuario,
+  }
+
+  let visitaError: { message?: string } | null = null
+  const insercionConMonto = await db
+    .from('visitas')
+    .insert({
+      ...payloadVisita,
+      monto_negocio: montoNegocioMxn,
+    })
+
+  if (faltaColumna(insercionConMonto.error, 'monto_negocio')) {
+    const insercionFallback = await db
+      .from('visitas')
+      .insert(payloadVisita)
+    visitaError = insercionFallback.error
+  } else {
+    visitaError = insercionConMonto.error
+  }
 
   if (visitaError) {
     return NextResponse.json({ error: 'Error al registrar visita' }, { status: 500 })
   }
+
+  const [{ error: tokenError }, { error: ultimoCheckinError }] = await Promise.all([
+    db.from('qr_tokens').update({ usado: true }).eq('id', qrToken.id),
+    db.from('users').update({ ultimo_checkin: new Date().toISOString() }).eq('id', qrToken.user_id),
+  ])
   if (tokenError) {
     return NextResponse.json({ error: 'Error al marcar token como usado' }, { status: 500 })
   }
@@ -318,6 +341,7 @@ export async function POST(request: NextRequest) {
     negocio: negocio.nombre,
     categoria_negocio: categoriaNegocio,
     servicio_reservado: servicioReservado,
+    monto_negocio_mxn: montoNegocioMxn,
     monto_maximo_autorizado_mxn: montoMaximoAutorizadoMxn,
     visitas_restantes_mes: visitasRestantesCiclo,
     visitas_usadas_mes: visitasUsadasCiclo,
