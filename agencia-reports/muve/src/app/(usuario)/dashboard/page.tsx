@@ -135,13 +135,13 @@ export default async function DashboardPage({
   const mostrarBannerActivacion = planActivoFlag === false
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
-  const limiteMensual = hasActiveMembership && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
+  const visitasIncluidasPlan = planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
 
   let usadasCiclo = 0
   let cicloActualTexto = '—'
   let cicloNuevoTexto = '—'
 
-  if (hasActiveMembership && planUsuario) {
+  if (planUsuario) {
     const ahora = new Date()
     const inicioCiclo = parseFechaSegura(perfil?.fecha_inicio_ciclo)
       ?? new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000)
@@ -162,19 +162,19 @@ export default async function DashboardPage({
     cicloActualTexto = `${formatearFecha(inicioCiclo)} — ${formatearFecha(finCiclo)}`
     cicloNuevoTexto = formatearFecha(finCiclo)
   }
-
-  const restantesCiclo = Math.max(limiteMensual - usadasCiclo, 0)
-  const progresoCiclo = limiteMensual > 0
-    ? Math.min((usadasCiclo / limiteMensual) * 100, 100)
+  const checkInsRealizados = Math.max(usadasCiclo, 0)
+  const visitasRestantes = Math.max(visitasIncluidasPlan - checkInsRealizados, 0)
+  const progresoCiclo = visitasIncluidasPlan > 0
+    ? Math.min((checkInsRealizados / visitasIncluidasPlan) * 100, 100)
     : 0
-  const barraProgresoColor = restantesCiclo <= 1
+  const barraProgresoColor = visitasRestantes <= 1
     ? 'bg-[#EF4444]'
-    : restantesCiclo === 2
+    : visitasRestantes === 2
       ? 'bg-[#FACC15]'
       : 'bg-[#22C55E]'
-  const textoRestantesColor = restantesCiclo <= 1
+  const textoRestantesColor = visitasRestantes <= 1
     ? 'text-[#FCA5A5]'
-    : restantesCiclo === 2
+    : visitasRestantes === 2
       ? 'text-[#FDE68A]'
       : 'text-[#86EFAC]'
 
@@ -234,7 +234,7 @@ export default async function DashboardPage({
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 sm:col-span-2">
             <p className="text-xs text-white/40">
-              {usadasCiclo} de {limiteMensual} visitas usadas
+              {checkInsRealizados} de {visitasIncluidasPlan} visitas usadas
             </p>
             <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
               <div
@@ -243,7 +243,7 @@ export default async function DashboardPage({
               />
             </div>
             <p className={`mt-2 text-sm font-bold ${textoRestantesColor}`}>
-              Visitas restantes: {restantesCiclo}
+              Visitas restantes: {visitasRestantes}
             </p>
             {hasActiveMembership && (
               <>
