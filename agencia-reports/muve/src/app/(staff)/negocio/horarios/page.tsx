@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { Categoria, DiaSemana, Rol, ServicioNegocio } from '@/types'
-import { CATEGORIA_LABELS, DIA_LABELS, formatHora } from '@/types'
+import { CATEGORIA_LABELS, DIA_LABELS, formatHora, proximaFecha } from '@/types'
 
 const DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
 const TIPOS_CLASE_OPCIONES = [
@@ -17,6 +17,24 @@ const TIPOS_CLASE_OPCIONES = [
   'Pilates Mat',
   'Box Funcional',
 ]
+
+const DATE_FORMATTER = new Intl.DateTimeFormat('es-MX', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+})
+
+function formatFechaCorta(fecha: Date): string {
+  const partes = DATE_FORMATTER.formatToParts(fecha)
+  const dia = partes.find((parte) => parte.type === 'day')?.value ?? ''
+  const mes = (partes.find((parte) => parte.type === 'month')?.value ?? '').replace('.', '')
+  const year = partes.find((parte) => parte.type === 'year')?.value ?? ''
+  return `${dia} ${mes} ${year}`
+}
+
+function formatDiaConFecha(dia: DiaSemana): string {
+  return `${DIA_LABELS[dia]}, ${formatFechaCorta(proximaFecha(dia))}`
+}
 
 interface NegocioOption {
   id: string
@@ -720,7 +738,7 @@ export default function NegocioHorariosPage() {
                     >
                       {DIAS.map(dia => (
                         <option key={dia} value={dia}>
-                          {DIA_LABELS[dia]}
+                          {formatDiaConFecha(dia)}
                         </option>
                       ))}
                     </select>
@@ -828,7 +846,7 @@ export default function NegocioHorariosPage() {
                   <tbody>
                     {horarios.map(horario => (
                       <tr key={horario.id} className="border-b border-[#F0F0F0] align-middle last:border-b-0">
-                        <td className="px-2 py-2 font-semibold text-[#0A0A0A]">{DIA_LABELS[horario.dia_semana]}</td>
+                        <td className="px-2 py-2 font-semibold text-[#0A0A0A]">{formatDiaConFecha(horario.dia_semana)}</td>
                         <td className="px-2 py-2 text-[#444]">{formatHora(horario.hora_inicio)}</td>
                         <td className="px-2 py-2 text-[#444]">{formatHora(horario.hora_fin)}</td>
                         <td className="px-2 py-2">
