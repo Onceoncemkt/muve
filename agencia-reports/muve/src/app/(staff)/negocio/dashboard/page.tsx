@@ -39,6 +39,7 @@ interface NegocioDashboard {
   imagen_url?: string | null
   instagram_handle?: string | null
   tiktok_handle?: string | null
+  stripe_account_id?: string | null
 }
 
 interface GananciasSemana {
@@ -232,11 +233,20 @@ export default function NegocioDashboardPage() {
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [instagramHandle, setInstagramHandle] = useState('')
   const [tiktokHandle, setTiktokHandle] = useState('')
-  const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+  const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(() => {
+    if (typeof window === 'undefined') return null
+    const params = new URLSearchParams(window.location.search)
+    const estado = params.get('stripe_status')
+    const texto = params.get('stripe_msg')?.trim() ?? ''
+    if (!texto || (estado !== 'ok' && estado !== 'error')) return null
+    return {
+      tipo: estado === 'ok' ? 'ok' : 'error',
+      texto,
+    }
+  })
 
   const cargarDashboard = useCallback(async () => {
     setCargando(true)
-    setMensaje(null)
 
     try {
       const res = await fetch(`/api/negocio/dashboard?fecha=${encodeURIComponent(fechaHoy)}`)
@@ -300,6 +310,20 @@ export default function NegocioDashboardPage() {
     }, 0)
     return () => clearTimeout(id)
   }, [cargarDashboard])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    const estado = params.get('stripe_status')
+    const texto = params.get('stripe_msg')?.trim() ?? ''
+    if (!texto || (estado !== 'ok' && estado !== 'error')) return
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('stripe_status')
+    url.searchParams.delete('stripe_msg')
+    window.history.replaceState({}, '', url.toString())
+  }, [])
 
   async function completarReservacion(reservacionId: string) {
     setCompletandoId(reservacionId)
@@ -435,6 +459,7 @@ export default function NegocioDashboardPage() {
         return a.horario.hora_inicio.localeCompare(b.horario.hora_inicio)
       })
   }, [reservaciones])
+  const cuentaStripeConectada = Boolean(negocio?.stripe_account_id)
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-10">
@@ -612,91 +637,126 @@ export default function NegocioDashboardPage() {
             </div>
 
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis pagos</p>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              {!cuentaStripeConectada ? (
                 <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Próximo pago estimado</p>
-                  <p className="mt-1 text-xs text-[#666]">
-                    Semana {formatPeriodoSemanal(
-                      pagos.proximo_pago_estimado.periodo_inicio,
-                      pagos.proximo_pago_estimado.periodo_fin
-                    )}
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">
+                    Conecta tu cuenta para recibir pagos
                   </p>
-
-                  <div className="mt-3 space-y-2">
-                    {PLANES_MEMBRESIA.map((plan) => {
-                      const visitasPlan = plan === 'basico'
-                        ? pagos.proximo_pago_estimado.visitas_basico
-                        : plan === 'plus'
-                          ? pagos.proximo_pago_estimado.visitas_plus
-                          : pagos.proximo_pago_estimado.visitas_total
-                      const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
-                      return (
-                        <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
-                          <span>
-                            Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
-                          </span>
-                          <span className="font-black">= {formatMonedaMXN(visitasPlan * tarifaPlan)}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  <div className="mt-4 rounded-lg bg-[#0A0A0A] px-4 py-3 text-center">
-                    <p className="text-[11px] font-black uppercase tracking-widest text-white/50">Total estimado</p>
-                    <p className="mt-1 text-3xl font-black tracking-tight text-[#E8FF47]">
-                      {formatMonedaMXN(pagos.proximo_pago_estimado.total_mxn)}
-                    </p>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between rounded-lg border border-[#E5E5E5] bg-white px-3 py-2">
-                    <p className="text-xs font-bold uppercase tracking-wider text-[#555]">Estado</p>
-                    <span className={`rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${claseEstadoPago(pagos.proximo_pago_estimado.estado)}`}>
-                      {pagos.proximo_pago_estimado.estado}
-                    </span>
-                  </div>
+                  <p className="mt-2 text-sm text-[#555]">
+                    Conecta tu cuenta bancaria a través de Stripe para recibir tus pagos semanales automáticamente cada lunes.
+                  </p>
+                  <a
+                    href="/api/negocio/stripe-connect"
+                    className="mt-4 inline-flex rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222]"
+                  >
+                    Conectar cuenta
+                  </a>
+                  <p className="mt-3 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-semibold text-[#0A0A0A]">
+                    Pagos automáticos cada lunes · Directo a tu cuenta bancaria · Sin comisiones de MUVET
+                  </p>
                 </div>
-
-                <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Historial semanal</p>
-                  {pagos.historial_semanal.length === 0 ? (
-                    <p className="mt-4 text-sm text-[#666]">Sin pagos registrados todavía.</p>
-                  ) : (
-                    <div className="mt-3 overflow-x-auto">
-                      <table className="min-w-full border-collapse text-sm">
-                        <thead>
-                          <tr className="border-b border-[#E5E5E5] text-left text-[11px] font-black uppercase tracking-widest text-[#888]">
-                            <th className="px-2 py-2">Semana</th>
-                            <th className="px-2 py-2">Visitas</th>
-                            <th className="px-2 py-2 text-right">Total</th>
-                            <th className="px-2 py-2 text-right">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pagos.historial_semanal.map((fila) => {
-                            const totalVisitas = fila.visitas_basico + fila.visitas_plus + fila.visitas_total
-                            return (
-                              <tr key={`${fila.periodo_inicio}-${fila.periodo_fin}`} className="border-b border-[#EFEFEF] text-[#0A0A0A]">
-                                <td className="px-2 py-2 font-semibold">
-                                  {formatPeriodoSemanal(fila.periodo_inicio, fila.periodo_fin)}
-                                </td>
-                                <td className="px-2 py-2">{totalVisitas}</td>
-                                <td className="px-2 py-2 text-right font-black">{formatMonedaMXN(fila.total_mxn)}</td>
-                                <td className="px-2 py-2 text-right">
-                                  <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${claseEstadoPago(fila.estado)}`}>
-                                    {fila.estado}
-                                  </span>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis pagos</p>
+                      <span className="rounded-full bg-[#DCFCE7] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-[#166534]">
+                        Cuenta conectada
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
+                    <a
+                      href="/api/negocio/stripe-connect?modo=gestionar"
+                      className="inline-flex rounded-lg border border-[#6B4FE8] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white"
+                    >
+                      Gestionar cuenta
+                    </a>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Próximo pago estimado</p>
+                      <p className="mt-1 text-xs text-[#666]">
+                        Semana {formatPeriodoSemanal(
+                          pagos.proximo_pago_estimado.periodo_inicio,
+                          pagos.proximo_pago_estimado.periodo_fin
+                        )}
+                      </p>
+
+                      <div className="mt-3 space-y-2">
+                        {PLANES_MEMBRESIA.map((plan) => {
+                          const visitasPlan = plan === 'basico'
+                            ? pagos.proximo_pago_estimado.visitas_basico
+                            : plan === 'plus'
+                              ? pagos.proximo_pago_estimado.visitas_plus
+                              : pagos.proximo_pago_estimado.visitas_total
+                          const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
+                          return (
+                            <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
+                              <span>
+                                Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
+                              </span>
+                              <span className="font-black">= {formatMonedaMXN(visitasPlan * tarifaPlan)}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      <div className="mt-4 rounded-lg bg-[#0A0A0A] px-4 py-3 text-center">
+                        <p className="text-[11px] font-black uppercase tracking-widest text-white/50">Total estimado</p>
+                        <p className="mt-1 text-3xl font-black tracking-tight text-[#E8FF47]">
+                          {formatMonedaMXN(pagos.proximo_pago_estimado.total_mxn)}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between rounded-lg border border-[#E5E5E5] bg-white px-3 py-2">
+                        <p className="text-xs font-bold uppercase tracking-wider text-[#555]">Estado</p>
+                        <span className={`rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${claseEstadoPago(pagos.proximo_pago_estimado.estado)}`}>
+                          {pagos.proximo_pago_estimado.estado}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Últimos pagos recibidos</p>
+                      {pagos.historial_semanal.length === 0 ? (
+                        <p className="mt-4 text-sm text-[#666]">Sin pagos registrados todavía.</p>
+                      ) : (
+                        <div className="mt-3 overflow-x-auto">
+                          <table className="min-w-full border-collapse text-sm">
+                            <thead>
+                              <tr className="border-b border-[#E5E5E5] text-left text-[11px] font-black uppercase tracking-widest text-[#888]">
+                                <th className="px-2 py-2">Semana</th>
+                                <th className="px-2 py-2">Visitas</th>
+                                <th className="px-2 py-2 text-right">Total</th>
+                                <th className="px-2 py-2 text-right">Estado</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {pagos.historial_semanal.map((fila) => {
+                                const totalVisitas = fila.visitas_basico + fila.visitas_plus + fila.visitas_total
+                                return (
+                                  <tr key={`${fila.periodo_inicio}-${fila.periodo_fin}`} className="border-b border-[#EFEFEF] text-[#0A0A0A]">
+                                    <td className="px-2 py-2 font-semibold">
+                                      {formatPeriodoSemanal(fila.periodo_inicio, fila.periodo_fin)}
+                                    </td>
+                                    <td className="px-2 py-2">{totalVisitas}</td>
+                                    <td className="px-2 py-2 text-right font-black">{formatMonedaMXN(fila.total_mxn)}</td>
+                                    <td className="px-2 py-2 text-right">
+                                      <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${claseEstadoPago(fila.estado)}`}>
+                                        {fila.estado}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">

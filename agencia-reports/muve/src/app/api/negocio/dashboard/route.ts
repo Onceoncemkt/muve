@@ -17,6 +17,7 @@ type NegocioDashboard = {
   imagen_url?: string | null
   instagram_handle?: string | null
   tiktok_handle?: string | null
+  stripe_account_id?: string | null
 }
 
 type GananciasSemana = {
@@ -256,10 +257,11 @@ export async function GET(request: NextRequest) {
   }
 
   const consultasNegocio = [
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, tiktok_handle', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true },
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false },
-    { select: 'id, nombre, ciudad, categoria, imagen_url', incluyeImagen: true, incluyeInstagram: false, incluyeTiktok: false },
-    { select: 'id, nombre, ciudad, categoria', incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false },
+    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true },
+    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, stripe_account_id', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: true },
+    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: false },
+    { select: 'id, nombre, ciudad, categoria, imagen_url', incluyeImagen: true, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false },
+    { select: 'id, nombre, ciudad, categoria', incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false },
   ] as const
 
   let negocio: NegocioDashboard | null = null
@@ -281,6 +283,7 @@ export async function GET(request: NextRequest) {
         imagen_url: consulta.incluyeImagen ? (resultado.data.imagen_url ?? null) : null,
         instagram_handle: consulta.incluyeInstagram ? (resultado.data.instagram_handle ?? null) : null,
         tiktok_handle: consulta.incluyeTiktok ? (resultado.data.tiktok_handle ?? null) : null,
+        stripe_account_id: consulta.incluyeStripeAccountId ? (resultado.data.stripe_account_id ?? null) : null,
       }
       negocioError = null
       break
@@ -291,6 +294,7 @@ export async function GET(request: NextRequest) {
       (consulta.incluyeImagen && faltaColumna(resultado.error, 'imagen_url'))
       || (consulta.incluyeInstagram && faltaColumna(resultado.error, 'instagram_handle'))
       || (consulta.incluyeTiktok && faltaColumna(resultado.error, 'tiktok_handle'))
+      || (consulta.incluyeStripeAccountId && faltaColumna(resultado.error, 'stripe_account_id'))
     )
     if (!errorPorColumnaOpcional) break
   }
