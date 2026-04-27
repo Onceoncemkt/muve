@@ -145,15 +145,17 @@ export default async function DashboardPage({
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
   const limiteMensual = hasActiveMembership && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
-  const mostrarBannerActivacion = !Boolean(perfil?.plan_activo)
 
   let usadasCiclo = 0
   let cicloActualTexto = '—'
   let cicloNuevoTexto = '—'
 
   if (hasActiveMembership && planUsuario) {
+    const inicioFallback = new Date()
+    inicioFallback.setUTCDate(inicioFallback.getUTCDate() - 30)
+    const inicioCicloBase = perfil?.fecha_inicio_ciclo ?? inicioFallback.toISOString()
     const ciclo = resolverVentanaCiclo({
-      fechaInicioCiclo: perfil?.fecha_inicio_ciclo ?? null,
+      fechaInicioCiclo: inicioCicloBase,
       fechaFinPlan: perfil?.fecha_fin_plan ?? null,
     })
 
@@ -176,13 +178,12 @@ export default async function DashboardPage({
       }
     }
 
-    const hoyIso = new Date().toISOString()
     const { count: visitasCiclo } = await supabase
       .from('visitas')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact' })
       .eq('user_id', user.id)
       .gte('fecha', cicloInicioIso)
-      .lte('fecha', hoyIso)
+      .lt('fecha', cicloFinIso)
 
     usadasCiclo = visitasCiclo ?? 0
     cicloActualTexto = `${formatearFecha(ciclo.inicio)} — ${formatearFecha(finVisibleCiclo(ciclo.fin))}`
@@ -193,7 +194,16 @@ export default async function DashboardPage({
   const progresoCiclo = limiteMensual > 0
     ? Math.min((usadasCiclo / limiteMensual) * 100, 100)
     : 0
-  const restantesEnRojo = restantesCiclo <= 2
+  const barraProgresoColor = restantesCiclo <= 1
+    ? 'bg-[#EF4444]'
+    : restantesCiclo <= 3
+      ? 'bg-[#FACC15]'
+      : 'bg-[#22C55E]'
+  const textoRestantesColor = restantesCiclo <= 1
+    ? 'text-[#FCA5A5]'
+    : restantesCiclo <= 3
+      ? 'text-[#FDE68A]'
+      : 'text-[#86EFAC]'
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
@@ -207,7 +217,7 @@ export default async function DashboardPage({
       )}
 
       {/* Sin membresía activa */}
-      {mostrarBannerActivacion && (
+      {!perfil?.plan_activo && (
         <div className="bg-[#E8FF47] px-4 py-3">
           <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-4">
             <p className="text-sm font-bold text-[#0A0A0A]">
@@ -251,15 +261,15 @@ export default async function DashboardPage({
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 sm:col-span-2">
             <p className="text-xs text-white/40">
-              Visitas usadas: {usadasCiclo} de {limiteMensual} en este ciclo
+              {usadasCiclo} de {limiteMensual} visitas usadas este ciclo
             </p>
             <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
               <div
-                className="h-full rounded-full bg-[#E8FF47] transition-all"
+                className={`h-full rounded-full transition-all ${barraProgresoColor}`}
                 style={{ width: `${progresoCiclo}%` }}
               />
             </div>
-            <p className={`mt-2 text-sm font-bold ${restantesEnRojo ? 'text-[#FCA5A5]' : 'text-[#86EFAC]'}`}>
+            <p className={`mt-2 text-sm font-bold ${textoRestantesColor}`}>
               Visitas restantes: {restantesCiclo}
             </p>
             {hasActiveMembership && (
