@@ -7,29 +7,59 @@ const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 export const metadata: Metadata = {
   title: 'MUVET — Membresía de bienestar',
   description: 'Un pase. Todo el bienestar. Gimnasios, clases, estéticas y restaurantes saludables en tu ciudad.',
+  manifest: '/manifest.json?v=2',
+  icons: {
+    icon: [
+      { url: '/favicon.ico?v=2' },
+      { url: '/favicon-32x32.png?v=2', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-16x16.png?v=2', sizes: '16x16', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png?v=2' }],
+  },
+  themeColor: '#E8FF47',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'MUVET',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={`${geist.variable} h-full antialiased`}>
       <head>
-        <link rel="manifest" href="/manifest.json" />
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <meta name="theme-color" content="#E8FF47" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="MUVET" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
-  if ('serviceWorker' in navigator) {
+  (function() {
+    var SW_VERSION = '2026-04-27-2';
+    var SW_PATH = '/sw.js?v=' + SW_VERSION;
+    if (!('serviceWorker' in navigator)) return;
+
     window.addEventListener('load', function() {
-      navigator.serviceWorker.register('/sw.js');
+      navigator.serviceWorker.getRegistrations()
+        .then(function(registrations) {
+          return Promise.all(
+            registrations.map(function(registration) {
+              var activeUrl = registration.active && registration.active.scriptURL ? registration.active.scriptURL : '';
+              var waitingUrl = registration.waiting && registration.waiting.scriptURL ? registration.waiting.scriptURL : '';
+              var installingUrl = registration.installing && registration.installing.scriptURL ? registration.installing.scriptURL : '';
+              var scriptUrl = activeUrl || waitingUrl || installingUrl;
+              if (scriptUrl.indexOf('/sw.js') !== -1 && scriptUrl.indexOf('v=' + SW_VERSION) === -1) {
+                return registration.unregister();
+              }
+              return Promise.resolve(false);
+            })
+          );
+        })
+        .catch(function() {
+          return undefined;
+        })
+        .finally(function() {
+          navigator.serviceWorker.register(SW_PATH, { scope: '/', updateViaCache: 'none' });
+        });
     });
-  }
+  })();
 `,
           }}
         />
