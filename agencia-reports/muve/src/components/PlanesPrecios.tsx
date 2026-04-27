@@ -76,7 +76,7 @@ const PLANES = [
     maxPorLugar: 10,
     features: [
       '25 visitas al mes',
-      'Máximo 10 visitas por lugar',
+      'máx 10 por lugar',
       'Gimnasios, clases, estéticas, restaurantes',
       'Las 4 ciudades',
     ],
