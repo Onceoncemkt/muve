@@ -32,7 +32,7 @@ export const TARIFA_NEGOCIO_CLASES_POR_PLAN: Record<PlanMembresia, number> = {
 export const TARIFA_NEGOCIO_FIJA_POR_CATEGORIA: Record<Exclude<Categoria, 'clases'>, number> = {
   gimnasio: 40,
   estetica: 50,
-  restaurante: 60,
+  restaurante: 50,
 }
 
 export const CATEGORIAS_VISIBLES_POR_PLAN: Record<PlanMembresia, Categoria[]> = {

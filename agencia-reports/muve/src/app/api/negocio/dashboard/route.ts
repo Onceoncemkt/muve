@@ -1,12 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
-import { normalizarPlan, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
+import {
+  normalizarCategoriaNegocio,
+  normalizarPlan,
+  obtenerTarifasNegocioPorPlan,
+} from '@/lib/planes'
 import type { PlanMembresia, Rol } from '@/types'
 
 type Perfil = {
   rol: Rol
   negocio_id: string | null
+}
+
+function planTarifaParaVisita({
+  categoria,
+  planUsuario,
+}: {
+  categoria: string | null | undefined
+  planUsuario: string | null | undefined
+}) {
+  const planNormalizado = normalizarPlan(planUsuario)
+  if (planNormalizado) return planNormalizado
+
+  const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
+  if (categoriaNormalizada && categoriaNormalizada !== 'clases') {
+    return 'basico'
+  }
+
+  return null
 }
 
 type NegocioDashboard = {
@@ -42,6 +64,33 @@ type GananciasDashboard = {
 type VisitaGanancias = {
   fecha: string
   plan_usuario: string | null
+}
+
+type UsuarioCheckin = {
+  id: string
+  nombre: string
+  email: string | null
+}
+
+type CheckinHoyDB = {
+  id: string
+  fecha: string
+  user_id: string
+  users: UsuarioCheckin | UsuarioCheckin[] | null
+}
+
+type CheckinHoyDashboard = {
+  id: string
+  fecha: string
+  user_id: string
+  usuario_nombre: string
+  usuario_email: string | null
+}
+
+type ServicioNegocioDashboard = {
+  id: string
+  nombre: string
+  precio_normal_mxn: number | null
 }
 
 type EstadoPagoDashboard = 'pagado' | 'pendiente'
@@ -110,6 +159,11 @@ function normalizarHandle(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const limpio = value.trim().replace(/^@+/, '')
   return limpio.length > 0 ? limpio : null
+}
+
+function obtenerRelacion<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null
+  return Array.isArray(value) ? (value[0] ?? null) : value
 }
 
 function inicioSemanaLocal(fecha: Date) {
@@ -224,9 +278,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       sin_negocio: true,
       fecha,
+      checkins_hoy: [],
+      servicios_disponibles: [],
       reservaciones: [],
       resumen: {
         reservaciones_hoy: 0,
+        checkins_hoy: 0,
         horarios_activos: 0,
       },
       ganancias: gananciasVacias(),
@@ -299,7 +356,44 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Negocio no encontrado' }, { status: 404 })
   }
 
-  const [{ data: reservaciones, error: reservacionesError }, { count: horariosActivos, error: horariosError }] = await Promise.all([
+  const categoriaNegocioNormalizada = normalizarCategoriaNegocio(negocio.categoria)
+  let serviciosDisponibles: Array<{ id: string; nombre: string; precio_normal_mxn: number }> = []
+
+  if (categoriaNegocioNormalizada === 'estetica') {
+    const serviciosResult = await db
+      .from('negocio_servicios')
+      .select('id, nombre, precio_normal_mxn')
+      .eq('negocio_id', negocioIdObjetivo)
+      .eq('activo', true)
+      .order('created_at', { ascending: true })
+      .returns<ServicioNegocioDashboard[]>()
+
+    if (!serviciosResult.error) {
+      serviciosDisponibles = (serviciosResult.data ?? []).map((servicio) => ({
+        id: servicio.id,
+        nombre: servicio.nombre,
+        precio_normal_mxn: typeof servicio.precio_normal_mxn === 'number'
+          ? Math.max(Math.trunc(servicio.precio_normal_mxn), 0)
+          : 0,
+      }))
+    } else if (!faltaRelacion(serviciosResult.error, 'negocio_servicios')) {
+      return NextResponse.json(
+        { error: serviciosResult.error.message ?? 'Error al cargar servicios disponibles' },
+        { status: 500 }
+      )
+    }
+  }
+
+  const inicioDiaCheckins = `${fecha}T00:00:00`
+  const fechaSiguiente = new Date(`${fecha}T00:00:00`)
+  fechaSiguiente.setDate(fechaSiguiente.getDate() + 1)
+  const finDiaCheckins = `${formatoFechaISO(fechaSiguiente)}T00:00:00`
+
+  const [
+    { data: reservaciones, error: reservacionesError },
+    { count: horariosActivos, error: horariosError },
+    { data: checkinsHoyRaw, error: checkinsError },
+  ] = await Promise.all([
     db
       .from('reservaciones')
       .select(`
@@ -315,14 +409,35 @@ export async function GET(request: NextRequest) {
       .select('id', { count: 'exact', head: true })
       .eq('negocio_id', negocioIdObjetivo)
       .eq('activo', true),
+    db
+      .from('visitas')
+      .select(`
+        id, fecha, user_id,
+        users ( id, nombre, email )
+      `)
+      .eq('negocio_id', negocioIdObjetivo)
+      .gte('fecha', inicioDiaCheckins)
+      .lt('fecha', finDiaCheckins)
+      .order('fecha', { ascending: false }),
   ])
 
-  if (reservacionesError || horariosError) {
+  if (reservacionesError || horariosError || checkinsError) {
     return NextResponse.json(
-      { error: reservacionesError?.message ?? horariosError?.message ?? 'Error al cargar dashboard' },
+      { error: reservacionesError?.message ?? horariosError?.message ?? checkinsError?.message ?? 'Error al cargar dashboard' },
       { status: 500 }
     )
   }
+
+  const checkinsHoy = ((checkinsHoyRaw ?? []) as CheckinHoyDB[]).map((checkin) => {
+    const usuario = obtenerRelacion(checkin.users)
+    return {
+      id: checkin.id,
+      fecha: checkin.fecha,
+      user_id: checkin.user_id,
+      usuario_nombre: usuario?.nombre ?? 'Usuario',
+      usuario_email: usuario?.email ?? null,
+    } satisfies CheckinHoyDashboard
+  })
 
   let visitasGanancias: VisitaGanancias[] = []
   const visitasConPlan = await db
@@ -370,13 +485,15 @@ export async function GET(request: NextRequest) {
   for (const visita of visitasGanancias) {
     const fechaVisita = new Date(visita.fecha)
     if (Number.isNaN(fechaVisita.getTime())) continue
+    const planTarifa = planTarifaParaVisita({
+      categoria: negocio.categoria,
+      planUsuario: visita.plan_usuario,
+    })
+    const tarifa = planTarifa ? tarifasPorPlan[planTarifa] : 0
 
-    const planUsuario = normalizarPlan(visita.plan_usuario)
-    const tarifa = planUsuario ? tarifasPorPlan[planUsuario] : 0
-
-    if (planUsuario && fechaVisita >= inicioSemana && fechaVisita < finSemana) {
-      visitasSemana[planUsuario] += 1
-      totalSemanaPorPlan[planUsuario] += tarifa
+    if (planTarifa && fechaVisita >= inicioSemana && fechaVisita < finSemana) {
+      visitasSemana[planTarifa] += 1
+      totalSemanaPorPlan[planTarifa] += tarifa
     }
 
     const claveMes = `${fechaVisita.getUTCFullYear()}-${String(fechaVisita.getUTCMonth() + 1).padStart(2, '0')}`
@@ -446,8 +563,11 @@ export async function GET(request: NextRequest) {
     sin_negocio: false,
     fecha,
     negocio,
+    checkins_hoy: checkinsHoy,
+    servicios_disponibles: serviciosDisponibles,
     resumen: {
       reservaciones_hoy: (reservaciones ?? []).length,
+      checkins_hoy: checkinsHoy.length,
       horarios_activos: horariosActivos ?? 0,
     },
     ganancias: {

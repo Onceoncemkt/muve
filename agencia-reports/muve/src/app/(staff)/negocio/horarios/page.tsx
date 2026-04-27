@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { Categoria, DiaSemana, Rol, ServicioNegocio } from '@/types'
-import { CATEGORIA_LABELS, DIA_LABELS, formatHora } from '@/types'
+import { CATEGORIA_LABELS, DIA_LABELS, formatHora, proximaFecha } from '@/types'
 
 const DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
 const TIPOS_CLASE_OPCIONES = [
@@ -17,6 +18,23 @@ const TIPOS_CLASE_OPCIONES = [
   'Pilates Mat',
   'Box Funcional',
 ]
+
+const DATE_FORMATTER = new Intl.DateTimeFormat('es-MX', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+})
+function formatFechaCorta(fecha: Date): string {
+  const partes = DATE_FORMATTER.formatToParts(fecha)
+  const dia = partes.find((parte) => parte.type === 'day')?.value ?? ''
+  const mes = (partes.find((parte) => parte.type === 'month')?.value ?? '').replace('.', '')
+  const year = partes.find((parte) => parte.type === 'year')?.value ?? ''
+  return `${dia} ${mes} ${year}`
+}
+
+function formatDiaConFecha(dia: DiaSemana): string {
+  return `${DIA_LABELS[dia]}, ${formatFechaCorta(proximaFecha(dia))}`
+}
 
 interface NegocioOption {
   id: string
@@ -56,6 +74,7 @@ type ServicioDraft = {
 }
 
 export default function NegocioHorariosPage() {
+  const router = useRouter()
   const [rol, setRol] = useState<Rol>('staff')
   const [negocios, setNegocios] = useState<NegocioOption[]>([])
   const [negocioId, setNegocioId] = useState('')
@@ -140,6 +159,15 @@ export default function NegocioHorariosPage() {
       activo = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!esRestaurante) return
+    const params = new URLSearchParams({
+      status: 'ok',
+      msg: 'Los restaurantes no requieren horarios',
+    })
+    router.replace(`/negocio/dashboard?${params.toString()}`)
+  }, [esRestaurante, router])
 
   const cargarHorarios = useCallback(async () => {
     if (!negocioId) {
@@ -480,8 +508,14 @@ export default function NegocioHorariosPage() {
             >
               MUVET
             </Link>
-            <h1 className="text-2xl font-black tracking-tight text-white">Horarios del negocio</h1>
-            <p className="mt-1 text-sm text-white/40">Crea, activa y ajusta cupos de reservación</p>
+            <h1 className="text-2xl font-black tracking-tight text-white">
+              {esWellness ? 'Disponibilidad de agenda' : 'Horarios del negocio'}
+            </h1>
+            <p className="mt-1 text-sm text-white/40">
+              {esWellness
+                ? 'Configura día, hora y capacidad para atención simultánea'
+                : 'Crea, activa y ajusta cupos de reservación'}
+            </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
@@ -699,12 +733,14 @@ export default function NegocioHorariosPage() {
         {negocioId && (
           <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-xs font-black uppercase tracking-widest text-[#888]">Nuevo horario</h2>
+              <h2 className="text-xs font-black uppercase tracking-widest text-[#888]">
+                {esWellness ? 'Nueva disponibilidad de agenda' : 'Nuevo horario'}
+              </h2>
               <button
                 onClick={() => setMostrarForm(v => !v)}
                 className="rounded-lg bg-[#6B4FE8] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-[#5a3fd6]"
               >
-                {mostrarForm ? 'Cancelar' : '+ Crear horario'}
+                {mostrarForm ? 'Cancelar' : (esWellness ? '+ Crear disponibilidad' : '+ Crear horario')}
               </button>
             </div>
 
@@ -720,13 +756,15 @@ export default function NegocioHorariosPage() {
                     >
                       {DIAS.map(dia => (
                         <option key={dia} value={dia}>
-                          {DIA_LABELS[dia]}
+                          {formatDiaConFecha(dia)}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">Capacidad</label>
+                    <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">
+                      {esWellness ? 'Capacidad (personas simultáneas)' : 'Capacidad'}
+                    </label>
                     <input
                       type="number"
                       min={1}
@@ -756,39 +794,43 @@ export default function NegocioHorariosPage() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">
-                      Nombre del coach/instructor
-                    </label>
-                    <input
-                      type="text"
-                      value={nuevoHorario.nombre_coach}
-                      onChange={e => setNuevoHorario(h => ({ ...h, nombre_coach: e.target.value }))}
-                      placeholder="Ej. Mariana López"
-                      className={inputCls}
-                    />
+                {!esWellness && (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">
+                        Nombre del coach/instructor
+                      </label>
+                      <input
+                        type="text"
+                        value={nuevoHorario.nombre_coach}
+                        onChange={e => setNuevoHorario(h => ({ ...h, nombre_coach: e.target.value }))}
+                        placeholder="Ej. Mariana López"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">
+                        Tipo de clase
+                      </label>
+                      <input
+                        type="text"
+                        list="tipos-clase-opciones"
+                        value={nuevoHorario.tipo_clase}
+                        onChange={e => setNuevoHorario(h => ({ ...h, tipo_clase: e.target.value }))}
+                        placeholder="Ej. Cycling"
+                        className={inputCls}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">
-                      Tipo de clase
-                    </label>
-                    <input
-                      type="text"
-                      list="tipos-clase-opciones"
-                      value={nuevoHorario.tipo_clase}
-                      onChange={e => setNuevoHorario(h => ({ ...h, tipo_clase: e.target.value }))}
-                      placeholder="Ej. Cycling"
-                      className={inputCls}
-                    />
-                  </div>
-                </div>
+                )}
                 <button
                   onClick={crearHorario}
                   disabled={guardando}
                   className="w-full rounded-lg bg-[#0A0A0A] py-2.5 text-sm font-bold text-[#E8FF47] transition-colors hover:bg-[#222] disabled:opacity-40"
                 >
-                  {guardando ? 'Guardando...' : 'Crear horario'}
+                  {guardando
+                    ? 'Guardando...'
+                    : (esWellness ? 'Guardar disponibilidad' : 'Crear horario')}
                 </button>
               </div>
             )}
@@ -803,12 +845,18 @@ export default function NegocioHorariosPage() {
 
         {negocioId && (
           <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-            <h2 className="mb-3 text-xs font-black uppercase tracking-widest text-[#888]">Tabla de horarios</h2>
+            <h2 className="mb-3 text-xs font-black uppercase tracking-widest text-[#888]">
+              {esWellness ? 'Disponibilidad de agenda' : 'Tabla de horarios'}
+            </h2>
 
             {cargando ? (
               <p className="text-sm text-[#888]">Cargando horarios...</p>
             ) : horarios.length === 0 ? (
-              <p className="text-sm text-[#888]">Aún no hay horarios registrados.</p>
+              <p className="text-sm text-[#888]">
+                {esWellness
+                  ? 'Aún no hay disponibilidad de agenda registrada.'
+                  : 'Aún no hay horarios registrados.'}
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
@@ -817,10 +865,12 @@ export default function NegocioHorariosPage() {
                       <th className="px-2 py-2 font-black">Día</th>
                       <th className="px-2 py-2 font-black">Inicio</th>
                       <th className="px-2 py-2 font-black">Fin</th>
-                      <th className="px-2 py-2 font-black">Coach</th>
-                      <th className="px-2 py-2 font-black">Tipo clase</th>
+                      {!esWellness && <th className="px-2 py-2 font-black">Coach</th>}
+                      {!esWellness && <th className="px-2 py-2 font-black">Tipo clase</th>}
                       <th className="px-2 py-2 font-black">Capacidad</th>
-                      <th className="px-2 py-2 font-black">Spots hoy</th>
+                      <th className="px-2 py-2 font-black">
+                        {esWellness ? 'Disponibilidad hoy' : 'Spots hoy'}
+                      </th>
                       <th className="px-2 py-2 font-black">Estado</th>
                       <th className="px-2 py-2 font-black">Acciones</th>
                     </tr>
@@ -828,37 +878,41 @@ export default function NegocioHorariosPage() {
                   <tbody>
                     {horarios.map(horario => (
                       <tr key={horario.id} className="border-b border-[#F0F0F0] align-middle last:border-b-0">
-                        <td className="px-2 py-2 font-semibold text-[#0A0A0A]">{DIA_LABELS[horario.dia_semana]}</td>
+                        <td className="px-2 py-2 font-semibold text-[#0A0A0A]">{formatDiaConFecha(horario.dia_semana)}</td>
                         <td className="px-2 py-2 text-[#444]">{formatHora(horario.hora_inicio)}</td>
                         <td className="px-2 py-2 text-[#444]">{formatHora(horario.hora_fin)}</td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            value={coachDraft[horario.id] ?? horario.nombre_coach ?? ''}
-                            onChange={e => setCoachDraft(prev => ({ ...prev, [horario.id]: e.target.value }))}
-                            placeholder="Nombre coach"
-                            className="w-40 rounded-md border border-[#E5E5E5] bg-white px-2 py-1 text-xs text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <div className="flex items-center gap-2">
+                        {!esWellness && (
+                          <td className="px-2 py-2">
                             <input
                               type="text"
-                              list="tipos-clase-opciones"
-                              value={tipoClaseDraft[horario.id] ?? horario.tipo_clase ?? ''}
-                              onChange={e => setTipoClaseDraft(prev => ({ ...prev, [horario.id]: e.target.value }))}
-                              placeholder="Tipo de clase"
+                              value={coachDraft[horario.id] ?? horario.nombre_coach ?? ''}
+                              onChange={e => setCoachDraft(prev => ({ ...prev, [horario.id]: e.target.value }))}
+                              placeholder="Nombre coach"
                               className="w-40 rounded-md border border-[#E5E5E5] bg-white px-2 py-1 text-xs text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
                             />
-                            <button
-                              onClick={() => actualizarDatosClase(horario.id)}
-                              disabled={actualizandoId === horario.id}
-                              className="rounded-md bg-[#0A0A0A] px-2 py-1 text-[10px] font-bold uppercase text-[#E8FF47] transition-colors hover:bg-[#222] disabled:opacity-40"
-                            >
-                              Guardar
-                            </button>
-                          </div>
-                        </td>
+                          </td>
+                        )}
+                        {!esWellness && (
+                          <td className="px-2 py-2">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                list="tipos-clase-opciones"
+                                value={tipoClaseDraft[horario.id] ?? horario.tipo_clase ?? ''}
+                                onChange={e => setTipoClaseDraft(prev => ({ ...prev, [horario.id]: e.target.value }))}
+                                placeholder="Tipo de clase"
+                                className="w-40 rounded-md border border-[#E5E5E5] bg-white px-2 py-1 text-xs text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                              />
+                              <button
+                                onClick={() => actualizarDatosClase(horario.id)}
+                                disabled={actualizandoId === horario.id}
+                                className="rounded-md bg-[#0A0A0A] px-2 py-1 text-[10px] font-bold uppercase text-[#E8FF47] transition-colors hover:bg-[#222] disabled:opacity-40"
+                              >
+                                Guardar
+                              </button>
+                            </div>
+                          </td>
+                        )}
                         <td className="px-2 py-2">
                           <div className="flex items-center gap-2">
                             <input

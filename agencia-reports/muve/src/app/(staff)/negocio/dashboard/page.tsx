@@ -26,6 +26,14 @@ interface ReservacionNegocio {
   horarios: HorarioReserva | HorarioReserva[] | null
 }
 
+interface CheckinHoy {
+  id: string
+  fecha: string
+  user_id: string
+  usuario_nombre: string
+  usuario_email: string | null
+}
+
 interface GrupoHorario {
   key: string
   horario: HorarioReserva | null
@@ -83,6 +91,7 @@ interface DashboardPayload {
   sin_negocio: boolean
   fecha: string
   negocio?: NegocioDashboard
+  checkins_hoy?: CheckinHoy[]
   resumen?: {
     reservaciones_hoy: number
     horarios_activos: number
@@ -220,6 +229,26 @@ function formatPeriodoSemanal(inicio: string, fin: string) {
   return `${formatFechaCorta(inicio)} - ${formatFechaCorta(fin)}`
 }
 
+function formatHoraCheckin(fechaISO: string) {
+  const fecha = new Date(fechaISO)
+  if (Number.isNaN(fecha.getTime())) return '--:--'
+  return fecha.toLocaleTimeString('es-MX', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function obtenerMensajeFlashDesdeQuery(params: URLSearchParams) {
+  const estado = params.get('status') ?? params.get('stripe_status')
+  const texto = (params.get('msg')?.trim() ?? '') || (params.get('stripe_msg')?.trim() ?? '')
+  if (!texto || (estado !== 'ok' && estado !== 'error')) return null
+
+  return {
+    tipo: estado === 'ok' ? 'ok' : 'error',
+    texto,
+  } as const
+}
+
 function textoTarifaFijaPorCategoria(
   categoria: string | null | undefined,
   tarifasPorPlan: Record<PlanMembresia, number>
@@ -243,6 +272,7 @@ function textoTarifaFijaPorCategoria(
 export default function NegocioDashboardPage() {
   const [fechaHoy] = useState(hoyLocalISO())
   const [negocio, setNegocio] = useState<NegocioDashboard | null>(null)
+  const [checkinsHoy, setCheckinsHoy] = useState<CheckinHoy[]>([])
   const [reservaciones, setReservaciones] = useState<ReservacionNegocio[]>([])
   const [resumen, setResumen] = useState({ reservaciones_hoy: 0, horarios_activos: 0 })
   const [ganancias, setGanancias] = useState<GananciasPayload>(gananciasIniciales())
@@ -257,13 +287,7 @@ export default function NegocioDashboardPage() {
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(() => {
     if (typeof window === 'undefined') return null
     const params = new URLSearchParams(window.location.search)
-    const estado = params.get('stripe_status')
-    const texto = params.get('stripe_msg')?.trim() ?? ''
-    if (!texto || (estado !== 'ok' && estado !== 'error')) return null
-    return {
-      tipo: estado === 'ok' ? 'ok' : 'error',
-      texto,
-    }
+    return obtenerMensajeFlashDesdeQuery(params)
   })
 
   const cargarDashboard = useCallback(async () => {
@@ -276,6 +300,7 @@ export default function NegocioDashboardPage() {
       if (!res.ok) {
         setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudieron cargar datos del panel' })
         setNegocio(null)
+        setCheckinsHoy([])
         setInstagramHandle('')
         setTiktokHandle('')
         setSinNegocio(false)
@@ -290,6 +315,7 @@ export default function NegocioDashboardPage() {
       if (data.sin_negocio) {
         setSinNegocio(true)
         setNegocio(null)
+        setCheckinsHoy([])
         setInstagramHandle('')
         setTiktokHandle('')
         setReservaciones([])
@@ -301,6 +327,7 @@ export default function NegocioDashboardPage() {
 
       setSinNegocio(false)
       setNegocio(negocioPerfil)
+      setCheckinsHoy((data.checkins_hoy ?? []) as CheckinHoy[])
       setInstagramHandle(negocioPerfil?.instagram_handle ? `@${negocioPerfil.instagram_handle}` : '')
       setTiktokHandle(negocioPerfil?.tiktok_handle ? `@${negocioPerfil.tiktok_handle}` : '')
       setReservaciones((data.reservaciones ?? []) as ReservacionNegocio[])
@@ -313,6 +340,7 @@ export default function NegocioDashboardPage() {
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar el panel' })
       setNegocio(null)
+      setCheckinsHoy([])
       setInstagramHandle('')
       setTiktokHandle('')
       setSinNegocio(false)
@@ -336,11 +364,12 @@ export default function NegocioDashboardPage() {
     if (typeof window === 'undefined') return
 
     const params = new URLSearchParams(window.location.search)
-    const estado = params.get('stripe_status')
-    const texto = params.get('stripe_msg')?.trim() ?? ''
-    if (!texto || (estado !== 'ok' && estado !== 'error')) return
+    const mensajeFlash = obtenerMensajeFlashDesdeQuery(params)
+    if (!mensajeFlash) return
 
     const url = new URL(window.location.href)
+    url.searchParams.delete('status')
+    url.searchParams.delete('msg')
     url.searchParams.delete('stripe_status')
     url.searchParams.delete('stripe_msg')
     window.history.replaceState({}, '', url.toString())
@@ -482,6 +511,14 @@ export default function NegocioDashboardPage() {
   }, [reservaciones])
   const cuentaStripeConectada = Boolean(negocio?.stripe_account_id)
   const categoriaNegocio = normalizarCategoriaNegocio(negocio?.categoria)
+  const esRestaurante = categoriaNegocio === 'restaurante'
+  const usaPanelCheckins = esRestaurante
+  const totalVisitasSemana = PLANES_MEMBRESIA.reduce(
+    (acumulado, plan) => acumulado + (ganancias.semana.visitas_por_plan[plan] ?? 0),
+    0
+  )
+  const tarifaFijaPorCheckin = esRestaurante ? 50 : (ganancias.tarifas_por_plan.basico ?? 0)
+  const gananciasSemanaTarifaFija = totalVisitasSemana * tarifaFijaPorCheckin
   const mensajeTarifaFija = textoTarifaFijaPorCategoria(negocio?.categoria, ganancias.tarifas_por_plan)
 
   return (
@@ -496,7 +533,11 @@ export default function NegocioDashboardPage() {
               MUVET
             </Link>
             <h1 className="text-2xl font-black tracking-tight text-white">Panel de negocio</h1>
-            <p className="mt-1 text-sm text-white/40">Reservaciones de hoy y operación de tu negocio asignado</p>
+            <p className="mt-1 text-sm text-white/40">
+              {esRestaurante
+                ? 'Control de entradas y resumen de visitas del restaurante'
+                : 'Reservaciones de hoy y operación de tu negocio asignado'}
+            </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
@@ -505,12 +546,14 @@ export default function NegocioDashboardPage() {
             >
               Inicio
             </Link>
-            <Link
-              href="/negocio/horarios"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Horarios
-            </Link>
+            {!esRestaurante && (
+              <Link
+                href="/negocio/horarios"
+                className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+              >
+                Horarios
+              </Link>
+            )}
             <Link
               href="/perfil"
               className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
@@ -549,59 +592,108 @@ export default function NegocioDashboardPage() {
 
         {!sinNegocio && negocio && (
           <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-2">
-              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mi negocio</p>
-              <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-                <div className="h-28 w-full overflow-hidden rounded-lg border border-[#E5E5E5] sm:w-40">
-                  {negocio.imagen_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={negocio.imagen_url}
-                      alt={negocio.nombre}
-                      className="h-full w-full object-cover"
-                    />
+            {usaPanelCheckins && (
+              <>
+                <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-2">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Check-ins del día</p>
+                  <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{checkinsHoy.length}</p>
+                  {checkinsHoy.length === 0 ? (
+                    <p className="mt-2 text-sm text-[#666]">Aún no hay entradas validadas hoy.</p>
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-[#6B4FE8] text-3xl font-black tracking-tight text-[#E8FF47]">
-                      {inicialesNegocio(negocio.nombre)}
-                    </div>
+                    <ul className="mt-3 space-y-2">
+                      {checkinsHoy.map((checkin) => (
+                        <li
+                          key={checkin.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-[#0A0A0A]">{checkin.usuario_nombre}</p>
+                            <p className="truncate text-[11px] text-[#666]">{checkin.usuario_email ?? 'Sin email'}</p>
+                          </div>
+                          <span className="shrink-0 text-xs font-semibold text-[#6B4FE8]">
+                            {formatHoraCheckin(checkin.fecha)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
 
-                <div className="flex-1">
-                  <p className="text-lg font-black text-[#0A0A0A]">{negocio.nombre}</p>
-                  <p className="text-xs text-[#666]">
-                    {negocio.ciudad.charAt(0).toUpperCase() + negocio.ciudad.slice(1)} · {negocio.categoria}
-                  </p>
+                <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Total de visitas de la semana</p>
+                  <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{totalVisitasSemana}</p>
+                </div>
 
-                  <form onSubmit={subirFotoNegocio} className="mt-3 flex flex-col gap-2">
-                    <input
-                      type="file"
-                      name="foto_negocio"
-                      accept="image/*"
-                      className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs text-[#555] file:mr-3 file:rounded-md file:border-0 file:bg-[#6B4FE8] file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:tracking-wide file:text-white hover:file:bg-[#5b40cd]"
-                    />
-                    <button
-                      type="submit"
-                      disabled={subiendoFoto}
-                      className="self-start rounded-lg bg-[#0A0A0A] px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {subiendoFoto ? 'Subiendo...' : 'Subir / cambiar foto'}
-                    </button>
-                  </form>
+                <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Ganancias</p>
+                  <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{formatMonedaMXN(gananciasSemanaTarifaFija)}</p>
+                  <p className="mt-1 text-xs text-[#666]">
+                    {totalVisitasSemana} × {formatMonedaMXN(tarifaFijaPorCheckin)}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {!usaPanelCheckins && (
+              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-2">
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mi negocio</p>
+                <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+                  <div className="h-28 w-full overflow-hidden rounded-lg border border-[#E5E5E5] sm:w-40">
+                    {negocio.imagen_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={negocio.imagen_url}
+                        alt={negocio.nombre}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-[#6B4FE8] text-3xl font-black tracking-tight text-[#E8FF47]">
+                        {inicialesNegocio(negocio.nombre)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1">
+                    <p className="text-lg font-black text-[#0A0A0A]">{negocio.nombre}</p>
+                    <p className="text-xs text-[#666]">
+                      {negocio.ciudad.charAt(0).toUpperCase() + negocio.ciudad.slice(1)} · {negocio.categoria}
+                    </p>
+
+                    <form onSubmit={subirFotoNegocio} className="mt-3 flex flex-col gap-2">
+                      <input
+                        type="file"
+                        name="foto_negocio"
+                        accept="image/*"
+                        className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs text-[#555] file:mr-3 file:rounded-md file:border-0 file:bg-[#6B4FE8] file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:tracking-wide file:text-white hover:file:bg-[#5b40cd]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={subiendoFoto}
+                        className="self-start rounded-lg bg-[#0A0A0A] px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {subiendoFoto ? 'Subiendo...' : 'Subir / cambiar foto'}
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Reservaciones del día</p>
-              <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{resumen.reservaciones_hoy}</p>
-            </div>
+            {!usaPanelCheckins && (
+              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Reservaciones del día</p>
+                <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{resumen.reservaciones_hoy}</p>
+              </div>
+            )}
 
-            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Horarios activos</p>
-              <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{resumen.horarios_activos}</p>
-            </div>
-            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+            {!usaPanelCheckins && (
+              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Horarios activos</p>
+                <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{resumen.horarios_activos}</p>
+              </div>
+            )}
+            {!usaPanelCheckins && (
+              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
               <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis ganancias</p>
               <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-4 py-3">
                 <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Tarifa por visita</p>
@@ -677,9 +769,11 @@ export default function NegocioDashboardPage() {
               <p className="mt-4 rounded-lg bg-[#E8FF47]/20 px-3 py-2 text-xs font-semibold text-[#0A0A0A]">
                 {ganancias.nota}
               </p>
-            </div>
+              </div>
+            )}
 
-            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+            {!usaPanelCheckins && (
+              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
               {!cuentaStripeConectada ? (
                 <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
                   <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">
@@ -800,7 +894,8 @@ export default function NegocioDashboardPage() {
                   </div>
                 </>
               )}
-            </div>
+              </div>
+            )}
 
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
               <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-[#888]">Escáner QR</p>
@@ -812,59 +907,60 @@ export default function NegocioDashboardPage() {
               </Link>
             </div>
 
-            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Perfil del negocio</p>
-              <p className="mt-1 text-xs text-[#666]">
-                Completa tus redes para que aparezcan en las cards del panel de usuario.
-              </p>
+            {!usaPanelCheckins && (
+              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Perfil del negocio</p>
+                <p className="mt-1 text-xs text-[#666]">
+                  Completa tus redes para que aparezcan en las cards del panel de usuario.
+                </p>
 
-              <form onSubmit={guardarPerfilNegocio} className="mt-3 space-y-3">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#555]">Instagram</span>
-                    <input
-                      type="text"
-                      value={instagramHandle}
-                      onChange={event => setInstagramHandle(event.target.value)}
-                      placeholder="@tu_negocio"
-                      className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
-                    />
-                  </label>
+                <form onSubmit={guardarPerfilNegocio} className="mt-3 space-y-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="block">
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#555]">Instagram</span>
+                      <input
+                        type="text"
+                        value={instagramHandle}
+                        onChange={event => setInstagramHandle(event.target.value)}
+                        placeholder="@tu_negocio"
+                        className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                      />
+                    </label>
 
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#555]">TikTok</span>
-                    <input
-                      type="text"
-                      value={tiktokHandle}
-                      onChange={event => setTiktokHandle(event.target.value)}
-                      placeholder="@tu_negocio"
-                      className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
-                    />
-                  </label>
-                </div>
+                    <label className="block">
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#555]">TikTok</span>
+                      <input
+                        type="text"
+                        value={tiktokHandle}
+                        onChange={event => setTiktokHandle(event.target.value)}
+                        placeholder="@tu_negocio"
+                        className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                      />
+                    </label>
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={guardandoPerfil}
-                  className="rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {guardandoPerfil ? 'Guardando...' : 'Guardar perfil'}
-                </button>
-              </form>
-            </div>
+                  <button
+                    type="submit"
+                    disabled={guardandoPerfil}
+                    className="rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {guardandoPerfil ? 'Guardando...' : 'Guardar perfil'}
+                  </button>
+                </form>
+              </div>
+            )}
           </section>
         )}
 
-        {cargando && <p className="text-center text-sm text-[#888]">Cargando reservaciones...</p>}
+        {!usaPanelCheckins && cargando && <p className="text-center text-sm text-[#888]">Cargando reservaciones...</p>}
 
-        {!cargando && !sinNegocio && negocio && gruposPorHorario.length === 0 && (
+        {!usaPanelCheckins && !cargando && !sinNegocio && negocio && gruposPorHorario.length === 0 && (
           <div className="rounded-xl border border-dashed border-[#E5E5E5] bg-white p-6 text-center">
             <p className="text-sm font-semibold text-[#0A0A0A]">Sin reservaciones para hoy</p>
             <p className="mt-1 text-xs text-[#888]">{negocio.nombre} no tiene reservaciones confirmadas/completadas hoy.</p>
           </div>
         )}
-
-        {!cargando && gruposPorHorario.length > 0 && (
+        {!usaPanelCheckins && !cargando && gruposPorHorario.length > 0 && (
           <div className="space-y-3">
             {gruposPorHorario.map(grupo => (
               <section key={grupo.key} className="rounded-xl border border-[#E5E5E5] bg-white p-4">

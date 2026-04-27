@@ -140,6 +140,11 @@ function formatMoneyMxn(monto: number) {
   }).format(monto)
 }
 
+function enlaceMapaNegocio(negocio: Negocio) {
+  const query = encodeURIComponent(`${negocio.nombre} ${negocio.direccion}`)
+  return `https://www.google.com/maps/search/?api=1&query=${query}`
+}
+
 function serviciosWellnessVisibles(negocio: Negocio): ServicioNegocio[] {
   return Array.isArray(negocio.servicios_disponibles)
     ? negocio.servicios_disponibles.filter((servicio) => servicio?.activo !== false)
@@ -510,6 +515,7 @@ export default function ExplorarPage() {
                 : false
               const instagramHandle = normalizarHandleSocial(negocio.instagram_handle)
               const tiktokHandle = normalizarHandleSocial(negocio.tiktok_handle)
+              const esRestaurante = negocio.categoria === 'restaurante'
               const iniciales = inicialesNegocio(negocio.nombre)
               const menuReservasAbierto = Boolean(menuReservasAbiertoPorNegocioId[negocio.id])
               const cargandoHorarios = Boolean(cargandoHorariosPorNegocioId[negocio.id])
@@ -523,23 +529,11 @@ export default function ExplorarPage() {
                 ? serviciosWellnessReservables(negocio)
                 : []
               const servicioSeleccionadoId = servicioSeleccionadoPorNegocioId[negocio.id] ?? ''
-              const montoMaximoRestaurante = typeof negocio.monto_maximo_visita === 'number'
-                ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
-                : 0
-              const planBeneficioCategoria: PlanMembresia | null = negocio.categoria === 'estetica'
-                ? 'plus'
-                : negocio.categoria === 'restaurante'
-                  ? 'total'
-                  : null
-              const tieneBeneficioCategoria = planBeneficioCategoria
-                ? Boolean(planEfectivo && puedeReservarConPlan(planEfectivo, planBeneficioCategoria))
-                : false
-              const textoBadgeBeneficioCategoria = planBeneficioCategoria
-                ? `${tieneBeneficioCategoria ? 'Beneficio' : 'Requiere'} ${planBeneficioCategoria === 'plus' ? 'Plus' : 'Total'}`
-                : null
-              const claseBadgeBeneficioCategoria = tieneBeneficioCategoria
-                ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]'
-                : 'bg-[#E5E7EB] text-[#6B7280]'
+              const textoBadgeWellness = 'Beneficio Plus y Total'
+              const claseBadgeWellness = 'bg-[#6B4FE8]/10 text-[#6B4FE8]'
+              const urlVerMasRestaurante = instagramHandle
+                ? `https://instagram.com/${instagramHandle}`
+                : enlaceMapaNegocio(negocio)
 
               return (
                 <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
@@ -557,54 +551,79 @@ export default function ExplorarPage() {
                       </div>
                     )}
                     <span className="absolute right-2 top-2 shrink-0 rounded-full bg-[#6B4FE8]/10 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#6B4FE8]">
-                      {PLAN_LABELS[planRequerido]}
+                      {esRestaurante ? 'Llegar directo — Plan Total' : PLAN_LABELS[planRequerido]}
                     </span>
                   </div>
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-base font-black text-[#0A0A0A]">{negocio.nombre}</h2>
                   </div>
-
-                  <div className="mt-2 space-y-1 text-sm text-[#555]">
-                    <p>
-                      <span className="font-semibold text-[#0A0A0A]">Categoría:</span> {CATEGORIA_LABELS[negocio.categoria]}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {CIUDAD_LABELS[negocio.ciudad]}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-[#0A0A0A]">Dirección:</span> {negocio.direccion}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-[#0A0A0A]">Instagram:</span>{' '}
-                      {instagramHandle ? (
-                        <a
-                          href={`https://instagram.com/${instagramHandle}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
-                        >
-                          @{instagramHandle}
-                        </a>
-                      ) : (
-                        'No disponible'
+                  {esRestaurante ? (
+                    <div className="mt-2 space-y-1 text-sm text-[#555]">
+                      {negocio.descripcion && (
+                        <p className="text-sm text-[#555]">{negocio.descripcion}</p>
                       )}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-[#0A0A0A]">TikTok:</span>{' '}
-                      {tiktokHandle ? (
-                        <a
-                          href={`https://tiktok.com/@${tiktokHandle}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
-                        >
-                          @{tiktokHandle}
-                        </a>
-                      ) : (
-                        'No disponible'
-                      )}
-                    </p>
-                  </div>
+                      <p>
+                        <span className="font-semibold text-[#0A0A0A]">Dirección:</span> {negocio.direccion}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-[#0A0A0A]">Instagram:</span>{' '}
+                        {instagramHandle ? (
+                          <a
+                            href={`https://instagram.com/${instagramHandle}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
+                          >
+                            @{instagramHandle}
+                          </a>
+                        ) : (
+                          'No disponible'
+                        )}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-2 space-y-1 text-sm text-[#555]">
+                      <p>
+                        <span className="font-semibold text-[#0A0A0A]">Categoría:</span> {CATEGORIA_LABELS[negocio.categoria]}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {CIUDAD_LABELS[negocio.ciudad]}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-[#0A0A0A]">Dirección:</span> {negocio.direccion}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-[#0A0A0A]">Instagram:</span>{' '}
+                        {instagramHandle ? (
+                          <a
+                            href={`https://instagram.com/${instagramHandle}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
+                          >
+                            @{instagramHandle}
+                          </a>
+                        ) : (
+                          'No disponible'
+                        )}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-[#0A0A0A]">TikTok:</span>{' '}
+                        {tiktokHandle ? (
+                          <a
+                            href={`https://tiktok.com/@${tiktokHandle}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
+                          >
+                            @{tiktokHandle}
+                          </a>
+                        ) : (
+                          'No disponible'
+                        )}
+                      </p>
+                    </div>
+                  )}
 
                   {negocio.categoria === 'estetica' && (
                     <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
@@ -612,11 +631,9 @@ export default function ExplorarPage() {
                         <p className="text-[11px] font-black uppercase tracking-widest text-[#555]">
                           Servicios incluidos
                         </p>
-                        {textoBadgeBeneficioCategoria && (
-                          <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${claseBadgeBeneficioCategoria}`}>
-                            {textoBadgeBeneficioCategoria}
-                          </span>
-                        )}
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${claseBadgeWellness}`}>
+                          {textoBadgeWellness}
+                        </span>
                       </div>
                       {serviciosWellness.length === 0 ? (
                         <p className="mt-1 text-xs text-[#777]">Este negocio aún no publica servicios disponibles.</p>
@@ -637,40 +654,44 @@ export default function ExplorarPage() {
                     </div>
                   )}
 
-                  {negocio.categoria === 'restaurante' && (
-                    <div className={`mt-3 rounded-lg border px-3 py-2 ${tieneBeneficioCategoria ? 'border-[#D9CEF8] bg-[#F6F1FF]' : 'border-[#E5E7EB] bg-[#F3F4F6]'}`}>
-                      {textoBadgeBeneficioCategoria && (
-                        <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${claseBadgeBeneficioCategoria}`}>
-                          {textoBadgeBeneficioCategoria}
-                        </span>
-                      )}
-                      <p className={`mt-1 text-xs font-bold ${tieneBeneficioCategoria ? 'text-[#4A2CA3]' : 'text-[#6B7280]'}`}>
-                        Hasta {formatMoneyMxn(montoMaximoRestaurante)} en consumo por visita
-                      </p>
-                    </div>
+                  {esRestaurante ? (
+                    <a
+                      href={urlVerMasRestaurante}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#0A0A0A] px-3 py-2 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-[#E8FF47]"
+                    >
+                      Ver más
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => abrirOCerrarMenuReservas(negocio, menuReservasAbierto)}
+                      disabled={!puedeReservar}
+                      className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
+                        puedeReservar
+                          ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
+                          : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                      }`}
+                    >
+                      {!puedeReservar
+                        ? 'Requiere membresía'
+                        : menuReservasAbierto
+                          ? negocio.categoria === 'estetica'
+                            ? 'Ocultar disponibilidad'
+                            : 'Ocultar horarios'
+                          : negocio.categoria === 'estetica'
+                            ? 'Reservar servicio'
+                            : 'Reservar clase'}
+                    </button>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => abrirOCerrarMenuReservas(negocio, menuReservasAbierto)}
-                    disabled={!puedeReservar}
-                    className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
-                      puedeReservar
-                        ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
-                        : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
-                    }`}
-                  >
-                    {!puedeReservar
-                      ? 'Requiere membresía'
-                      : menuReservasAbierto
-                        ? 'Ocultar horarios'
-                        : 'Reservar'}
-                  </button>
-
-                  {puedeReservar && menuReservasAbierto && (
+                  {!esRestaurante && puedeReservar && menuReservasAbierto && (
                     <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-[#555]">
-                        Horarios disponibles
+                        {negocio.categoria === 'estetica'
+                          ? 'Disponibilidad de agenda'
+                          : 'Horarios disponibles'}
                       </p>
                       {negocio.categoria === 'estetica' && (
                         <div className="mt-2 rounded-md border border-[#E5E5E5] bg-white p-2">
@@ -720,7 +741,11 @@ export default function ExplorarPage() {
                       ) : errorHorarios ? (
                         <p className="mt-2 text-xs font-semibold text-red-800">{errorHorarios}</p>
                       ) : horarios.length === 0 ? (
-                        <p className="mt-2 text-xs text-[#666]">No hay horarios disponibles</p>
+                        <p className="mt-2 text-xs text-[#666]">
+                          {negocio.categoria === 'estetica'
+                            ? 'No hay disponibilidad de agenda'
+                            : 'No hay horarios disponibles'}
+                        </p>
                       ) : (
                         <div className="mt-2 space-y-2">
                           {horarios.map((horario) => {
@@ -751,12 +776,12 @@ export default function ExplorarPage() {
                                   <span className="text-xs text-[#666]">
                                     Próxima fecha: {fechaProxima}
                                   </span>
-                                  {horario.nombre_coach && (
+                                  {negocio.categoria !== 'estetica' && horario.nombre_coach && (
                                     <span className="text-xs text-[#666]">
                                       Coach: {horario.nombre_coach}
                                     </span>
                                   )}
-                                  {horario.tipo_clase && (
+                                  {negocio.categoria !== 'estetica' && horario.tipo_clase && (
                                     <span className="text-xs text-[#666]">
                                       Tipo de clase: {horario.tipo_clase}
                                     </span>
