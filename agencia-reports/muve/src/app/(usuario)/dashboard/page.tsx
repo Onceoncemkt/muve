@@ -10,14 +10,16 @@ import RoleRedirectEffect from './RoleRedirectEffect'
 import { CIUDAD_LABELS } from '@/types'
 import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
-import { PLAN_VISITAS_MENSUALES, normalizarPlan } from '@/lib/planes'
+import { PLAN_VISITAS_MENSUALES, normalizarPlan, planDesdePriceId } from '@/lib/planes'
 import { resolverVentanaCiclo } from '@/lib/ciclos'
+import { stripe } from '@/lib/stripe'
 
 type PerfilDashboard = {
   nombre: string
   ciudad: Ciudad
   plan_activo: boolean
   plan: PlanMembresia | null
+  stripe_subscription_id?: string | null
   rol: 'usuario' | 'staff' | 'admin'
   creditos_extra?: number | null
   fecha_inicio_ciclo?: string | null
@@ -60,7 +62,7 @@ export default async function DashboardPage({
 
   const consultaPerfil = await supabase
     .from('users')
-    .select('nombre, ciudad, plan_activo, plan, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo')
+    .select('nombre, ciudad, plan_activo, plan, stripe_subscription_id, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo')
     .eq('id', user.id)
     .single<PerfilDashboard>()
   let perfil = consultaPerfil.data ?? null
@@ -68,7 +70,7 @@ export default async function DashboardPage({
   if (!perfil) {
     const fallbackConCiclo = await supabase
       .from('users')
-      .select('nombre, ciudad, plan_activo, plan, rol, fecha_fin_plan, fecha_inicio_ciclo')
+      .select('nombre, ciudad, plan_activo, plan, stripe_subscription_id, rol, fecha_fin_plan, fecha_inicio_ciclo')
       .eq('id', user.id)
       .single<Omit<PerfilDashboard, 'creditos_extra'>>()
 
@@ -83,7 +85,7 @@ export default async function DashboardPage({
   if (!perfil) {
     const fallbackMinimo = await supabase
       .from('users')
-      .select('nombre, ciudad, plan_activo, plan, rol')
+      .select('nombre, ciudad, plan_activo, plan, stripe_subscription_id, rol')
       .eq('id', user.id)
       .single<Omit<PerfilDashboard, 'creditos_extra' | 'fecha_inicio_ciclo' | 'fecha_fin_plan'>>()
 
@@ -107,17 +109,48 @@ export default async function DashboardPage({
   const params = await searchParams
   const recienActivada = params.membresia === 'activada'
 
-  const planUsuario = normalizarPlan(perfil?.plan ?? null)
-  const planActivo = Boolean(perfil?.plan_activo)
+  let planUsuario = normalizarPlan(perfil?.plan ?? null)
+  let planActivo = Boolean(perfil?.plan_activo)
+
+  const stripeSubscriptionId = typeof perfil?.stripe_subscription_id === 'string'
+    ? perfil.stripe_subscription_id
+    : null
+
+  if (stripeSubscriptionId && (!planActivo || !planUsuario)) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
+      const estadoStripeActivo = subscription.status === 'active' || subscription.status === 'trialing'
+      if (estadoStripeActivo) {
+        planActivo = true
+        const planStripe = planDesdePriceId(subscription.items.data[0]?.price?.id)
+        if (planStripe) {
+          planUsuario = planStripe
+          await supabase
+            .from('users')
+            .update({ plan_activo: true, plan: planStripe })
+            .eq('id', user.id)
+        } else {
+          await supabase
+            .from('users')
+            .update({ plan_activo: true })
+            .eq('id', user.id)
+        }
+      }
+    } catch (error) {
+      console.error('[dashboard] No se pudo reconciliar membresía desde Stripe:', error)
+    }
+  }
+
+  const hasActiveMembership = planActivo
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
-  const limiteMensual = planActivo && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
+  const limiteMensual = hasActiveMembership && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
 
   let usadasCiclo = 0
   let cicloActualTexto = '—'
   let cicloNuevoTexto = '—'
 
-  if (planActivo && planUsuario) {
+  if (hasActiveMembership && planUsuario) {
     const ciclo = resolverVentanaCiclo({
       fechaInicioCiclo: perfil?.fecha_inicio_ciclo ?? null,
       fechaFinPlan: perfil?.fecha_fin_plan ?? null,
@@ -172,7 +205,7 @@ export default async function DashboardPage({
       )}
 
       {/* Sin membresía activa */}
-      {!planActivo && (
+      {!hasActiveMembership && (
         <div className="bg-[#E8FF47] px-4 py-3">
           <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-4">
             <p className="text-sm font-bold text-[#0A0A0A]">
@@ -199,7 +232,7 @@ export default async function DashboardPage({
         <h1 className="mt-2 text-2xl font-black tracking-tight">
           Hola, {nombre.split(' ')[0]}
         </h1>
-        {planActivo ? (
+        {hasActiveMembership ? (
           <div className="mt-2">
             {planActivoLabel ? (
               <span className="inline-flex rounded-full bg-[#E8FF47] px-3 py-1 text-xs font-black uppercase tracking-wider text-[#0A0A0A]">
@@ -227,7 +260,7 @@ export default async function DashboardPage({
             <p className={`mt-2 text-sm font-bold ${restantesEnRojo ? 'text-[#FCA5A5]' : 'text-[#86EFAC]'}`}>
               Visitas restantes: {restantesCiclo}
             </p>
-            {planActivo && (
+            {hasActiveMembership && (
               <>
                 <p className="mt-2 text-xs text-white/40">Tu ciclo actual: {cicloActualTexto}</p>
                 <p className="mt-1 text-xs text-white/40">Ciclo nuevo el {cicloNuevoTexto}</p>
@@ -279,7 +312,7 @@ export default async function DashboardPage({
       </div>
 
       {/* Gestión de membresía */}
-      {planActivo ? (
+      {hasActiveMembership ? (
         <div className="mt-4 px-4">
           <BotonPortal className="w-full rounded-lg border border-[#E5E5E5] bg-white py-3 text-sm font-semibold text-[#888] transition-colors hover:text-[#0A0A0A]" />
         </div>
