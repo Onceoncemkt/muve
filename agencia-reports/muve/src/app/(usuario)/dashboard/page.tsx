@@ -57,8 +57,19 @@ function parseBooleanSegura(value: unknown): boolean | null {
   }
   if (typeof value === 'string') {
     const normalizado = value.trim().toLowerCase()
-    if (normalizado === 'true' || normalizado === '1') return true
-    if (normalizado === 'false' || normalizado === '0') return false
+    if (
+      normalizado === 'true'
+      || normalizado === '1'
+      || normalizado === 't'
+      || normalizado === 'yes'
+      || normalizado === 'si'
+    ) return true
+    if (
+      normalizado === 'false'
+      || normalizado === '0'
+      || normalizado === 'f'
+      || normalizado === 'no'
+    ) return false
   }
   return null
 }
@@ -128,7 +139,7 @@ export default async function DashboardPage({
   let planUsuario = normalizarPlan(perfil?.plan ?? null)
   const planActivoFlag = parseBooleanSegura(perfil?.plan_activo)
   let planActivo = planActivoFlag === true
-  if (!planActivo && planActivoFlag !== false && Boolean(planUsuario)) {
+  if (!planActivo && Boolean(planUsuario)) {
     planActivo = true
   }
   if (!planActivo || !planUsuario) {
@@ -159,7 +170,7 @@ export default async function DashboardPage({
     planUsuario = 'basico'
   }
 
-  const hasActiveMembership = planActivo
+  const hasActiveMembership = planActivo || Boolean(planUsuario)
   const mostrarBannerActivacion = planActivoFlag === false && !hasActiveMembership
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null

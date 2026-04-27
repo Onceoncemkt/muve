@@ -41,10 +41,16 @@ export const PLAN_POR_PRICE_ID: Record<string, PlanMembresia> = {
 
 export function normalizarPlan(plan: unknown): PlanMembresia | null {
   if (typeof plan !== 'string') return null
-  const normalizado = plan.trim().toLowerCase()
-  if (normalizado === 'basico' || normalizado === 'básico') return 'basico'
-  if (normalizado === 'plus') return 'plus'
-  if (normalizado === 'total') return 'total'
+  const normalizado = plan
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!normalizado) return null
+
+  if (normalizado === 'basico' || normalizado.includes('basico')) return 'basico'
+  if (normalizado === 'plus' || normalizado.includes('plus')) return 'plus'
+  if (normalizado === 'total' || normalizado.includes('total')) return 'total'
   return null
 }
 
