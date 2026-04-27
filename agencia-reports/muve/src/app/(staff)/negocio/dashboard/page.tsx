@@ -258,25 +258,6 @@ function obtenerMensajeFlashDesdeQuery(params: URLSearchParams) {
   } as const
 }
 
-function textoTarifaFijaPorCategoria(
-  categoria: string | null | undefined,
-  tarifasPorPlan: Record<PlanMembresia, number>
-) {
-  const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
-  const tarifaFija = tarifasPorPlan.basico
-
-  if (categoriaNormalizada === 'gimnasio') {
-    return `Recibes ${formatMonedaMXN(tarifaFija)} por cada visita MUVET`
-  }
-  if (categoriaNormalizada === 'estetica') {
-    return `Recibes ${formatMonedaMXN(tarifaFija)} por cada visita MUVET`
-  }
-  if (categoriaNormalizada === 'restaurante') {
-    return `Recibes ${formatMonedaMXN(tarifaFija)} por cada visita MUVET`
-  }
-
-  return null
-}
 
 export default function NegocioDashboardPage() {
   const [fechaHoy] = useState(hoyLocalISO())
@@ -526,22 +507,16 @@ export default function NegocioDashboardPage() {
   }, [reservaciones])
   const cuentaStripeConectada = Boolean(negocio?.stripe_account_id)
   const categoriaNegocio = normalizarCategoriaNegocio(negocio?.categoria)
-  const esEstetica = categoriaNegocio === 'estetica' || serviciosDisponibles.length > 0
   const esRestaurante = categoriaNegocio === 'restaurante'
   const esGimnasio = categoriaNegocio === 'gimnasio'
-  const esClases = categoriaNegocio === 'clases'
+  const esEstetica = categoriaNegocio === 'estetica' || serviciosDisponibles.length > 0
+  const esClases = !esRestaurante && !esGimnasio && !esEstetica
   const totalVisitasSemana = PLANES_MEMBRESIA.reduce(
     (acumulado, plan) => acumulado + (ganancias.semana.visitas_por_plan[plan] ?? 0),
     0
   )
   const tarifaFijaPorCheckin = ganancias.tarifas_por_plan.basico ?? 0
   const gananciasSemanaTarifaFija = totalVisitasSemana * tarifaFijaPorCheckin
-  const totalVisitasProximoPago = (
-    pagos.proximo_pago_estimado.visitas_basico
-    + pagos.proximo_pago_estimado.visitas_plus
-    + pagos.proximo_pago_estimado.visitas_total
-  )
-  const mensajeTarifaFija = textoTarifaFijaPorCategoria(negocio?.categoria, ganancias.tarifas_por_plan)
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-10">
@@ -790,48 +765,31 @@ export default function NegocioDashboardPage() {
               <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis ganancias</p>
               <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-4 py-3">
                 <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Tarifa por visita</p>
-                {categoriaNegocio === 'clases' ? (
-                  <div className="mt-2 space-y-1 text-sm font-semibold text-[#0A0A0A]">
-                    <p>Plan Básico: {formatMonedaMXN(ganancias.tarifas_por_plan.basico)} por visita</p>
-                    <p>Plan Plus: {formatMonedaMXN(ganancias.tarifas_por_plan.plus)} por visita</p>
-                    <p>Plan Total: {formatMonedaMXN(ganancias.tarifas_por_plan.total)} por visita</p>
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm font-semibold text-[#0A0A0A]">
-                    {mensajeTarifaFija ?? `Recibes ${formatMonedaMXN(ganancias.tarifas_por_plan.basico)} por cada visita MUVET`}
-                  </p>
-                )}
+                <div className="mt-2 space-y-1 text-sm font-semibold text-[#0A0A0A]">
+                  <p>Plan Básico: {formatMonedaMXN(ganancias.tarifas_por_plan.basico)} por visita</p>
+                  <p>Plan Plus: {formatMonedaMXN(ganancias.tarifas_por_plan.plus)} por visita</p>
+                  <p>Plan Total: {formatMonedaMXN(ganancias.tarifas_por_plan.total)} por visita</p>
+                </div>
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
                   <p className="text-[11px] font-black uppercase tracking-widest text-[#6B4FE8]">Esta semana</p>
-                  {categoriaNegocio === 'clases' ? (
-                    <div className="mt-3 space-y-2">
-                      {PLANES_MEMBRESIA.map((plan) => {
-                        const visitasPlan = ganancias.semana.visitas_por_plan[plan] ?? 0
-                        const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
-                        const totalPlan = ganancias.semana.total_por_plan[plan] ?? (visitasPlan * tarifaPlan)
-                        return (
-                          <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
-                            <span>
-                              Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
-                            </span>
-                            <span className="font-black text-[#0A0A0A]">= {formatMonedaMXN(totalPlan)}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A]">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <span>
-                          Visitas MUVET: {totalVisitasSemana} × {formatMonedaMXN(tarifaFijaPorCheckin)}
-                        </span>
-                        <span className="font-black text-[#0A0A0A]">= {formatMonedaMXN(gananciasSemanaTarifaFija)}</span>
-                      </div>
-                    </div>
-                  )}
+                  <div className="mt-3 space-y-2">
+                    {PLANES_MEMBRESIA.map((plan) => {
+                      const visitasPlan = ganancias.semana.visitas_por_plan[plan] ?? 0
+                      const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
+                      const totalPlan = ganancias.semana.total_por_plan[plan] ?? (visitasPlan * tarifaPlan)
+                      return (
+                        <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
+                          <span>
+                            Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
+                          </span>
+                          <span className="font-black text-[#0A0A0A]">= {formatMonedaMXN(totalPlan)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
 
                   <div className="mt-4 rounded-lg bg-[#0A0A0A] px-4 py-3 text-center">
                     <p className="text-[11px] font-black uppercase tracking-widest text-white/50">Total a cobrar</p>
@@ -922,37 +880,24 @@ export default function NegocioDashboardPage() {
                           pagos.proximo_pago_estimado.periodo_fin
                         )}
                       </p>
-                      {categoriaNegocio === 'clases' ? (
-                        <div className="mt-3 space-y-2">
-                          {PLANES_MEMBRESIA.map((plan) => {
-                            const visitasPlan = plan === 'basico'
-                              ? pagos.proximo_pago_estimado.visitas_basico
-                              : plan === 'plus'
-                                ? pagos.proximo_pago_estimado.visitas_plus
-                                : pagos.proximo_pago_estimado.visitas_total
-                            const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
-                            return (
-                              <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
-                                <span>
-                                  Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
-                                </span>
-                                <span className="font-black">= {formatMonedaMXN(visitasPlan * tarifaPlan)}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      ) : (
-                        <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A]">
-                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                            <span>
-                              Visitas MUVET: {totalVisitasProximoPago} × {formatMonedaMXN(tarifaFijaPorCheckin)}
-                            </span>
-                            <span className="font-black">
-                              = {formatMonedaMXN(totalVisitasProximoPago * tarifaFijaPorCheckin)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                      <div className="mt-3 space-y-2">
+                        {PLANES_MEMBRESIA.map((plan) => {
+                          const visitasPlan = plan === 'basico'
+                            ? pagos.proximo_pago_estimado.visitas_basico
+                            : plan === 'plus'
+                              ? pagos.proximo_pago_estimado.visitas_plus
+                              : pagos.proximo_pago_estimado.visitas_total
+                          const tarifaPlan = ganancias.tarifas_por_plan[plan] ?? 0
+                          return (
+                            <div key={plan} className="flex flex-col gap-1 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] sm:flex-row sm:items-center sm:justify-between">
+                              <span>
+                                Visitas {PLAN_LABELS[plan]}: {visitasPlan} × {formatMonedaMXN(tarifaPlan)}
+                              </span>
+                              <span className="font-black">= {formatMonedaMXN(visitasPlan * tarifaPlan)}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
 
                       <div className="mt-4 rounded-lg bg-[#0A0A0A] px-4 py-3 text-center">
                         <p className="text-[11px] font-black uppercase tracking-widest text-white/50">Total estimado</p>
