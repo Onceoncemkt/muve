@@ -40,6 +40,8 @@ type NegocioDashboard = {
   instagram_handle?: string | null
   tiktok_handle?: string | null
   stripe_account_id?: string | null
+  monto_maximo_visita?: number | null
+  servicios_incluidos?: string | null
 }
 
 type GananciasSemana = {
@@ -310,11 +312,13 @@ export async function GET(request: NextRequest) {
   }
 
   const consultasNegocio = [
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true },
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, stripe_account_id', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: true },
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: false },
-    { select: 'id, nombre, ciudad, categoria, imagen_url', incluyeImagen: true, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false },
-    { select: 'id, nombre, ciudad, categoria', incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false },
+    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita, servicios_incluidos', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: true },
+    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, stripe_account_id', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, categoria, imagen_url', incluyeImagen: true, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, categoria', incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
   ] as const
 
   let negocio: NegocioDashboard | null = null
@@ -337,6 +341,16 @@ export async function GET(request: NextRequest) {
         instagram_handle: consulta.incluyeInstagram ? (resultado.data.instagram_handle ?? null) : null,
         tiktok_handle: consulta.incluyeTiktok ? (resultado.data.tiktok_handle ?? null) : null,
         stripe_account_id: consulta.incluyeStripeAccountId ? (resultado.data.stripe_account_id ?? null) : null,
+        monto_maximo_visita: consulta.incluyeMontoMaximoVisita
+          ? (typeof resultado.data.monto_maximo_visita === 'number'
+            ? Math.max(Math.trunc(resultado.data.monto_maximo_visita), 0)
+            : 0)
+          : null,
+        servicios_incluidos: consulta.incluyeServiciosIncluidos
+          ? (typeof resultado.data.servicios_incluidos === 'string'
+            ? resultado.data.servicios_incluidos
+            : null)
+          : null,
       }
       negocioError = null
       break
@@ -348,6 +362,8 @@ export async function GET(request: NextRequest) {
       || (consulta.incluyeInstagram && faltaColumna(resultado.error, 'instagram_handle'))
       || (consulta.incluyeTiktok && faltaColumna(resultado.error, 'tiktok_handle'))
       || (consulta.incluyeStripeAccountId && faltaColumna(resultado.error, 'stripe_account_id'))
+      || (consulta.incluyeMontoMaximoVisita && faltaColumna(resultado.error, 'monto_maximo_visita'))
+      || (consulta.incluyeServiciosIncluidos && faltaColumna(resultado.error, 'servicios_incluidos'))
     )
     if (!errorPorColumnaOpcional) break
   }

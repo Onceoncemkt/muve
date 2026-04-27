@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { DiaSemana, EstadoReserva, PlanMembresia } from '@/types'
-import { formatHora } from '@/types'
+import { DIA_LABELS, formatHora } from '@/types'
 import { normalizarCategoriaNegocio } from '@/lib/planes'
 
 type UsuarioReserva = { id: string; nombre: string; email: string }
@@ -56,6 +56,8 @@ interface NegocioDashboard {
   instagram_handle?: string | null
   tiktok_handle?: string | null
   stripe_account_id?: string | null
+  monto_maximo_visita?: number | null
+  servicios_incluidos?: string | null
 }
 
 interface GananciasSemana {
@@ -109,6 +111,67 @@ interface DashboardPayload {
   pagos?: PagosPayload
   reservaciones?: ReservacionNegocio[]
   error?: string
+}
+
+type ConfiguracionRestaurante = {
+  servicio: string
+  dias_activos: DiaSemana[]
+}
+
+const DIAS_SEMANA: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+const RESTAURANTE_CONFIG_PREFIX = '__MUVET_RESTAURANTE_CONFIG__'
+
+function normalizarDiasActivosRestaurante(value: unknown): DiaSemana[] {
+  if (!Array.isArray(value)) return [...DIAS_SEMANA]
+  const resultado = value.filter((dia): dia is DiaSemana => (
+    typeof dia === 'string' && DIAS_SEMANA.includes(dia as DiaSemana)
+  ))
+  return resultado.length > 0 ? Array.from(new Set(resultado)) : [...DIAS_SEMANA]
+}
+
+function configuracionRestauranteInicial(): ConfiguracionRestaurante {
+  return {
+    servicio: '',
+    dias_activos: [...DIAS_SEMANA],
+  }
+}
+
+function parseConfiguracionRestaurante(raw: string | null | undefined): ConfiguracionRestaurante {
+  if (typeof raw !== 'string' || !raw.trim()) return configuracionRestauranteInicial()
+  const limpio = raw.trim()
+  const prefijo = `${RESTAURANTE_CONFIG_PREFIX}:`
+  if (!limpio.startsWith(prefijo)) {
+    return {
+      servicio: limpio,
+      dias_activos: [...DIAS_SEMANA],
+    }
+  }
+
+  const payload = limpio.slice(prefijo.length).trim()
+  if (!payload) return configuracionRestauranteInicial()
+
+  try {
+    const parsed = JSON.parse(payload) as {
+      servicio?: unknown
+      dias_activos?: unknown
+    }
+    return {
+      servicio: typeof parsed.servicio === 'string' ? parsed.servicio.trim() : '',
+      dias_activos: normalizarDiasActivosRestaurante(parsed.dias_activos),
+    }
+  } catch {
+    return {
+      servicio: payload,
+      dias_activos: [...DIAS_SEMANA],
+    }
+  }
+}
+
+function serializarConfiguracionRestaurante(config: ConfiguracionRestaurante) {
+  return `${RESTAURANTE_CONFIG_PREFIX}:${JSON.stringify({
+    servicio: config.servicio.trim(),
+    dias_activos: normalizarDiasActivosRestaurante(config.dias_activos),
+  })}`
 }
 
 function hoyLocalISO() {
@@ -270,6 +333,11 @@ export default function NegocioDashboardPage() {
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [instagramHandle, setInstagramHandle] = useState('')
   const [tiktokHandle, setTiktokHandle] = useState('')
+  const [montoMaximoRestauranteDraft, setMontoMaximoRestauranteDraft] = useState('0')
+  const [configuracionRestaurante, setConfiguracionRestaurante] = useState<ConfiguracionRestaurante>(
+    configuracionRestauranteInicial()
+  )
+  const [guardandoConfiguracionRestaurante, setGuardandoConfiguracionRestaurante] = useState(false)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(() => {
     if (typeof window === 'undefined') return null
     const params = new URLSearchParams(window.location.search)
@@ -290,6 +358,8 @@ export default function NegocioDashboardPage() {
         setServiciosDisponibles([])
         setInstagramHandle('')
         setTiktokHandle('')
+        setMontoMaximoRestauranteDraft('0')
+        setConfiguracionRestaurante(configuracionRestauranteInicial())
         setSinNegocio(false)
         setReservaciones([])
         setResumen({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
@@ -306,6 +376,8 @@ export default function NegocioDashboardPage() {
         setServiciosDisponibles([])
         setInstagramHandle('')
         setTiktokHandle('')
+        setMontoMaximoRestauranteDraft('0')
+        setConfiguracionRestaurante(configuracionRestauranteInicial())
         setReservaciones([])
         setResumen({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
         setGanancias(data.ganancias ?? gananciasIniciales())
@@ -319,6 +391,12 @@ export default function NegocioDashboardPage() {
       setServiciosDisponibles((data.servicios_disponibles ?? []) as ServicioDisponible[])
       setInstagramHandle(negocioPerfil?.instagram_handle ? `@${negocioPerfil.instagram_handle}` : '')
       setTiktokHandle(negocioPerfil?.tiktok_handle ? `@${negocioPerfil.tiktok_handle}` : '')
+      setMontoMaximoRestauranteDraft(String(
+        typeof negocioPerfil?.monto_maximo_visita === 'number'
+          ? Math.max(Math.trunc(negocioPerfil.monto_maximo_visita), 0)
+          : 0
+      ))
+      setConfiguracionRestaurante(parseConfiguracionRestaurante(negocioPerfil?.servicios_incluidos))
       setReservaciones((data.reservaciones ?? []) as ReservacionNegocio[])
       setResumen({
         reservaciones_hoy: data.resumen?.reservaciones_hoy ?? 0,
@@ -334,6 +412,8 @@ export default function NegocioDashboardPage() {
       setServiciosDisponibles([])
       setInstagramHandle('')
       setTiktokHandle('')
+      setMontoMaximoRestauranteDraft('0')
+      setConfiguracionRestaurante(configuracionRestauranteInicial())
       setSinNegocio(false)
       setReservaciones([])
       setResumen({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
@@ -471,6 +551,86 @@ export default function NegocioDashboardPage() {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al subir la foto del negocio' })
     } finally {
       setSubiendoFoto(false)
+    }
+  }
+
+  function toggleDiaActivoRestaurante(dia: DiaSemana) {
+    setConfiguracionRestaurante((prev) => {
+      const activo = prev.dias_activos.includes(dia)
+      return {
+        ...prev,
+        dias_activos: activo
+          ? prev.dias_activos.filter((item) => item !== dia)
+          : [...prev.dias_activos, dia],
+      }
+    })
+  }
+
+  async function guardarConfiguracionRestaurante(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!negocio) return
+
+    const montoMaximo = Number.parseInt(montoMaximoRestauranteDraft, 10)
+    if (!Number.isFinite(montoMaximo) || montoMaximo < 0) {
+      setMensaje({ tipo: 'error', texto: 'El monto máximo debe ser un entero mayor o igual a 0' })
+      return
+    }
+
+    const servicio = configuracionRestaurante.servicio.trim()
+    if (!servicio) {
+      setMensaje({ tipo: 'error', texto: 'Especifica el servicio o beneficio a otorgar' })
+      return
+    }
+
+    const diasActivos = normalizarDiasActivosRestaurante(configuracionRestaurante.dias_activos)
+    if (diasActivos.length === 0) {
+      setMensaje({ tipo: 'error', texto: 'Selecciona al menos un día activo' })
+      return
+    }
+
+    const serviciosIncluidosSerializado = serializarConfiguracionRestaurante({
+      servicio,
+      dias_activos: diasActivos,
+    })
+
+    setGuardandoConfiguracionRestaurante(true)
+    setMensaje(null)
+    try {
+      const res = await fetch('/api/negocio/configuracion', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          negocio_id: negocio.id,
+          monto_maximo_visita: montoMaximo,
+          servicios_incluidos: serviciosIncluidosSerializado,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMensaje({
+          tipo: 'error',
+          texto: typeof data.error === 'string'
+            ? data.error
+            : 'No se pudo actualizar la configuración del restaurante',
+        })
+        return
+      }
+
+      setNegocio((prev) => prev ? {
+        ...prev,
+        monto_maximo_visita: montoMaximo,
+        servicios_incluidos: serviciosIncluidosSerializado,
+      } : prev)
+      setConfiguracionRestaurante({
+        servicio,
+        dias_activos: diasActivos,
+      })
+      setMontoMaximoRestauranteDraft(String(montoMaximo))
+      setMensaje({ tipo: 'ok', texto: 'Configuración de restaurante guardada correctamente' })
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al guardar la configuración del restaurante' })
+    } finally {
+      setGuardandoConfiguracionRestaurante(false)
     }
   }
 
@@ -626,6 +786,79 @@ export default function NegocioDashboardPage() {
                   </p>
                 </div>
               </>
+            )}
+
+            {esRestaurante && (
+              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">
+                  Configuración de beneficio restaurante
+                </p>
+                <p className="mt-1 text-xs text-[#666]">
+                  Personaliza monto, servicio y días activos. No necesitas definir horarios por hora.
+                </p>
+
+                <form onSubmit={guardarConfiguracionRestaurante} className="mt-3 space-y-4">
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <label className="block">
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#555]">
+                        Monto máximo por visita (MXN)
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={montoMaximoRestauranteDraft}
+                        onChange={(event) => setMontoMaximoRestauranteDraft(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                      />
+                    </label>
+
+                    <label className="block md:col-span-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#555]">
+                        Servicio o beneficio a otorgar
+                      </span>
+                      <input
+                        type="text"
+                        value={configuracionRestaurante.servicio}
+                        onChange={(event) => setConfiguracionRestaurante((prev) => ({ ...prev, servicio: event.target.value }))}
+                        placeholder="Ej. Hasta $150 en consumo o combo de cortesía"
+                        className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[#555]">Días activos</p>
+                    <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                      {DIAS_SEMANA.map((dia) => {
+                        const activo = configuracionRestaurante.dias_activos.includes(dia)
+                        return (
+                          <button
+                            key={dia}
+                            type="button"
+                            onClick={() => toggleDiaActivoRestaurante(dia)}
+                            className={`rounded-lg border px-2 py-2 text-xs font-bold transition-colors ${
+                              activo
+                                ? 'border-[#6B4FE8] bg-[#6B4FE8]/10 text-[#6B4FE8]'
+                                : 'border-[#E5E5E5] bg-white text-[#666] hover:border-[#6B4FE8] hover:text-[#6B4FE8]'
+                            }`}
+                          >
+                            {DIA_LABELS[dia]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={guardandoConfiguracionRestaurante}
+                    className="rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {guardandoConfiguracionRestaurante ? 'Guardando...' : 'Guardar configuración restaurante'}
+                  </button>
+                </form>
+              </div>
             )}
 
             {esEstetica && (
