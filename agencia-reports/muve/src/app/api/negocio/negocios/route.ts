@@ -164,7 +164,7 @@ export async function GET() {
       .select(consulta.select)
 
     if (consulta.usaActivo) {
-      query = query.eq('activo', true)
+      query = query.or('activo.eq.true,activo.is.null')
     }
 
     if (filtrarPorNegocio && perfil.negocio_id) {
@@ -182,6 +182,9 @@ export async function GET() {
     const { data, error } = await query
 
     if (!error) {
+      if (consulta.usaActivo && (data ?? []).length === 0) {
+        continue
+      }
       if (consulta.incluyeCiudad) {
         negocios = ((data ?? []) as unknown as NegocioConCiudad[]).map(negocio => ({
           id: negocio.id,

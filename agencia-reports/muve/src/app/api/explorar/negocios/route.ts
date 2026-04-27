@@ -12,7 +12,10 @@ type ServicioFila = {
   activo: boolean | null
 }
 async function consultarNegocios(cliente: ReturnType<typeof createServiceClient>) {
-  let consulta = await cliente.from('negocios').select('*').eq('activo', true)
+  let consulta = await cliente
+    .from('negocios')
+    .select('*')
+    .or('activo.eq.true,activo.is.null')
   if (faltaColumna(consulta.error, 'activo')) {
     consulta = await cliente.from('negocios').select('*')
   }
