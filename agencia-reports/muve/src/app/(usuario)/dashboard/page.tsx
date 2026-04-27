@@ -11,7 +11,7 @@ import { CIUDAD_LABELS } from '@/types'
 import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 import { PLAN_VISITAS_MENSUALES, normalizarPlan } from '@/lib/planes'
-import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
+import { resolverVentanaCiclo } from '@/lib/ciclos'
 
 type PerfilDashboard = {
   nombre: string
@@ -19,6 +19,7 @@ type PerfilDashboard = {
   plan_activo: boolean
   plan: PlanMembresia | null
   rol: 'usuario' | 'staff' | 'admin'
+  creditos_extra?: number | null
   fecha_inicio_ciclo?: string | null
   fecha_fin_plan?: string | null
 }
@@ -29,10 +30,6 @@ const PLAN_BADGE_LABEL: Record<PlanMembresia, string> = {
   total: 'Plan Total',
 }
 
-function faltaColumna(error: { message?: string } | null | undefined, columna: string) {
-  const message = error?.message?.toLowerCase() ?? ''
-  return message.includes('column') && message.includes(columna.toLowerCase())
-}
 
 function formatearFecha(value: Date) {
   return new Intl.DateTimeFormat('es-MX', {
@@ -61,30 +58,12 @@ export default async function DashboardPage({
   if (rol === 'admin') redirect('/admin')
   if (rol === 'staff') redirect('/negocio/dashboard')
 
-  const consultaPerfil = await supabase
+  const { data: perfil } = await supabase
     .from('users')
-    .select('nombre, ciudad, plan_activo, plan, rol, fecha_inicio_ciclo, fecha_fin_plan')
+    .select('nombre, ciudad, plan_activo, plan, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo')
     .eq('id', user.id)
     .single<PerfilDashboard>()
-
-  let perfil: PerfilDashboard | null = null
-  if (!consultaPerfil.error) {
-    perfil = consultaPerfil.data
-  } else if (faltaColumna(consultaPerfil.error, 'fecha_inicio_ciclo')) {
-    const fallback = await supabase
-      .from('users')
-      .select('nombre, ciudad, plan_activo, plan, rol')
-      .eq('id', user.id)
-      .single<Omit<PerfilDashboard, 'fecha_inicio_ciclo' | 'fecha_fin_plan'>>()
-
-    if (fallback.data) {
-      perfil = {
-        ...fallback.data,
-        fecha_inicio_ciclo: null,
-        fecha_fin_plan: null,
-      }
-    }
-  }
+  console.log('perfil:', perfil)
 
   const { count: totalVisitas } = await supabase
     .from('visitas')
@@ -96,23 +75,8 @@ export default async function DashboardPage({
   const params = await searchParams
   const recienActivada = params.membresia === 'activada'
 
-  let planActivo = Boolean(perfil?.plan_activo)
-  let planUsuario = normalizarPlan(perfil?.plan ?? null)
-
-  if (planActivo && planExpirado(perfil?.fecha_fin_plan)) {
-    await supabase
-      .from('users')
-      .update({ plan_activo: false })
-      .eq('id', user.id)
-    planActivo = false
-    planUsuario = null
-    if (perfil) {
-      perfil = {
-        ...perfil,
-        plan_activo: false,
-      }
-    }
-  }
+  const planActivo = Boolean(perfil?.plan_activo)
+  const planUsuario = normalizarPlan(perfil?.plan ?? null)
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
   const limiteMensual = planActivo && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
@@ -176,7 +140,7 @@ export default async function DashboardPage({
       )}
 
       {/* Sin membresía activa */}
-      {!perfil?.plan_activo && (
+      {!planActivo && (
         <div className="bg-[#E8FF47] px-4 py-3">
           <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-4">
             <p className="text-sm font-bold text-[#0A0A0A]">

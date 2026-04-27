@@ -200,8 +200,6 @@ export default function PlanesPrecios({
   const priceIdsActivos = priceIds[regionActiva]
   const preciosActivos = PRECIOS_POR_REGION[regionActiva]
   const preciosAnterioresActivos = PRECIOS_ANTERIORES_POR_REGION[regionActiva]
-  const mostrarBadgeDesde = !usuarioAutenticado && ciudadSeleccionada === null
-  const badgeDesdeTexto = regionActiva === 'bc' ? 'Desde $699' : 'Desde $549'
   return (
     <section id="planes" className="px-6 py-20">
       <div className="mx-auto max-w-5xl">
@@ -245,7 +243,7 @@ export default function PlanesPrecios({
             </div>
           )}
           <p className="mx-auto mt-3 max-w-2xl text-center text-xs text-[#888]">
-            Los precios pueden variar según tu ciudad. Tulancingo y Pachuca desde $549 · Tijuana y Ensenada desde $699
+            Los precios pueden variar según tu ciudad.
           </p>
         </div>
 
@@ -270,13 +268,6 @@ export default function PlanesPrecios({
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                     <span className="inline-block rounded-full bg-[#E8FF47] px-4 py-1.5 text-[11px] font-black uppercase tracking-widest text-[#0A0A0A]">
                       Más popular
-                    </span>
-                  </div>
-                )}
-                {mostrarBadgeDesde && (
-                  <div className="absolute right-3 top-3">
-                    <span className="inline-block rounded-full bg-[#0A0A0A] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-[#E8FF47]">
-                      {badgeDesdeTexto}
                     </span>
                   </div>
                 )}

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/service'
+import { createClient } from '@/lib/supabase/server'
 import type { Negocio, ServicioNegocio } from '@/types'
 
 type ServicioFila = {
@@ -33,7 +33,7 @@ function parseServiciosTexto(negocioId: string, serviciosIncluidos: string | nul
 }
 
 export async function GET() {
-  const supabase = createServiceClient()
+  const supabase = await createClient()
   const consulta = await supabase.from('negocios').select('*').eq('activo', true)
 
   if (consulta.error) {
@@ -71,10 +71,7 @@ export async function GET() {
         serviciosPorNegocio.set(servicio.negocio_id, negocioServicios)
       }
     } else if (!faltaRelacion(consultaServicios.error, 'negocio_servicios')) {
-      return NextResponse.json(
-        { error: consultaServicios.error.message, negocios: [] },
-        { status: 500 }
-      )
+      console.error('[GET /api/explorar/negocios] error consultando negocio_servicios:', consultaServicios.error)
     }
   }
 
