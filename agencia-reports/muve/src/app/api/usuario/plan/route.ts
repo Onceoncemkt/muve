@@ -9,15 +9,17 @@ import {
 } from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
 import { createServiceClient } from '@/lib/supabase/service'
+import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 
 type PerfilPlan = {
   plan_activo: boolean | null
   plan?: PlanMembresia | null
+  fecha_inicio_ciclo?: string | null
+  fecha_fin_plan?: string | null
 }
 type PerfilSubscription = {
   stripe_subscription_id: string | null
 }
-
 
 function mensajeColumnaNoExiste(error: { message?: string } | null | undefined, columna: string) {
   const message = error?.message?.toLowerCase() ?? ''
@@ -29,12 +31,21 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
 
   const consultaPrincipal = await supabase
     .from('users')
-    .select('plan_activo, plan')
+    .select('plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan')
     .eq('id', userId)
     .maybeSingle<PerfilPlan>()
 
   if (!consultaPrincipal.error) {
-    return consultaPrincipal.data ?? { plan_activo: false, plan: null }
+    return consultaPrincipal.data ?? {
+      plan_activo: false,
+      plan: null,
+      fecha_inicio_ciclo: null,
+      fecha_fin_plan: null,
+    }
+  }
+
+  if (mensajeColumnaNoExiste(consultaPrincipal.error, 'fecha_inicio_ciclo')) {
+    throw new Error('Falta la columna users.fecha_inicio_ciclo. Ejecuta la migración 019 en Supabase.')
   }
 
   const faltaColumnaPlan = mensajeColumnaNoExiste(consultaPrincipal.error, 'plan')
@@ -44,9 +55,17 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
 
   const fallback = await supabase
     .from('users')
-    .select('plan_activo')
+    .select('plan_activo, fecha_inicio_ciclo, fecha_fin_plan')
     .eq('id', userId)
-    .maybeSingle<{ plan_activo: boolean | null }>()
+    .maybeSingle<{
+      plan_activo: boolean | null
+      fecha_inicio_ciclo: string | null
+      fecha_fin_plan: string | null
+    }>()
+
+  if (mensajeColumnaNoExiste(fallback.error, 'fecha_inicio_ciclo')) {
+    throw new Error('Falta la columna users.fecha_inicio_ciclo. Ejecuta la migración 019 en Supabase.')
+  }
 
   if (fallback.error) {
     throw new Error(fallback.error.message)
@@ -55,6 +74,8 @@ async function obtenerPerfilPlan(userId: string): Promise<PerfilPlan> {
   return {
     plan_activo: fallback.data?.plan_activo ?? false,
     plan: null,
+    fecha_inicio_ciclo: fallback.data?.fecha_inicio_ciclo ?? null,
+    fecha_fin_plan: fallback.data?.fecha_fin_plan ?? null,
   }
 }
 
@@ -84,23 +105,41 @@ async function planDesdeStripe(subscriptionId: string): Promise<PlanMembresia | 
   return planDesdePriceId(priceId)
 }
 
-async function contarVisitasMesActual(userId: string): Promise<number> {
-  const inicioMes = new Date()
-  inicioMes.setDate(1)
-  inicioMes.setHours(0, 0, 0, 0)
-
+async function contarVisitasCiclo(userId: string, inicioCicloIso: string, finCicloIso: string): Promise<number> {
   const supabase = createServiceClient()
   const { count, error } = await supabase
     .from('visitas')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
-    .gte('fecha', inicioMes.toISOString())
+    .gte('fecha', inicioCicloIso)
+    .lt('fecha', finCicloIso)
 
   if (error) {
     throw new Error(error.message)
   }
 
   return count ?? 0
+}
+
+async function desactivarPlanSiExpirado(userId: string, perfil: PerfilPlan): Promise<PerfilPlan> {
+  const activo = Boolean(perfil.plan_activo)
+  if (!activo) return perfil
+  if (!planExpirado(perfil.fecha_fin_plan ?? null)) return perfil
+
+  const admin = createServiceClient()
+  const { error } = await admin
+    .from('users')
+    .update({ plan_activo: false })
+    .eq('id', userId)
+
+  if (error) {
+    console.error('[GET /api/usuario/plan] error desactivando plan expirado:', error)
+  }
+
+  return {
+    ...perfil,
+    plan_activo: false,
+  }
 }
 
 export async function GET() {
@@ -111,35 +150,33 @@ export async function GET() {
     return NextResponse.json({
       plan_activo: false,
       plan: null,
+      fecha_inicio_ciclo: null,
+      fecha_fin_ciclo: null,
       limite_visitas_mensuales: 0,
       max_visitas_por_lugar: 0,
       visitas_usadas_mes: 0,
       visitas_restantes_mes: 0,
+      visitas_usadas_ciclo: 0,
+      visitas_restantes_ciclo: 0,
     })
   }
 
   try {
-    const perfil = await obtenerPerfilPlan(user.id)
+    let perfil = await obtenerPerfilPlan(user.id)
+    perfil = await desactivarPlanSiExpirado(user.id, perfil)
+
     const planActivo = Boolean(perfil.plan_activo)
     let plan = normalizarPlan(perfil.plan ?? null)
+
     if (planActivo && !plan) {
       try {
         const stripeSubscriptionId = await obtenerStripeSubscriptionId(user.id)
-        if (!stripeSubscriptionId) {
-          return NextResponse.json({
-            plan_activo: planActivo,
-            plan: null,
-            limite_visitas_mensuales: 0,
-            max_visitas_por_lugar: 0,
-            visitas_usadas_mes: 0,
-            visitas_restantes_mes: 0,
-          })
-        }
-
-        plan = await planDesdeStripe(stripeSubscriptionId)
-        if (plan) {
-          const admin = createServiceClient()
-          await admin.from('users').update({ plan }).eq('id', user.id)
+        if (stripeSubscriptionId) {
+          plan = await planDesdeStripe(stripeSubscriptionId)
+          if (plan) {
+            const admin = createServiceClient()
+            await admin.from('users').update({ plan }).eq('id', user.id)
+          }
         }
       } catch (error) {
         console.error('[GET /api/usuario/plan] fallback Stripe error:', error)
@@ -153,24 +190,56 @@ export async function GET() {
       ? PLAN_MAX_VISITAS_POR_LUGAR[plan]
       : 0
 
-    let visitasUsadasMes = 0
+    let visitasUsadasCiclo = 0
+    let fechaInicioCiclo: string | null = null
+    let fechaFinCiclo: string | null = null
+
     if (planActivo && plan) {
+      const ciclo = resolverVentanaCiclo({
+        fechaInicioCiclo: perfil.fecha_inicio_ciclo,
+        fechaFinPlan: perfil.fecha_fin_plan,
+      })
+      fechaInicioCiclo = ciclo.inicio.toISOString()
+      fechaFinCiclo = ciclo.fin.toISOString()
+
+      if (!perfil.fecha_inicio_ciclo || !perfil.fecha_fin_plan) {
+        const actualizacionCiclo: Record<string, string> = {}
+        if (!perfil.fecha_inicio_ciclo) {
+          actualizacionCiclo.fecha_inicio_ciclo = fechaInicioCiclo
+        }
+        if (!perfil.fecha_fin_plan) {
+          actualizacionCiclo.fecha_fin_plan = fechaFinCiclo
+        }
+        if (Object.keys(actualizacionCiclo).length > 0) {
+          const admin = createServiceClient()
+          await admin
+            .from('users')
+            .update(actualizacionCiclo)
+            .eq('id', user.id)
+        }
+      }
+
       try {
-        visitasUsadasMes = await contarVisitasMesActual(user.id)
+        visitasUsadasCiclo = await contarVisitasCiclo(user.id, fechaInicioCiclo, fechaFinCiclo)
       } catch (error) {
-        console.error('[GET /api/usuario/plan] error contando visitas del mes:', error)
+        console.error('[GET /api/usuario/plan] error contando visitas del ciclo:', error)
       }
     }
 
-    const visitasRestantesMes = Math.max(limiteVisitasMensuales - visitasUsadasMes, 0)
+    const visitasRestantesCiclo = Math.max(limiteVisitasMensuales - visitasUsadasCiclo, 0)
 
     return NextResponse.json({
       plan_activo: planActivo,
       plan,
+      fecha_inicio_ciclo: fechaInicioCiclo,
+      fecha_fin_ciclo: fechaFinCiclo,
       limite_visitas_mensuales: limiteVisitasMensuales,
       max_visitas_por_lugar: maxVisitasPorLugar,
-      visitas_usadas_mes: visitasUsadasMes,
-      visitas_restantes_mes: visitasRestantesMes,
+      visitas_usadas_mes: visitasUsadasCiclo,
+      visitas_restantes_mes: visitasRestantesCiclo,
+      visitas_usadas_ciclo: visitasUsadasCiclo,
+      visitas_restantes_ciclo: visitasRestantesCiclo,
+      ciclo_nuevo_el: fechaFinCiclo,
     })
   } catch (error) {
     console.error('[GET /api/usuario/plan]', error)

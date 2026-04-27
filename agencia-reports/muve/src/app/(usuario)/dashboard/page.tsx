@@ -12,6 +12,7 @@ import { CIUDAD_LABELS } from '@/types'
 import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 import { PLAN_VISITAS_MENSUALES, normalizarPlan } from '@/lib/planes'
+import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 
 type PerfilDashboard = {
   nombre: string
@@ -19,12 +20,33 @@ type PerfilDashboard = {
   plan_activo: boolean
   plan: PlanMembresia | null
   rol: 'usuario' | 'staff' | 'admin'
+  fecha_inicio_ciclo?: string | null
+  fecha_fin_plan?: string | null
 }
 
 const PLAN_BADGE_LABEL: Record<PlanMembresia, string> = {
   basico: 'Plan Básico',
   plus: 'Plan Plus',
   total: 'Plan Total',
+}
+
+function faltaColumna(error: { message?: string } | null | undefined, columna: string) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes(columna.toLowerCase())
+}
+
+function formatearFecha(value: Date) {
+  return new Intl.DateTimeFormat('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(value)
+}
+
+function finVisibleCiclo(fechaFin: Date) {
+  const out = new Date(fechaFin)
+  out.setUTCDate(out.getUTCDate() - 1)
+  return out
 }
 
 export default async function DashboardPage({
@@ -40,41 +62,102 @@ export default async function DashboardPage({
   if (rol === 'admin') redirect('/admin')
   if (rol === 'staff') redirect('/negocio/dashboard')
 
-  const { data: perfil } = await supabase
+  const consultaPerfil = await supabase
     .from('users')
-    .select('nombre, ciudad, plan_activo, plan, rol')
+    .select('nombre, ciudad, plan_activo, plan, rol, fecha_inicio_ciclo, fecha_fin_plan')
     .eq('id', user.id)
     .single<PerfilDashboard>()
+
+  let perfil: PerfilDashboard | null = null
+  if (!consultaPerfil.error) {
+    perfil = consultaPerfil.data
+  } else if (faltaColumna(consultaPerfil.error, 'fecha_inicio_ciclo')) {
+    const fallback = await supabase
+      .from('users')
+      .select('nombre, ciudad, plan_activo, plan, rol')
+      .eq('id', user.id)
+      .single<Omit<PerfilDashboard, 'fecha_inicio_ciclo' | 'fecha_fin_plan'>>()
+
+    if (fallback.data) {
+      perfil = {
+        ...fallback.data,
+        fecha_inicio_ciclo: null,
+        fecha_fin_plan: null,
+      }
+    }
+  }
 
   const { count: totalVisitas } = await supabase
     .from('visitas')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
 
-  const inicioMes = new Date()
-  inicioMes.setDate(1)
-  inicioMes.setHours(0, 0, 0, 0)
-
-  const { count: visitasMes } = await supabase
-    .from('visitas')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .gte('fecha', inicioMes.toISOString())
-
   const nombre = perfil?.nombre ?? user.email?.split('@')[0] ?? 'Muver'
   const ciudad = perfil?.ciudad ?? 'tulancingo'
   const params = await searchParams
   const recienActivada = params.membresia === 'activada'
-  const planActivo = Boolean(perfil?.plan_activo)
-  const planUsuario = normalizarPlan(perfil?.plan ?? null)
+
+  let planActivo = Boolean(perfil?.plan_activo)
+  let planUsuario = normalizarPlan(perfil?.plan ?? null)
+
+  if (planActivo && planExpirado(perfil?.fecha_fin_plan)) {
+    await supabase
+      .from('users')
+      .update({ plan_activo: false })
+      .eq('id', user.id)
+    planActivo = false
+    planUsuario = null
+  }
+
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
   const limiteMensual = planActivo && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
-  const usadasMes = visitasMes ?? 0
-  const restantesMes = Math.max(limiteMensual - usadasMes, 0)
-  const progresoMes = limiteMensual > 0
-    ? Math.min((usadasMes / limiteMensual) * 100, 100)
+
+  let usadasCiclo = 0
+  let cicloActualTexto = '—'
+  let cicloNuevoTexto = '—'
+
+  if (planActivo && planUsuario) {
+    const ciclo = resolverVentanaCiclo({
+      fechaInicioCiclo: perfil?.fecha_inicio_ciclo ?? null,
+      fechaFinPlan: perfil?.fecha_fin_plan ?? null,
+    })
+
+    const cicloInicioIso = ciclo.inicio.toISOString()
+    const cicloFinIso = ciclo.fin.toISOString()
+
+    if (!perfil?.fecha_inicio_ciclo || !perfil?.fecha_fin_plan) {
+      const actualizacionCiclo: Record<string, string> = {}
+      if (!perfil?.fecha_inicio_ciclo) {
+        actualizacionCiclo.fecha_inicio_ciclo = cicloInicioIso
+      }
+      if (!perfil?.fecha_fin_plan) {
+        actualizacionCiclo.fecha_fin_plan = cicloFinIso
+      }
+      if (Object.keys(actualizacionCiclo).length > 0) {
+        await supabase
+          .from('users')
+          .update(actualizacionCiclo)
+          .eq('id', user.id)
+      }
+    }
+
+    const { count: visitasCiclo } = await supabase
+      .from('visitas')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('fecha', cicloInicioIso)
+      .lt('fecha', cicloFinIso)
+
+    usadasCiclo = visitasCiclo ?? 0
+    cicloActualTexto = `${formatearFecha(ciclo.inicio)} — ${formatearFecha(finVisibleCiclo(ciclo.fin))}`
+    cicloNuevoTexto = formatearFecha(ciclo.fin)
+  }
+
+  const restantesCiclo = Math.max(limiteMensual - usadasCiclo, 0)
+  const progresoCiclo = limiteMensual > 0
+    ? Math.min((usadasCiclo / limiteMensual) * 100, 100)
     : 0
-  const restantesEnRojo = restantesMes <= 2
+  const restantesEnRojo = restantesCiclo <= 2
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
@@ -133,17 +216,26 @@ export default async function DashboardPage({
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 sm:col-span-2">
             <p className="text-xs text-white/40">
-              Visitas usadas este mes: {usadasMes} de {limiteMensual}
+              Visitas usadas: {usadasCiclo} de {limiteMensual} en este ciclo
             </p>
             <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-full rounded-full bg-[#E8FF47] transition-all"
-                style={{ width: `${progresoMes}%` }}
+                style={{ width: `${progresoCiclo}%` }}
               />
             </div>
             <p className={`mt-2 text-sm font-bold ${restantesEnRojo ? 'text-[#FCA5A5]' : 'text-[#86EFAC]'}`}>
-              Visitas restantes: {restantesMes}
+              Visitas restantes: {restantesCiclo}
             </p>
+            {planActivo && (
+              <>
+                <p className="mt-2 text-xs text-white/40">Tu ciclo actual: {cicloActualTexto}</p>
+                <p className="mt-1 text-xs text-white/40">Ciclo nuevo el {cicloNuevoTexto}</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#E8FF47]">
+                  Los créditos NO se acumulan — al terminar el ciclo se reinician a 0.
+                </p>
+              </>
+            )}
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
             <p className="text-2xl font-black text-[#E8FF47]">{totalVisitas ?? 0}</p>

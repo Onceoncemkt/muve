@@ -8,6 +8,7 @@ import {
   PLAN_VISITAS_MENSUALES,
   normalizarPlan,
 } from '@/lib/planes'
+import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 function diaSemanaDesdeFecha(fecha: string): DiaSemana | null {
   const dias: DiaSemana[] = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
   const date = new Date(`${fecha}T00:00:00`)
@@ -279,9 +280,21 @@ export async function POST(request: NextRequest) {
 
   const { data: perfilUsuario, error: perfilUsuarioError } = await db
     .from('users')
-    .select('plan_activo, plan')
+    .select('plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan')
     .eq('id', user.id)
-    .maybeSingle<{ plan_activo: boolean; plan: string | null }>()
+    .maybeSingle<{
+      plan_activo: boolean
+      plan: string | null
+      fecha_inicio_ciclo: string | null
+      fecha_fin_plan: string | null
+    }>()
+
+  if (faltaColumna(perfilUsuarioError, 'fecha_inicio_ciclo')) {
+    return NextResponse.json(
+      { error: 'Falta la columna users.fecha_inicio_ciclo. Ejecuta la migración 019 en Supabase.' },
+      { status: 500 }
+    )
+  }
 
   if (perfilUsuarioError) {
     return NextResponse.json({ error: 'No se pudo validar tu membresía' }, { status: 500 })
@@ -291,41 +304,68 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Tu membresía está inactiva' }, { status: 403 })
   }
 
-  const planUsuario = normalizarPlan(perfilUsuario.plan ?? null) ?? 'basico'
-  const inicioMes = new Date()
-  inicioMes.setDate(1)
-  inicioMes.setHours(0, 0, 0, 0)
+  if (planExpirado(perfilUsuario.fecha_fin_plan)) {
+    await db
+      .from('users')
+      .update({ plan_activo: false })
+      .eq('id', user.id)
+    return NextResponse.json({ error: 'Tu membresía está expirada' }, { status: 403 })
+  }
 
-  const [{ count: visitasMes, error: visitasMesError }, { count: visitasLugarMes, error: visitasLugarMesError }] = await Promise.all([
+  const planUsuario = normalizarPlan(perfilUsuario.plan ?? null) ?? 'basico'
+  const ciclo = resolverVentanaCiclo({
+    fechaInicioCiclo: perfilUsuario.fecha_inicio_ciclo,
+    fechaFinPlan: perfilUsuario.fecha_fin_plan,
+  })
+
+  if (!perfilUsuario.fecha_inicio_ciclo || !perfilUsuario.fecha_fin_plan) {
+    const actualizacionCiclo: Record<string, string> = {}
+    if (!perfilUsuario.fecha_inicio_ciclo) {
+      actualizacionCiclo.fecha_inicio_ciclo = ciclo.inicio.toISOString()
+    }
+    if (!perfilUsuario.fecha_fin_plan) {
+      actualizacionCiclo.fecha_fin_plan = ciclo.fin.toISOString()
+    }
+    if (Object.keys(actualizacionCiclo).length > 0) {
+      await db
+        .from('users')
+        .update(actualizacionCiclo)
+        .eq('id', user.id)
+    }
+  }
+
+  const [{ count: visitasCiclo, error: visitasCicloError }, { count: visitasLugarCiclo, error: visitasLugarCicloError }] = await Promise.all([
     db
       .from('visitas')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .gte('fecha', inicioMes.toISOString()),
+      .gte('fecha', ciclo.inicio.toISOString())
+      .lt('fecha', ciclo.fin.toISOString()),
     db
       .from('visitas')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('negocio_id', horario.negocio_id)
-      .gte('fecha', inicioMes.toISOString()),
+      .gte('fecha', ciclo.inicio.toISOString())
+      .lt('fecha', ciclo.fin.toISOString()),
   ])
 
-  if (visitasMesError || visitasLugarMesError) {
+  if (visitasCicloError || visitasLugarCicloError) {
     return NextResponse.json({ error: 'No se pudieron validar tus límites de visitas' }, { status: 500 })
   }
 
   const limiteMensual = PLAN_VISITAS_MENSUALES[planUsuario]
-  if ((visitasMes ?? 0) >= limiteMensual) {
+  if ((visitasCiclo ?? 0) >= limiteMensual) {
     return NextResponse.json(
-      { error: `Ya alcanzaste tu límite mensual de ${limiteMensual} visitas` },
+      { error: `Ya alcanzaste tu límite del ciclo actual de ${limiteMensual} visitas` },
       { status: 400 }
     )
   }
 
   const limitePorLugar = PLAN_MAX_VISITAS_POR_LUGAR[planUsuario]
-  if ((visitasLugarMes ?? 0) >= limitePorLugar) {
+  if ((visitasLugarCiclo ?? 0) >= limitePorLugar) {
     return NextResponse.json(
-      { error: `Ya alcanzaste tu límite de ${limitePorLugar} visitas en este lugar este mes` },
+      { error: `Ya alcanzaste tu límite de ${limitePorLugar} visitas en este lugar durante este ciclo` },
       { status: 400 }
     )
   }

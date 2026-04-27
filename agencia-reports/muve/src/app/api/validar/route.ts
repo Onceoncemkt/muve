@@ -6,6 +6,7 @@ import {
   PLAN_VISITAS_MENSUALES,
   normalizarPlan,
 } from '@/lib/planes'
+import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 
 export async function POST(request: NextRequest) {
   const authClient = await createClient()
@@ -71,11 +72,18 @@ export async function POST(request: NextRequest) {
   }
 
   // Buscar el token
-  const { data: qrToken } = await db
+  const { data: qrToken, error: qrTokenError } = await db
     .from('qr_tokens')
-    .select('*, users(nombre, ciudad, plan_activo, plan)')
+    .select('*, users(nombre, ciudad, plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan)')
     .eq('token', token)
     .single()
+
+  if (faltaColumna(qrTokenError, 'fecha_inicio_ciclo')) {
+    return NextResponse.json(
+      { error: 'Falta la columna users.fecha_inicio_ciclo. Ejecuta la migración 019 en Supabase.' },
+      { status: 500 }
+    )
+  }
 
   if (!qrToken) {
     return NextResponse.json({ valido: false, error: 'Token no encontrado' }, { status: 404 })
@@ -89,41 +97,77 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ valido: false, error: 'Token expirado' })
   }
 
-  const usuario = qrToken.users as { nombre: string; ciudad: string; plan_activo: boolean; plan?: unknown }
+  const usuario = qrToken.users as {
+    nombre: string
+    ciudad: string
+    plan_activo: boolean
+    plan?: unknown
+    fecha_inicio_ciclo?: string | null
+    fecha_fin_plan?: string | null
+  }
   const planUsuario = normalizarPlan(usuario?.plan ?? null) ?? 'basico'
 
   if (!usuario?.plan_activo) {
     return NextResponse.json({ valido: false, error: 'Usuario sin membresía activa' })
   }
-  const inicioMes = new Date()
-  inicioMes.setDate(1)
-  inicioMes.setHours(0, 0, 0, 0)
 
-  const [{ count: visitasMes, error: visitasMesError }, { count: visitasLugarMes, error: visitasLugarMesError }] = await Promise.all([
+  if (planExpirado(usuario.fecha_fin_plan)) {
+    await db
+      .from('users')
+      .update({ plan_activo: false })
+      .eq('id', qrToken.user_id)
+
+    return NextResponse.json({ valido: false, error: 'Membresía expirada' })
+  }
+
+  const ciclo = resolverVentanaCiclo({
+    fechaInicioCiclo: usuario.fecha_inicio_ciclo,
+    fechaFinPlan: usuario.fecha_fin_plan,
+  })
+
+  if (!usuario.fecha_inicio_ciclo || !usuario.fecha_fin_plan) {
+    const actualizacionCiclo: Record<string, string> = {}
+    if (!usuario.fecha_inicio_ciclo) {
+      actualizacionCiclo.fecha_inicio_ciclo = ciclo.inicio.toISOString()
+    }
+    if (!usuario.fecha_fin_plan) {
+      actualizacionCiclo.fecha_fin_plan = ciclo.fin.toISOString()
+    }
+    if (Object.keys(actualizacionCiclo).length > 0) {
+      await db
+        .from('users')
+        .update(actualizacionCiclo)
+        .eq('id', qrToken.user_id)
+    }
+  }
+
+  const [{ count: visitasCiclo, error: visitasCicloError }, { count: visitasLugarCiclo, error: visitasLugarCicloError }] = await Promise.all([
     db
       .from('visitas')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', qrToken.user_id)
-      .gte('fecha', inicioMes.toISOString()),
+      .gte('fecha', ciclo.inicio.toISOString())
+      .lt('fecha', ciclo.fin.toISOString()),
     db
       .from('visitas')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', qrToken.user_id)
       .eq('negocio_id', negocioIdObjetivo)
-      .gte('fecha', inicioMes.toISOString()),
+      .gte('fecha', ciclo.inicio.toISOString())
+      .lt('fecha', ciclo.fin.toISOString()),
   ])
 
-  if (visitasMesError || visitasLugarMesError) {
+  if (visitasCicloError || visitasLugarCicloError) {
     return NextResponse.json({ error: 'No se pudieron validar límites de visitas' }, { status: 500 })
   }
 
   const limiteMensual = PLAN_VISITAS_MENSUALES[planUsuario]
-  if ((visitasMes ?? 0) >= limiteMensual) {
-    return NextResponse.json({ valido: false, error: 'Usuario agotó sus visitas del mes' })
+  if ((visitasCiclo ?? 0) >= limiteMensual) {
+    return NextResponse.json({ valido: false, error: 'Usuario agotó sus visitas del ciclo actual' })
   }
 
   const limitePorLugar = PLAN_MAX_VISITAS_POR_LUGAR[planUsuario]
-  if ((visitasLugarMes ?? 0) >= limitePorLugar) {
+  if ((visitasLugarCiclo ?? 0) >= limitePorLugar) {
     return NextResponse.json({
       valido: false,
       error: 'Límite de visitas en este lugar alcanzado',
@@ -256,8 +300,8 @@ export async function POST(request: NextRequest) {
     console.warn('[POST /api/validar] No se pudo actualizar ultimo_checkin', ultimoCheckinError)
   }
 
-  const visitasUsadasMes = (visitasMes ?? 0) + 1
-  const visitasRestantesMes = Math.max(limiteMensual - visitasUsadasMes, 0)
+  const visitasUsadasCiclo = (visitasCiclo ?? 0) + 1
+  const visitasRestantesCiclo = Math.max(limiteMensual - visitasUsadasCiclo, 0)
 
   return NextResponse.json({
     valido: true,
@@ -266,8 +310,12 @@ export async function POST(request: NextRequest) {
     categoria_negocio: categoriaNegocio,
     servicio_reservado: servicioReservado,
     monto_maximo_autorizado_mxn: montoMaximoAutorizadoMxn,
-    visitas_restantes_mes: visitasRestantesMes,
-    visitas_usadas_mes: visitasUsadasMes,
+    visitas_restantes_mes: visitasRestantesCiclo,
+    visitas_usadas_mes: visitasUsadasCiclo,
     limite_visitas_mensuales: limiteMensual,
+    visitas_restantes_ciclo: visitasRestantesCiclo,
+    visitas_usadas_ciclo: visitasUsadasCiclo,
+    ciclo_inicio: ciclo.inicio.toISOString(),
+    ciclo_fin: ciclo.fin.toISOString(),
   })
 }

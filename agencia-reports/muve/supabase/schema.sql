@@ -21,6 +21,7 @@ create table public.users (
   stripe_customer_id  text,
   plan                text check (plan in ('basico', 'plus', 'total')),
   rol                 rol_enum not null default 'usuario',
+  fecha_inicio_ciclo  timestamp with time zone,
   fecha_fin_plan      timestamp with time zone,
   ultimo_checkin      timestamp with time zone,
   fecha_registro      timestamp with time zone default now()
@@ -326,7 +327,7 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ============================================================
--- FUNCIÓN: límite de visitas por mes
+-- FUNCIÓN: límite de visitas por ciclo de renovación
 -- Devuelve cuántas visitas le quedan al usuario en un negocio
 -- ============================================================
 create or replace function public.visitas_restantes(p_user_id uuid, p_negocio_id uuid)
@@ -337,10 +338,13 @@ as $$
   select
     n.visitas_permitidas_por_mes - count(v.id)::int
   from public.negocios n
+  left join public.users u
+    on u.id = p_user_id
   left join public.visitas v
     on v.negocio_id = n.id
     and v.user_id = p_user_id
-    and date_trunc('month', v.fecha) = date_trunc('month', now())
+    and v.fecha >= coalesce(u.fecha_inicio_ciclo, date_trunc('month', now()))
+    and v.fecha < coalesce(u.fecha_inicio_ciclo, date_trunc('month', now())) + interval '1 month'
   where n.id = p_negocio_id
   group by n.visitas_permitidas_por_mes;
 $$;
@@ -413,10 +417,30 @@ do $$
 begin
   if to_regclass('public.users') is not null then
     alter table public.users
+      add column if not exists fecha_inicio_ciclo timestamp with time zone;
+
+    alter table public.users
       add column if not exists fecha_fin_plan timestamp with time zone;
 
     alter table public.users
       add column if not exists ultimo_checkin timestamp with time zone;
+  end if;
+end
+$$;
+
+do $$
+begin
+  if to_regclass('public.users') is not null then
+    update public.users
+    set fecha_inicio_ciclo = coalesce(fecha_inicio_ciclo, coalesce(fecha_fin_plan - interval '1 month', now()))
+    where plan_activo = true
+      and fecha_inicio_ciclo is null;
+
+    update public.users
+    set plan_activo = false
+    where plan_activo = true
+      and fecha_fin_plan is not null
+      and fecha_fin_plan < now();
   end if;
 end
 $$;

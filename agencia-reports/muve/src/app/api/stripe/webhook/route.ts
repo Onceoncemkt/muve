@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
 import { planDesdePriceId } from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
+import { sumarUnMes } from '@/lib/ciclos'
 
 // Service role para saltarse RLS — solo en server, nunca exponer al cliente
 function serviceRoleKey() {
@@ -31,6 +32,11 @@ function columnaFechaFinPlanNoExiste(error: { message?: string } | null | undefi
   return message.includes('column') && message.includes('fecha_fin_plan')
 }
 
+function columnaFechaInicioCicloNoExiste(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes('fecha_inicio_ciclo')
+}
+
 function faltaRelacion(error: { message?: string } | null | undefined, relation: string) {
   const message = error?.message?.toLowerCase() ?? ''
   return message.includes(relation.toLowerCase()) && message.includes('does not exist')
@@ -39,27 +45,38 @@ function faltaRelacion(error: { message?: string } | null | undefined, relation:
 async function activarMembresia(
   customerId: string,
   subscriptionId: string,
-  plan: PlanMembresia,
-  fechaFinPlan: string | null
+  plan: PlanMembresia
 ) {
   const supabase = getServiceClient()
+  const inicioCiclo = new Date()
+  const fechaInicioCiclo = inicioCiclo.toISOString()
+  const fechaFinPlan = sumarUnMes(inicioCiclo).toISOString()
+
   let { error } = await supabase
     .from('users')
     .update({
       plan_activo: true,
       stripe_subscription_id: subscriptionId,
       plan,
+      fecha_inicio_ciclo: fechaInicioCiclo,
       fecha_fin_plan: fechaFinPlan,
     })
     .eq('stripe_customer_id', customerId)
 
-  if (columnaPlanNoExiste(error) || columnaFechaFinPlanNoExiste(error)) {
+  if (
+    columnaPlanNoExiste(error)
+    || columnaFechaInicioCicloNoExiste(error)
+    || columnaFechaFinPlanNoExiste(error)
+  ) {
     const fallbackPayload: Record<string, unknown> = {
       plan_activo: true,
       stripe_subscription_id: subscriptionId,
     }
     if (!columnaPlanNoExiste(error)) {
       fallbackPayload.plan = plan
+    }
+    if (!columnaFechaInicioCicloNoExiste(error)) {
+      fallbackPayload.fecha_inicio_ciclo = fechaInicioCiclo
     }
     if (!columnaFechaFinPlanNoExiste(error)) {
       fallbackPayload.fecha_fin_plan = fechaFinPlan
@@ -83,17 +100,25 @@ async function desactivarMembresia(customerId: string) {
       plan_activo: false,
       stripe_subscription_id: null,
       plan: null,
+      fecha_inicio_ciclo: null,
       fecha_fin_plan: null,
     })
     .eq('stripe_customer_id', customerId)
 
-  if (columnaPlanNoExiste(error) || columnaFechaFinPlanNoExiste(error)) {
+  if (
+    columnaPlanNoExiste(error)
+    || columnaFechaInicioCicloNoExiste(error)
+    || columnaFechaFinPlanNoExiste(error)
+  ) {
     const fallbackPayload: Record<string, unknown> = {
       plan_activo: false,
       stripe_subscription_id: null,
     }
     if (!columnaPlanNoExiste(error)) {
       fallbackPayload.plan = null
+    }
+    if (!columnaFechaInicioCicloNoExiste(error)) {
+      fallbackPayload.fecha_inicio_ciclo = null
     }
     if (!columnaFechaFinPlanNoExiste(error)) {
       fallbackPayload.fecha_fin_plan = null
@@ -109,22 +134,14 @@ async function desactivarMembresia(customerId: string) {
   if (error) throw new Error(`desactivarMembresia: ${error.message}`)
 }
 
-async function obtenerDatosSubscription(subscriptionId: string): Promise<{
-  plan: PlanMembresia
-  fechaFinPlan: string | null
-}> {
+async function obtenerPlanDesdeSubscription(subscriptionId: string): Promise<PlanMembresia> {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
   const priceId = subscription.items.data[0]?.price?.id
   const plan = planDesdePriceId(priceId)
   if (!plan) {
     throw new Error(`price_id no mapeado para membresía: ${priceId ?? 'desconocido'}`)
   }
-  const currentPeriodEnd = (subscription as { current_period_end?: unknown }).current_period_end
-  const fechaFinPlan = typeof currentPeriodEnd === 'number'
-    ? new Date(currentPeriodEnd * 1000).toISOString()
-    : null
-
-  return { plan, fechaFinPlan }
+  return plan
 }
 
 async function marcarDescuentoComoUsado(metadata: Stripe.Metadata | null | undefined) {
@@ -181,12 +198,11 @@ export async function POST(request: NextRequest) {
         if (session.mode !== 'subscription') break
         if (!session.customer || !session.subscription) break
 
-        const datosSubscription = await obtenerDatosSubscription(session.subscription as string)
+        const plan = await obtenerPlanDesdeSubscription(session.subscription as string)
         await activarMembresia(
           session.customer as string,
           session.subscription as string,
-          datosSubscription.plan,
-          datosSubscription.fechaFinPlan
+          plan
         )
         await marcarDescuentoComoUsado(session.metadata)
         break
@@ -204,12 +220,11 @@ export async function POST(request: NextRequest) {
           )
         if (!invoice.customer || !subId) break
 
-        const datosSubscription = await obtenerDatosSubscription(subId)
+        const plan = await obtenerPlanDesdeSubscription(subId)
         await activarMembresia(
           invoice.customer as string,
           subId,
-          datosSubscription.plan,
-          datosSubscription.fechaFinPlan
+          plan
         )
         break
       }
@@ -238,24 +253,14 @@ export async function POST(request: NextRequest) {
         }
 
         let plan = planDesdePriceId(sub.items.data[0]?.price?.id)
-        const currentPeriodEnd = (sub as { current_period_end?: unknown }).current_period_end
-        let fechaFinPlan = typeof currentPeriodEnd === 'number'
-          ? new Date(currentPeriodEnd * 1000).toISOString()
-          : null
-
         if (!plan) {
-          const datosSubscription = await obtenerDatosSubscription(sub.id)
-          plan = datosSubscription.plan
-          if (!fechaFinPlan) {
-            fechaFinPlan = datosSubscription.fechaFinPlan
-          }
+          plan = await obtenerPlanDesdeSubscription(sub.id)
         }
 
         await activarMembresia(
           sub.customer as string,
           sub.id,
-          plan,
-          fechaFinPlan
+          plan
         )
         break
       }

@@ -22,6 +22,8 @@ export interface User {
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   plan?: PlanMembresia | null
+  fecha_inicio_ciclo?: string | null
+  fecha_fin_plan?: string | null
   rol: Rol
   negocio_id?: string | null
   fecha_registro: string
