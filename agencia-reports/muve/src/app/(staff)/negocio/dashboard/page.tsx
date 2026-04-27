@@ -530,7 +530,6 @@ export default function NegocioDashboardPage() {
   const esRestaurante = categoriaNegocio === 'restaurante'
   const esGimnasio = categoriaNegocio === 'gimnasio'
   const esClases = categoriaNegocio === 'clases'
-  const usaPanelSimplificado = esEstetica || esRestaurante || esGimnasio
   const totalVisitasSemana = PLANES_MEMBRESIA.reduce(
     (acumulado, plan) => acumulado + (ganancias.semana.visitas_por_plan[plan] ?? 0),
     0
@@ -773,20 +772,20 @@ export default function NegocioDashboardPage() {
               </div>
             )}
 
-            {!usaPanelCheckins && (
+            {esClases && (
               <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
                 <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Reservaciones del día</p>
                 <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{resumen.reservaciones_hoy}</p>
               </div>
             )}
 
-            {!usaPanelCheckins && (
+            {esClases && (
               <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
                 <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Horarios activos</p>
                 <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{resumen.horarios_activos}</p>
               </div>
             )}
-            {!usaPanelCheckins && (
+            {esClases && (
               <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
               <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mis ganancias</p>
               <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-4 py-3">
@@ -877,7 +876,7 @@ export default function NegocioDashboardPage() {
               </div>
             )}
 
-            {!usaPanelCheckins && (
+            {esClases && (
               <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
               {!cuentaStripeConectada ? (
                 <div className="rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] p-4">
@@ -1024,7 +1023,7 @@ export default function NegocioDashboardPage() {
               </Link>
             </div>
 
-            {!usaPanelCheckins && (
+            {esClases && (
               <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
                 <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Perfil del negocio</p>
                 <p className="mt-1 text-xs text-[#666]">
