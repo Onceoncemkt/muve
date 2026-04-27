@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { stripe } from '@/lib/stripe'
-import { normalizarPlan, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
+import {
+  normalizarCategoriaNegocio,
+  normalizarPlan,
+  obtenerTarifasNegocioPorPlan,
+} from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
 
 export const runtime = 'nodejs'
@@ -42,6 +46,24 @@ function admin() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
+}
+
+function planTarifaParaVisita({
+  categoria,
+  planUsuario,
+}: {
+  categoria: string | null | undefined
+  planUsuario: string | null | undefined
+}) {
+  const planNormalizado = normalizarPlan(planUsuario)
+  if (planNormalizado) return planNormalizado
+
+  const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
+  if (categoriaNormalizada && categoriaNormalizada !== 'clases') {
+    return 'basico'
+  }
+
+  return null
 }
 
 function esRequestAutorizado(request: NextRequest) {
@@ -231,9 +253,16 @@ export async function GET(request: NextRequest) {
   for (const negocio of negociosPendientes) {
     resumenPorNegocio.set(negocio.id, crearResumenVacio())
   }
+  const categoriaPorNegocioId = new Map(
+    negociosPendientes.map((negocio) => [negocio.id, negocio.categoria])
+  )
 
   for (const visita of visitasPeriodo ?? []) {
-    const plan = normalizarPlan(visita.plan_usuario)
+    const categoriaNegocio = categoriaPorNegocioId.get(visita.negocio_id) ?? null
+    const plan = planTarifaParaVisita({
+      categoria: categoriaNegocio,
+      planUsuario: visita.plan_usuario,
+    })
     if (!plan) continue
     const resumen = resumenPorNegocio.get(visita.negocio_id)
     if (!resumen) continue

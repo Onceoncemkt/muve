@@ -34,6 +34,12 @@ interface CheckinHoy {
   usuario_email: string | null
 }
 
+interface ServicioDisponible {
+  id: string
+  nombre: string
+  precio_normal_mxn: number
+}
+
 interface GrupoHorario {
   key: string
   horario: HorarioReserva | null
@@ -92,8 +98,10 @@ interface DashboardPayload {
   fecha: string
   negocio?: NegocioDashboard
   checkins_hoy?: CheckinHoy[]
+  servicios_disponibles?: ServicioDisponible[]
   resumen?: {
     reservaciones_hoy: number
+    checkins_hoy: number
     horarios_activos: number
   }
   ganancias?: GananciasPayload
@@ -273,8 +281,9 @@ export default function NegocioDashboardPage() {
   const [fechaHoy] = useState(hoyLocalISO())
   const [negocio, setNegocio] = useState<NegocioDashboard | null>(null)
   const [checkinsHoy, setCheckinsHoy] = useState<CheckinHoy[]>([])
+  const [serviciosDisponibles, setServiciosDisponibles] = useState<ServicioDisponible[]>([])
   const [reservaciones, setReservaciones] = useState<ReservacionNegocio[]>([])
-  const [resumen, setResumen] = useState({ reservaciones_hoy: 0, horarios_activos: 0 })
+  const [resumen, setResumen] = useState({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
   const [ganancias, setGanancias] = useState<GananciasPayload>(gananciasIniciales())
   const [pagos, setPagos] = useState<PagosPayload>(pagosIniciales())
   const [sinNegocio, setSinNegocio] = useState(false)
@@ -301,11 +310,12 @@ export default function NegocioDashboardPage() {
         setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudieron cargar datos del panel' })
         setNegocio(null)
         setCheckinsHoy([])
+        setServiciosDisponibles([])
         setInstagramHandle('')
         setTiktokHandle('')
         setSinNegocio(false)
         setReservaciones([])
-        setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
+        setResumen({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
         setGanancias(gananciasIniciales())
         setPagos(pagosIniciales())
         return
@@ -316,10 +326,11 @@ export default function NegocioDashboardPage() {
         setSinNegocio(true)
         setNegocio(null)
         setCheckinsHoy([])
+        setServiciosDisponibles([])
         setInstagramHandle('')
         setTiktokHandle('')
         setReservaciones([])
-        setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
+        setResumen({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
         setGanancias(data.ganancias ?? gananciasIniciales())
         setPagos(data.pagos ?? pagosIniciales())
         return
@@ -328,11 +339,13 @@ export default function NegocioDashboardPage() {
       setSinNegocio(false)
       setNegocio(negocioPerfil)
       setCheckinsHoy((data.checkins_hoy ?? []) as CheckinHoy[])
+      setServiciosDisponibles((data.servicios_disponibles ?? []) as ServicioDisponible[])
       setInstagramHandle(negocioPerfil?.instagram_handle ? `@${negocioPerfil.instagram_handle}` : '')
       setTiktokHandle(negocioPerfil?.tiktok_handle ? `@${negocioPerfil.tiktok_handle}` : '')
       setReservaciones((data.reservaciones ?? []) as ReservacionNegocio[])
       setResumen({
         reservaciones_hoy: data.resumen?.reservaciones_hoy ?? 0,
+        checkins_hoy: data.resumen?.checkins_hoy ?? 0,
         horarios_activos: data.resumen?.horarios_activos ?? 0,
       })
       setGanancias(data.ganancias ?? gananciasIniciales())
@@ -341,11 +354,12 @@ export default function NegocioDashboardPage() {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar el panel' })
       setNegocio(null)
       setCheckinsHoy([])
+      setServiciosDisponibles([])
       setInstagramHandle('')
       setTiktokHandle('')
       setSinNegocio(false)
       setReservaciones([])
-      setResumen({ reservaciones_hoy: 0, horarios_activos: 0 })
+      setResumen({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
       setGanancias(gananciasIniciales())
       setPagos(pagosIniciales())
     } finally {
@@ -511,13 +525,14 @@ export default function NegocioDashboardPage() {
   }, [reservaciones])
   const cuentaStripeConectada = Boolean(negocio?.stripe_account_id)
   const categoriaNegocio = normalizarCategoriaNegocio(negocio?.categoria)
+  const esEstetica = categoriaNegocio === 'estetica'
   const esRestaurante = categoriaNegocio === 'restaurante'
-  const usaPanelCheckins = esRestaurante
+  const usaPanelCheckins = esEstetica || esRestaurante
   const totalVisitasSemana = PLANES_MEMBRESIA.reduce(
     (acumulado, plan) => acumulado + (ganancias.semana.visitas_por_plan[plan] ?? 0),
     0
   )
-  const tarifaFijaPorCheckin = esRestaurante ? 50 : (ganancias.tarifas_por_plan.basico ?? 0)
+  const tarifaFijaPorCheckin = ganancias.tarifas_por_plan.basico ?? 0
   const gananciasSemanaTarifaFija = totalVisitasSemana * tarifaFijaPorCheckin
   const mensajeTarifaFija = textoTarifaFijaPorCategoria(negocio?.categoria, ganancias.tarifas_por_plan)
 
@@ -534,7 +549,9 @@ export default function NegocioDashboardPage() {
             </Link>
             <h1 className="text-2xl font-black tracking-tight text-white">Panel de negocio</h1>
             <p className="mt-1 text-sm text-white/40">
-              {esRestaurante
+              {esEstetica
+                ? 'Check-ins del día, servicios disponibles y operación wellness'
+                : esRestaurante
                 ? 'Control de entradas y resumen de visitas del restaurante'
                 : 'Reservaciones de hoy y operación de tu negocio asignado'}
             </p>
@@ -598,7 +615,11 @@ export default function NegocioDashboardPage() {
                   <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Check-ins del día</p>
                   <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{checkinsHoy.length}</p>
                   {checkinsHoy.length === 0 ? (
-                    <p className="mt-2 text-sm text-[#666]">Aún no hay entradas validadas hoy.</p>
+                    <p className="mt-2 text-sm text-[#666]">
+                      {esEstetica
+                        ? 'Aún no hay check-ins registrados hoy.'
+                        : 'Aún no hay entradas validadas hoy.'}
+                    </p>
                   ) : (
                     <ul className="mt-3 space-y-2">
                       {checkinsHoy.map((checkin) => (
@@ -620,7 +641,7 @@ export default function NegocioDashboardPage() {
                 </div>
 
                 <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Total de visitas de la semana</p>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Check-ins de la semana</p>
                   <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{totalVisitasSemana}</p>
                 </div>
 
@@ -631,6 +652,30 @@ export default function NegocioDashboardPage() {
                     {totalVisitasSemana} × {formatMonedaMXN(tarifaFijaPorCheckin)}
                   </p>
                 </div>
+
+                {esEstetica && (
+                  <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">
+                      Servicios disponibles
+                    </p>
+                    {serviciosDisponibles.length === 0 ? (
+                      <p className="mt-2 text-sm text-[#666]">
+                        Este negocio aún no tiene servicios activos publicados.
+                      </p>
+                    ) : (
+                      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {serviciosDisponibles.map((servicio) => (
+                          <li
+                            key={servicio.id}
+                            className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#0A0A0A]"
+                          >
+                            {servicio.nombre}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
