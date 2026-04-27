@@ -58,12 +58,44 @@ export default async function DashboardPage({
   if (rol === 'admin') redirect('/admin')
   if (rol === 'staff') redirect('/negocio/dashboard')
 
-  const { data: perfil } = await supabase
+  const consultaPerfil = await supabase
     .from('users')
     .select('nombre, ciudad, plan_activo, plan, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo')
     .eq('id', user.id)
     .single<PerfilDashboard>()
-  console.log('perfil:', perfil)
+  let perfil = consultaPerfil.data ?? null
+
+  if (!perfil) {
+    const fallbackConCiclo = await supabase
+      .from('users')
+      .select('nombre, ciudad, plan_activo, plan, rol, fecha_fin_plan, fecha_inicio_ciclo')
+      .eq('id', user.id)
+      .single<Omit<PerfilDashboard, 'creditos_extra'>>()
+
+    if (fallbackConCiclo.data) {
+      perfil = {
+        ...fallbackConCiclo.data,
+        creditos_extra: null,
+      }
+    }
+  }
+
+  if (!perfil) {
+    const fallbackMinimo = await supabase
+      .from('users')
+      .select('nombre, ciudad, plan_activo, plan, rol')
+      .eq('id', user.id)
+      .single<Omit<PerfilDashboard, 'creditos_extra' | 'fecha_inicio_ciclo' | 'fecha_fin_plan'>>()
+
+    if (fallbackMinimo.data) {
+      perfil = {
+        ...fallbackMinimo.data,
+        creditos_extra: null,
+        fecha_inicio_ciclo: null,
+        fecha_fin_plan: null,
+      }
+    }
+  }
 
   const { count: totalVisitas } = await supabase
     .from('visitas')
@@ -75,8 +107,8 @@ export default async function DashboardPage({
   const params = await searchParams
   const recienActivada = params.membresia === 'activada'
 
-  const planActivo = Boolean(perfil?.plan_activo)
   const planUsuario = normalizarPlan(perfil?.plan ?? null)
+  const planActivo = Boolean(perfil?.plan_activo)
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
   const limiteMensual = planActivo && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
