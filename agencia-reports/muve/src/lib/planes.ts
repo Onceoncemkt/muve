@@ -14,8 +14,8 @@ export const PLAN_NIVELES: Record<PlanMembresia, number> = {
 
 export const PLAN_VISITAS_MENSUALES: Record<PlanMembresia, number> = {
   basico: 8,
-  plus: 14,
-  total: 20,
+  plus: 12,
+  total: 25,
 }
 
 export const PLAN_MAX_VISITAS_POR_LUGAR: Record<PlanMembresia, number> = {

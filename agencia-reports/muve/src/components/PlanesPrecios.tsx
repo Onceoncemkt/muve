@@ -59,10 +59,10 @@ const PLANES = [
   {
     id: 'plus' as const,
     nombre: 'PLUS',
-    visitas: 14,
+    visitas: 12,
     maxPorLugar: 7,
     features: [
-      '14 visitas al mes',
+      '12 visitas al mes',
       'Máximo 7 visitas por lugar',
       'Gimnasios, clases, estéticas y wellness',
       'Las 4 ciudades',
@@ -72,10 +72,10 @@ const PLANES = [
   {
     id: 'total' as const,
     nombre: 'TOTAL',
-    visitas: 20,
+    visitas: 25,
     maxPorLugar: 10,
     features: [
-      '20 visitas al mes',
+      '25 visitas al mes',
       'Máximo 10 visitas por lugar',
       'Gimnasios, clases, estéticas, restaurantes',
       'Las 4 ciudades',

@@ -145,6 +145,7 @@ export default async function DashboardPage({
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
   const limiteMensual = hasActiveMembership && planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
+  const mostrarBannerActivacion = !Boolean(perfil?.plan_activo)
 
   let usadasCiclo = 0
   let cicloActualTexto = '—'
@@ -175,12 +176,13 @@ export default async function DashboardPage({
       }
     }
 
+    const hoyIso = new Date().toISOString()
     const { count: visitasCiclo } = await supabase
       .from('visitas')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .gte('fecha', cicloInicioIso)
-      .lt('fecha', cicloFinIso)
+      .lte('fecha', hoyIso)
 
     usadasCiclo = visitasCiclo ?? 0
     cicloActualTexto = `${formatearFecha(ciclo.inicio)} — ${formatearFecha(finVisibleCiclo(ciclo.fin))}`
@@ -205,7 +207,7 @@ export default async function DashboardPage({
       )}
 
       {/* Sin membresía activa */}
-      {!hasActiveMembership && (
+      {mostrarBannerActivacion && (
         <div className="bg-[#E8FF47] px-4 py-3">
           <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-4">
             <p className="text-sm font-bold text-[#0A0A0A]">
