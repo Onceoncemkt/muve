@@ -20,13 +20,13 @@ function planTarifaParaVisita({
   categoria: string | null | undefined
   planUsuario: string | null | undefined
 }) {
-  const planNormalizado = normalizarPlan(planUsuario)
-  if (planNormalizado) return planNormalizado
 
   const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
   if (categoriaNormalizada && categoriaNormalizada !== 'clases') {
     return 'basico'
   }
+  const planNormalizado = normalizarPlan(planUsuario)
+  if (planNormalizado) return planNormalizado
 
   return null
 }
@@ -358,29 +358,38 @@ export async function GET(request: NextRequest) {
 
   const categoriaNegocioNormalizada = normalizarCategoriaNegocio(negocio.categoria)
   let serviciosDisponibles: Array<{ id: string; nombre: string; precio_normal_mxn: number }> = []
+  const serviciosResult = await db
+    .from('negocio_servicios')
+    .select('id, nombre, precio_normal_mxn')
+    .eq('negocio_id', negocioIdObjetivo)
+    .eq('activo', true)
+    .order('created_at', { ascending: true })
+    .returns<ServicioNegocioDashboard[]>()
 
-  if (categoriaNegocioNormalizada === 'estetica') {
-    const serviciosResult = await db
-      .from('negocio_servicios')
-      .select('id, nombre, precio_normal_mxn')
-      .eq('negocio_id', negocioIdObjetivo)
-      .eq('activo', true)
-      .order('created_at', { ascending: true })
-      .returns<ServicioNegocioDashboard[]>()
-
-    if (!serviciosResult.error) {
-      serviciosDisponibles = (serviciosResult.data ?? []).map((servicio) => ({
-        id: servicio.id,
-        nombre: servicio.nombre,
-        precio_normal_mxn: typeof servicio.precio_normal_mxn === 'number'
-          ? Math.max(Math.trunc(servicio.precio_normal_mxn), 0)
-          : 0,
-      }))
-    } else if (!faltaRelacion(serviciosResult.error, 'negocio_servicios')) {
-      return NextResponse.json(
-        { error: serviciosResult.error.message ?? 'Error al cargar servicios disponibles' },
-        { status: 500 }
-      )
+  if (!serviciosResult.error) {
+    serviciosDisponibles = (serviciosResult.data ?? []).map((servicio) => ({
+      id: servicio.id,
+      nombre: servicio.nombre,
+      precio_normal_mxn: typeof servicio.precio_normal_mxn === 'number'
+        ? Math.max(Math.trunc(servicio.precio_normal_mxn), 0)
+        : 0,
+    }))
+  } else if (!faltaRelacion(serviciosResult.error, 'negocio_servicios')) {
+    return NextResponse.json(
+      { error: serviciosResult.error.message ?? 'Error al cargar servicios disponibles' },
+      { status: 500 }
+    )
+  }
+  const categoriaParaDashboard = (
+    categoriaNegocioNormalizada === 'estetica'
+    || serviciosDisponibles.length > 0
+  )
+    ? 'estetica'
+    : negocio.categoria
+  if (categoriaParaDashboard === 'estetica' && negocio.categoria !== 'estetica') {
+    negocio = {
+      ...negocio,
+      categoria: 'estetica',
     }
   }
 
@@ -476,7 +485,7 @@ export async function GET(request: NextRequest) {
   const inicioSemana = inicioSemanaLocal(new Date())
   const finSemana = new Date(inicioSemana)
   finSemana.setDate(finSemana.getDate() + 7)
-  const tarifasPorPlan = obtenerTarifasNegocioPorPlan(negocio.categoria)
+  const tarifasPorPlan = obtenerTarifasNegocioPorPlan(categoriaParaDashboard)
 
   const visitasSemana = recordPlanInicial()
   const totalSemanaPorPlan = recordPlanInicial()
@@ -486,7 +495,7 @@ export async function GET(request: NextRequest) {
     const fechaVisita = new Date(visita.fecha)
     if (Number.isNaN(fechaVisita.getTime())) continue
     const planTarifa = planTarifaParaVisita({
-      categoria: negocio.categoria,
+      categoria: categoriaParaDashboard,
       planUsuario: visita.plan_usuario,
     })
     const tarifa = planTarifa ? tarifasPorPlan[planTarifa] : 0
