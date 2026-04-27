@@ -84,16 +84,23 @@ const PLANES = [
   },
 ]
 
+function normalizarCodigoDescuento(value: string | null | undefined) {
+  if (!value) return ''
+  return value.trim().toUpperCase()
+}
+
 function BotonPlan({
   planId,
   planNombre,
   priceId,
   esRecomendado,
+  codigoDescuento,
 }: {
   planId: string
   planNombre: string
   priceId: string
   esRecomendado: boolean
+  codigoDescuento: string
 }) {
   const [cargando, setCargando] = useState(false)
 
@@ -103,7 +110,10 @@ function BotonPlan({
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId }),
+        body: JSON.stringify({
+          priceId,
+          codigo_descuento: normalizarCodigoDescuento(codigoDescuento) || undefined,
+        }),
       })
       if (res.status === 401) {
         window.location.href = `/registro?plan=${planId}`
@@ -152,14 +162,36 @@ export default function PlanesPrecios({
   priceIds,
   ciudadInicial,
   usuarioAutenticado,
+  codigoDescuentoInicial = null,
+  mostrarCampoDescuento = false,
 }: {
   priceIds: PriceIdsPorRegion
   ciudadInicial: Ciudad
   usuarioAutenticado: boolean
+  codigoDescuentoInicial?: string | null
+  mostrarCampoDescuento?: boolean
 }) {
   const [ciudadSeleccionada, setCiudadSeleccionada] = useState<Ciudad | null>(
     usuarioAutenticado ? ciudadInicial : null
   )
+  const [codigoDescuento, setCodigoDescuento] = useState(() => {
+    const inicial = normalizarCodigoDescuento(codigoDescuentoInicial)
+    if (inicial) return inicial
+    if (!mostrarCampoDescuento || typeof window === 'undefined') return ''
+    return normalizarCodigoDescuento(window.localStorage.getItem('muvet_codigo_descuento'))
+  })
+
+  function actualizarCodigoDescuento(value: string) {
+    const normalizado = normalizarCodigoDescuento(value)
+    setCodigoDescuento(normalizado)
+
+    if (typeof window === 'undefined') return
+    if (normalizado) {
+      window.localStorage.setItem('muvet_codigo_descuento', normalizado)
+    } else {
+      window.localStorage.removeItem('muvet_codigo_descuento')
+    }
+  }
 
   const ciudadActiva = usuarioAutenticado
     ? ciudadInicial
@@ -196,6 +228,20 @@ export default function PlanesPrecios({
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+          {mostrarCampoDescuento && (
+            <div className="mx-auto mt-3 max-w-sm rounded-lg border border-[#E5E5E5] bg-white p-3 text-left">
+              <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#555]">
+                ¿Tienes un código de descuento?
+              </label>
+              <input
+                type="text"
+                value={codigoDescuento}
+                onChange={(event) => actualizarCodigoDescuento(event.target.value)}
+                placeholder="MUVET10-ABC123"
+                className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+              />
             </div>
           )}
           <p className="mx-auto mt-3 max-w-2xl text-center text-xs text-[#888]">
@@ -299,6 +345,7 @@ export default function PlanesPrecios({
                   planNombre={plan.nombre}
                   priceId={priceId}
                   esRecomendado={plan.recomendado}
+                  codigoDescuento={codigoDescuento}
                 />
               </div>
             )

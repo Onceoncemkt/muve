@@ -13,6 +13,7 @@ function serviceRoleKey() {
   }
   return key
 }
+
 function getServiceClient() {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,16 +26,48 @@ function columnaPlanNoExiste(error: { message?: string } | null | undefined) {
   return message.includes('column') && message.includes('plan')
 }
 
-async function activarMembresia(customerId: string, subscriptionId: string, plan: PlanMembresia) {
+function columnaFechaFinPlanNoExiste(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes('fecha_fin_plan')
+}
+
+function faltaRelacion(error: { message?: string } | null | undefined, relation: string) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes(relation.toLowerCase()) && message.includes('does not exist')
+}
+
+async function activarMembresia(
+  customerId: string,
+  subscriptionId: string,
+  plan: PlanMembresia,
+  fechaFinPlan: string | null
+) {
   const supabase = getServiceClient()
   let { error } = await supabase
     .from('users')
-    .update({ plan_activo: true, stripe_subscription_id: subscriptionId, plan })
+    .update({
+      plan_activo: true,
+      stripe_subscription_id: subscriptionId,
+      plan,
+      fecha_fin_plan: fechaFinPlan,
+    })
     .eq('stripe_customer_id', customerId)
-  if (columnaPlanNoExiste(error)) {
+
+  if (columnaPlanNoExiste(error) || columnaFechaFinPlanNoExiste(error)) {
+    const fallbackPayload: Record<string, unknown> = {
+      plan_activo: true,
+      stripe_subscription_id: subscriptionId,
+    }
+    if (!columnaPlanNoExiste(error)) {
+      fallbackPayload.plan = plan
+    }
+    if (!columnaFechaFinPlanNoExiste(error)) {
+      fallbackPayload.fecha_fin_plan = fechaFinPlan
+    }
+
     const fallback = await supabase
       .from('users')
-      .update({ plan_activo: true, stripe_subscription_id: subscriptionId })
+      .update(fallbackPayload)
       .eq('stripe_customer_id', customerId)
     error = fallback.error
   }
@@ -46,12 +79,29 @@ async function desactivarMembresia(customerId: string) {
   const supabase = getServiceClient()
   let { error } = await supabase
     .from('users')
-    .update({ plan_activo: false, stripe_subscription_id: null, plan: null })
+    .update({
+      plan_activo: false,
+      stripe_subscription_id: null,
+      plan: null,
+      fecha_fin_plan: null,
+    })
     .eq('stripe_customer_id', customerId)
-  if (columnaPlanNoExiste(error)) {
+
+  if (columnaPlanNoExiste(error) || columnaFechaFinPlanNoExiste(error)) {
+    const fallbackPayload: Record<string, unknown> = {
+      plan_activo: false,
+      stripe_subscription_id: null,
+    }
+    if (!columnaPlanNoExiste(error)) {
+      fallbackPayload.plan = null
+    }
+    if (!columnaFechaFinPlanNoExiste(error)) {
+      fallbackPayload.fecha_fin_plan = null
+    }
+
     const fallback = await supabase
       .from('users')
-      .update({ plan_activo: false, stripe_subscription_id: null })
+      .update(fallbackPayload)
       .eq('stripe_customer_id', customerId)
     error = fallback.error
   }
@@ -59,14 +109,52 @@ async function desactivarMembresia(customerId: string) {
   if (error) throw new Error(`desactivarMembresia: ${error.message}`)
 }
 
-async function obtenerPlanDesdeSubscriptionId(subscriptionId: string): Promise<PlanMembresia> {
+async function obtenerDatosSubscription(subscriptionId: string): Promise<{
+  plan: PlanMembresia
+  fechaFinPlan: string | null
+}> {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
   const priceId = subscription.items.data[0]?.price?.id
   const plan = planDesdePriceId(priceId)
   if (!plan) {
     throw new Error(`price_id no mapeado para membresía: ${priceId ?? 'desconocido'}`)
   }
-  return plan
+  const currentPeriodEnd = (subscription as { current_period_end?: unknown }).current_period_end
+  const fechaFinPlan = typeof currentPeriodEnd === 'number'
+    ? new Date(currentPeriodEnd * 1000).toISOString()
+    : null
+
+  return { plan, fechaFinPlan }
+}
+
+async function marcarDescuentoComoUsado(metadata: Stripe.Metadata | null | undefined) {
+  const descuentoId = typeof metadata?.descuento_id === 'string'
+    ? metadata.descuento_id.trim()
+    : ''
+  const codigo = typeof metadata?.codigo_descuento === 'string'
+    ? metadata.codigo_descuento.trim().toUpperCase()
+    : ''
+
+  if (!descuentoId && !codigo) return
+
+  const supabase = getServiceClient()
+  let query = supabase
+    .from('descuentos')
+    .update({ usado: true })
+
+  query = descuentoId
+    ? query.eq('id', descuentoId)
+    : query.eq('codigo', codigo)
+
+  const { error } = await query
+
+  if (faltaRelacion(error, 'descuentos')) {
+    throw new Error('Falta la tabla descuentos. Ejecuta la migración 018 en Supabase.')
+  }
+
+  if (error) {
+    throw new Error(`marcarDescuentoComoUsado: ${error.message}`)
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -90,66 +178,89 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
-        // Solo procesar suscripciones (no pagos únicos)
         if (session.mode !== 'subscription') break
         if (!session.customer || !session.subscription) break
-        const plan = await obtenerPlanDesdeSubscriptionId(session.subscription as string)
 
+        const datosSubscription = await obtenerDatosSubscription(session.subscription as string)
         await activarMembresia(
           session.customer as string,
           session.subscription as string,
-          plan
+          datosSubscription.plan,
+          datosSubscription.fechaFinPlan
         )
+        await marcarDescuentoComoUsado(session.metadata)
         break
       }
 
       case 'invoice.paid': {
-        // Renovación mensual — mantener membresía activa
         const invoice = event.data.object as Stripe.Invoice
-        const subId = typeof invoice.parent === 'object' && invoice.parent?.type === 'subscription_details'
-          ? (invoice.parent as { subscription_id?: string }).subscription_id
-          : null
+        const invoiceConSubscription = invoice as Stripe.Invoice & { subscription?: string | null }
+        const subId = typeof invoiceConSubscription.subscription === 'string'
+          ? invoiceConSubscription.subscription
+          : (
+            typeof invoice.parent === 'object' && invoice.parent?.type === 'subscription_details'
+              ? (invoice.parent as { subscription_id?: string }).subscription_id ?? null
+              : null
+          )
         if (!invoice.customer || !subId) break
-        const plan = await obtenerPlanDesdeSubscriptionId(subId)
-        await activarMembresia(invoice.customer as string, subId, plan)
+
+        const datosSubscription = await obtenerDatosSubscription(subId)
+        await activarMembresia(
+          invoice.customer as string,
+          subId,
+          datosSubscription.plan,
+          datosSubscription.fechaFinPlan
+        )
         break
       }
 
       case 'invoice.payment_failed': {
-        // Pago fallido — Stripe reintentará según la config del dashboard
-        // No desactivamos aún; dejamos que `customer.subscription.deleted` lo haga
-        // si Stripe cancela definitivamente tras los reintentos
         const invoice = event.data.object as Stripe.Invoice
         console.warn(`Pago fallido para customer: ${invoice.customer}`)
         break
       }
 
       case 'customer.subscription.deleted': {
-        // Cancelación definitiva (manual o por reintentos fallidos)
         const sub = event.data.object as Stripe.Subscription
         if (!sub.customer) break
-
         await desactivarMembresia(sub.customer as string)
         break
       }
 
       case 'customer.subscription.updated': {
-        // Cambio de plan, pausa, etc.
         const sub = event.data.object as Stripe.Subscription
         if (!sub.customer) break
 
         const activo = sub.status === 'active' || sub.status === 'trialing'
-        if (activo) {
-          const plan = planDesdePriceId(sub.items.data[0]?.price?.id) ?? await obtenerPlanDesdeSubscriptionId(sub.id)
-          await activarMembresia(sub.customer as string, sub.id, plan)
-        } else {
+        if (!activo) {
           await desactivarMembresia(sub.customer as string)
+          break
         }
+
+        let plan = planDesdePriceId(sub.items.data[0]?.price?.id)
+        const currentPeriodEnd = (sub as { current_period_end?: unknown }).current_period_end
+        let fechaFinPlan = typeof currentPeriodEnd === 'number'
+          ? new Date(currentPeriodEnd * 1000).toISOString()
+          : null
+
+        if (!plan) {
+          const datosSubscription = await obtenerDatosSubscription(sub.id)
+          plan = datosSubscription.plan
+          if (!fechaFinPlan) {
+            fechaFinPlan = datosSubscription.fechaFinPlan
+          }
+        }
+
+        await activarMembresia(
+          sub.customer as string,
+          sub.id,
+          plan,
+          fechaFinPlan
+        )
         break
       }
 
       default:
-        // Evento no manejado — ignorar silenciosamente
         break
     }
   } catch (err) {

@@ -2,10 +2,17 @@ import Link from 'next/link'
 import PlanesPrecios from '@/components/PlanesPrecios'
 import { createClient } from '@/lib/supabase/server'
 import type { Ciudad } from '@/types'
-
-export default async function PlanesPage() {
+export default async function PlanesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ codigo_descuento?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  const params = await searchParams
+  const codigoDescuentoInicial = typeof params.codigo_descuento === 'string'
+    ? params.codigo_descuento
+    : null
 
   let ciudadInicial: Ciudad = 'tulancingo'
   if (user) {
@@ -59,6 +66,8 @@ export default async function PlanesPage() {
         priceIds={priceIds}
         ciudadInicial={ciudadInicial}
         usuarioAutenticado={usuarioAutenticado}
+        codigoDescuentoInicial={codigoDescuentoInicial}
+        mostrarCampoDescuento
       />
     </div>
   )

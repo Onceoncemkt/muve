@@ -7,6 +7,11 @@ import type { Ciudad } from '@/types'
 import { CIUDAD_LABELS } from '@/types'
 
 const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+
+function normalizarCodigoDescuento(value: string | null | undefined) {
+  if (!value) return ''
+  return value.trim().toUpperCase()
+}
 async function enviarEmailBienvenida(payload: { email: string; nombre: string }) {
   try {
     const response = await fetch('/api/email/bienvenida', {
@@ -28,6 +33,10 @@ export default function RegistroPage() {
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [codigoDescuento, setCodigoDescuento] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return normalizarCodigoDescuento(window.localStorage.getItem('muvet_codigo_descuento'))
+  })
   const [ciudadSeleccionada, setCiudadSeleccionada] = useState<Ciudad>('tulancingo')
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
@@ -42,6 +51,15 @@ export default function RegistroPage() {
 
     setCargando(true)
     setError(null)
+    const codigoDescuentoNormalizado = normalizarCodigoDescuento(codigoDescuento)
+
+    if (typeof window !== 'undefined') {
+      if (codigoDescuentoNormalizado) {
+        window.localStorage.setItem('muvet_codigo_descuento', codigoDescuentoNormalizado)
+      } else {
+        window.localStorage.removeItem('muvet_codigo_descuento')
+      }
+    }
 
     try {
       const supabase = createClient()
@@ -198,6 +216,20 @@ export default function RegistroPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-white/30">
+                ¿Tienes un código de descuento?
+              </label>
+              <input
+                type="text"
+                value={codigoDescuento}
+                onChange={e => setCodigoDescuento(normalizarCodigoDescuento(e.target.value))}
+                autoComplete="off"
+                placeholder="MUVET10-ABC123"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-[#6B4FE8] focus:ring-1 focus:ring-[#6B4FE8]/30"
+              />
             </div>
 
             <button

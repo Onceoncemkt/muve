@@ -21,6 +21,8 @@ create table public.users (
   stripe_customer_id  text,
   plan                text check (plan in ('basico', 'plus', 'total')),
   rol                 rol_enum not null default 'usuario',
+  fecha_fin_plan      timestamp with time zone,
+  ultimo_checkin      timestamp with time zone,
   fecha_registro      timestamp with time zone default now()
 );
 
@@ -91,6 +93,19 @@ create unique index pagos_negocios_negocio_periodo_unique
   on public.pagos_negocios (negocio_id, periodo_inicio, periodo_fin);
 
 -- ============================================================
+-- TABLA: descuentos
+-- ============================================================
+create table public.descuentos (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid references public.users(id) on delete cascade,
+  codigo            text unique not null,
+  porcentaje        int default 10 check (porcentaje >= 1 and porcentaje <= 100),
+  usado             boolean default false,
+  fecha_expiracion  timestamp with time zone,
+  created_at        timestamp with time zone default now()
+);
+
+-- ============================================================
 -- TABLA: qr_tokens
 -- ============================================================
 create table public.qr_tokens (
@@ -116,6 +131,8 @@ create index qr_tokens_token_idx on public.qr_tokens (token);
 create index visitas_user_id_idx on public.visitas (user_id);
 create index visitas_negocio_id_idx on public.visitas (negocio_id);
 create index users_negocio_id_idx on public.users (negocio_id);
+create index descuentos_user_id_idx on public.descuentos (user_id);
+create index descuentos_expiracion_idx on public.descuentos (fecha_expiracion);
 create index push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
 create index negocio_servicios_negocio_id_idx on public.negocio_servicios (negocio_id);
 create index negocio_servicios_activo_idx on public.negocio_servicios (negocio_id, activo);
@@ -130,6 +147,7 @@ alter table public.negocios enable row level security;
 alter table public.negocio_servicios enable row level security;
 alter table public.visitas enable row level security;
 alter table public.pagos_negocios enable row level security;
+alter table public.descuentos enable row level security;
 alter table public.qr_tokens enable row level security;
 alter table public.push_subscriptions enable row level security;
 
@@ -195,6 +213,10 @@ create policy "staff y admin ven pagos de su negocio" on public.pagos_negocios
         )
     )
   );
+
+-- descuentos
+create policy "usuarios ven sus descuentos" on public.descuentos
+  for select using (auth.uid() = user_id);
 
 -- qr_tokens
 create policy "usuarios ven sus tokens" on public.qr_tokens
@@ -383,6 +405,65 @@ begin
     alter table public.negocios
       add constraint negocios_monto_maximo_visita_check
       check (monto_maximo_visita >= 0);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if to_regclass('public.users') is not null then
+    alter table public.users
+      add column if not exists fecha_fin_plan timestamp with time zone;
+
+    alter table public.users
+      add column if not exists ultimo_checkin timestamp with time zone;
+  end if;
+end
+$$;
+
+do $$
+begin
+  create table if not exists public.descuentos (
+    id                uuid primary key default gen_random_uuid(),
+    user_id           uuid references public.users(id) on delete cascade,
+    codigo            text unique not null,
+    porcentaje        int default 10,
+    usado             boolean default false,
+    fecha_expiracion  timestamp with time zone,
+    created_at        timestamp with time zone default now()
+  );
+
+  create index if not exists descuentos_user_id_idx
+    on public.descuentos (user_id);
+
+  create index if not exists descuentos_expiracion_idx
+    on public.descuentos (fecha_expiracion);
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'descuentos_porcentaje_check'
+  ) then
+    alter table public.descuentos
+      add constraint descuentos_porcentaje_check
+      check (porcentaje >= 1 and porcentaje <= 100);
+  end if;
+end
+$$;
+
+do $$
+begin
+  alter table public.descuentos enable row level security;
+
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'descuentos'
+      and policyname = 'usuarios ven sus descuentos'
+  ) then
+    create policy "usuarios ven sus descuentos" on public.descuentos
+      for select using (auth.uid() = user_id);
   end if;
 end
 $$;

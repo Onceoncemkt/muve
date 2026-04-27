@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Registrar visita y marcar token como usado
-  const [{ error: visitaError }] = await Promise.all([
+  const [{ error: visitaError }, { error: tokenError }, { error: ultimoCheckinError }] = await Promise.all([
     db.from('visitas').insert({
       user_id: qrToken.user_id,
       negocio_id: negocioIdObjetivo,
@@ -243,10 +243,17 @@ export async function POST(request: NextRequest) {
       plan_usuario: planUsuario,
     }),
     db.from('qr_tokens').update({ usado: true }).eq('id', qrToken.id),
+    db.from('users').update({ ultimo_checkin: new Date().toISOString() }).eq('id', qrToken.user_id),
   ])
 
   if (visitaError) {
     return NextResponse.json({ error: 'Error al registrar visita' }, { status: 500 })
+  }
+  if (tokenError) {
+    return NextResponse.json({ error: 'Error al marcar token como usado' }, { status: 500 })
+  }
+  if (ultimoCheckinError && !faltaColumna(ultimoCheckinError, 'ultimo_checkin')) {
+    console.warn('[POST /api/validar] No se pudo actualizar ultimo_checkin', ultimoCheckinError)
   }
 
   const visitasUsadasMes = (visitasMes ?? 0) + 1

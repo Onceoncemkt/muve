@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/pagar-negocios",
       "schedule": "0 9 * * 1"
+    },
+    {
+      "path": "/api/cron/recordatorio-plan",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/reactivar-usuarios",
+      "schedule": "0 11 * * *"
     }
   ]
 }
