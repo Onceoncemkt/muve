@@ -107,6 +107,12 @@ export default async function DashboardPage({
       .eq('id', user.id)
     planActivo = false
     planUsuario = null
+    if (perfil) {
+      perfil = {
+        ...perfil,
+        plan_activo: false,
+      }
+    }
   }
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
@@ -172,7 +178,7 @@ export default async function DashboardPage({
       )}
 
       {/* Sin membresía activa */}
-      {!planActivo && !recienActivada && (
+      {!perfil?.plan_activo && (
         <div className="bg-[#E8FF47] px-4 py-3">
           <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-4">
             <p className="text-sm font-bold text-[#0A0A0A]">
