@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
+import type { DiaSemana } from '@/types'
 
 function admin() {
   return createAdmin(
@@ -14,6 +15,18 @@ function normalizarTextoOpcional(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const limpio = value.trim()
   return limpio.length > 0 ? limpio : null
+}
+
+function esDiaSemana(value: unknown): value is DiaSemana {
+  return (
+    value === 'lunes'
+    || value === 'martes'
+    || value === 'miercoles'
+    || value === 'jueves'
+    || value === 'viernes'
+    || value === 'sabado'
+    || value === 'domingo'
+  )
 }
 
 // PATCH /api/negocio/horarios/[id] — editar (activo, capacidad, coach, tipo de clase) — solo staff/admin
@@ -38,6 +51,15 @@ export async function PATCH(
 
   // Solo se pueden actualizar estos campos
   const updates: Record<string, unknown> = {}
+  if (typeof body.hora_inicio === 'string' && body.hora_inicio.trim().length > 0) {
+    updates.hora_inicio = body.hora_inicio.trim()
+  }
+  if (typeof body.hora_fin === 'string' && body.hora_fin.trim().length > 0) {
+    updates.hora_fin = body.hora_fin.trim()
+  }
+  if (esDiaSemana(body.dia_semana)) {
+    updates.dia_semana = body.dia_semana
+  }
   if (typeof body.activo === 'boolean') updates.activo = body.activo
   if (typeof body.capacidad_total === 'number' && Number.isFinite(body.capacidad_total)) {
     const capacidad = Math.trunc(body.capacidad_total)
@@ -57,6 +79,29 @@ export async function PATCH(
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })
+  }
+
+  if (typeof updates.hora_inicio === 'string' || typeof updates.hora_fin === 'string') {
+    const { data: horarioActual, error: horarioActualError } = await db
+      .from('horarios')
+      .select('hora_inicio, hora_fin')
+      .eq('id', id)
+      .maybeSingle<{ hora_inicio: string; hora_fin: string }>()
+
+    if (horarioActualError || !horarioActual) {
+      return NextResponse.json({ error: 'Horario no encontrado' }, { status: 404 })
+    }
+
+    const horaInicioFinal = typeof updates.hora_inicio === 'string'
+      ? updates.hora_inicio
+      : horarioActual.hora_inicio
+    const horaFinFinal = typeof updates.hora_fin === 'string'
+      ? updates.hora_fin
+      : horarioActual.hora_fin
+
+    if (horaInicioFinal >= horaFinFinal) {
+      return NextResponse.json({ error: 'hora_fin debe ser mayor a hora_inicio' }, { status: 400 })
+    }
   }
 
   const { data, error } = await db
