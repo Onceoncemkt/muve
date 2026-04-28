@@ -160,7 +160,7 @@ export async function POST(request: Request) {
       objectId,
       classId: LOYALTY_CLASS_ID,
       nombre: (socio.nombre ?? user.email?.split('@')[0] ?? 'Socio MUVET').trim(),
-      plan,
+      plan: plan as 'BÁSICO' | 'PLUS' | 'TOTAL',
       ciudad: CIUDAD_LABELS[ciudad],
       visitasUsadas,
       visitasTotales,
