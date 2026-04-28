@@ -40,3 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# Google Wallet integration
+wallet-integration/credentials/*.json
+!wallet-integration/credentials/.gitkeep
+!wallet-integration/.env.example

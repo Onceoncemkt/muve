@@ -1,99 +1,136 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-
-type PlataformaWallet = 'apple' | 'google'
+import { QRCodeSVG } from 'qrcode.react'
 
 interface WalletPassCardProps {
-  userId: string
-  appleWalletAgregado: boolean
-  googleWalletAgregado: boolean
-}
-
-type WalletState = {
-  plataforma: PlataformaWallet | null
-  paseAgregado: boolean
+  nombre?: string
+  plan?: 'BÁSICO' | 'PLUS' | 'TOTAL'
+  ciudad?: string
+  visitasUsadas?: number
+  visitasTotales?: number
+  fechaVencimiento?: string
+  anoVencimiento?: string
+  idSocio?: string
+  qrCode?: string
 }
 
 export default function WalletPassCard({
-  userId,
-  appleWalletAgregado,
-  googleWalletAgregado,
+  nombre,
+  plan,
+  ciudad,
+  visitasUsadas,
+  visitasTotales,
+  fechaVencimiento,
+  anoVencimiento,
+  idSocio,
+  qrCode,
 }: WalletPassCardProps) {
-  const [walletState, setWalletState] = useState<WalletState>({
-    plataforma: null,
-    paseAgregado: false,
-  })
-  const [cargandoAccion, setCargandoAccion] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const esIphone = /iphone/i.test(navigator.userAgent)
-    const plataformaDetectada: PlataformaWallet = esIphone ? 'apple' : 'google'
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setWalletState({
-      plataforma: plataformaDetectada,
-      paseAgregado: plataformaDetectada === 'apple' ? appleWalletAgregado : googleWalletAgregado,
-    })
-  }, [appleWalletAgregado, googleWalletAgregado])
-
-
-  const endpointWallet = useMemo(() => {
-    if (!walletState.plataforma) return null
-    return `/api/wallet/${walletState.plataforma}/${encodeURIComponent(userId)}`
-  }, [walletState.plataforma, userId])
-
-  const textoBoton = useMemo(() => {
-    if (!walletState.plataforma) return 'Detectando dispositivo...'
-    if (walletState.paseAgregado) return 'Ver mi pase'
-    return walletState.plataforma === 'apple'
-      ? 'Agregar a Apple Wallet'
-      : 'Agregar a Google Wallet'
-  }, [walletState.paseAgregado, walletState.plataforma])
-
-  async function manejarWallet() {
-    if (!endpointWallet) return
-    setError(null)
-    setCargandoAccion(true)
-
-    try {
-      const respuesta = await fetch(endpointWallet, { cache: 'no-store' })
-      const data = await respuesta.json().catch(() => ({}))
-
-      if (!respuesta.ok) {
-        setError(data.error ?? 'No se pudo abrir Wallet')
-        return
-      }
-
-      setWalletState((prev) => ({ ...prev, paseAgregado: true }))
-
-      if (typeof data.wallet_url === 'string' && data.wallet_url.length > 0) {
-        window.location.assign(data.wallet_url)
-      }
-    } catch (err) {
-      console.error('[WalletPassCard] error abriendo wallet:', err)
-      setError('Error de conexión al abrir Wallet')
-    } finally {
-      setCargandoAccion(false)
-    }
-  }
+  const nombreSocio = nombre ?? 'María García'
+  const planSocio = plan ?? 'PLUS'
+  const ciudadSocio = ciudad ?? 'Tulancingo'
+  const visitasTotalesSeguras = Math.max(Math.trunc(visitasTotales ?? 12), 0)
+  const visitasUsadasSeguras = Math.max(Math.trunc(visitasUsadas ?? 8), 0)
+  const visitasUsadasLimitadas = visitasTotalesSeguras > 0
+    ? Math.min(visitasUsadasSeguras, visitasTotalesSeguras)
+    : 0
+  const visitasRestantes = Math.max(visitasTotalesSeguras - visitasUsadasLimitadas, 0)
+  const porcentajeBarra = visitasTotalesSeguras > 0
+    ? Math.min((visitasUsadasLimitadas / visitasTotalesSeguras) * 100, 100)
+    : 0
+  const fechaVencimientoSocio = fechaVencimiento ?? '15 May'
+  const anoVencimientoSocio = anoVencimiento ?? '2026'
+  const idSocioTexto = idSocio ?? 'MUVET-0001'
+  const qrValue = qrCode ?? `MUVET|${idSocioTexto}|${planSocio}|${ciudadSocio}`
 
   return (
     <div className="flex flex-col items-center gap-5">
-      <button
-        type="button"
-        onClick={() => void manejarWallet()}
-        disabled={!endpointWallet || cargandoAccion}
-        className="w-full max-w-sm rounded-lg bg-[#6B4FE8] px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6] disabled:cursor-not-allowed disabled:opacity-60"
+      <div
+        className="w-[320px] overflow-hidden rounded-[16px] shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
+        style={{ fontFamily: "-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" }}
       >
-        {cargandoAccion ? 'Abriendo Wallet...' : textoBoton}
-      </button>
+        <div className="relative overflow-hidden bg-[linear-gradient(135deg,#0A0A0A_0%,#1A1240_100%)] px-5 pb-5 pt-6 before:pointer-events-none before:absolute before:-right-[10px] before:-top-[10px] before:text-[80px] before:font-black before:tracking-[-3px] before:text-[rgba(232,255,71,0.04)] before:content-['MUVET']">
+          <div className="mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-[10px]">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#E8FF47] text-[14px] font-black text-[#0A0A0A]">
+                MV
+              </div>
+              <span className="text-[18px] font-bold text-white">MUVET</span>
+            </div>
+            <span className="rounded-[20px] border border-[rgba(107,79,232,0.5)] bg-[rgba(107,79,232,0.3)] px-[10px] py-1 text-[10px] font-bold uppercase tracking-[1.5px] text-[#A891FF]">
+              Plan {planSocio}
+            </span>
+          </div>
+          <div className="mb-1 text-[22px] font-bold tracking-[-0.3px] text-white">{nombreSocio}</div>
+          <div className="text-[12px] tracking-[0.3px] text-[rgba(255,255,255,0.4)]">
+            Membresía activa · {ciudadSocio}
+          </div>
+        </div>
 
-      {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700">
-          {error}
-        </p>
-      )}
+        <div className="bg-[#161616] px-5 py-4">
+          <div className="mb-4 grid grid-cols-2 gap-[10px]">
+            <div className="rounded-[10px] bg-[#1E1E1E] px-[14px] py-3">
+              <div className="mb-1 text-[9px] font-semibold uppercase tracking-[1.5px] text-[rgba(255,255,255,0.3)]">
+                Visitas restantes
+              </div>
+              <div className="text-[18px] font-bold text-[#E8FF47]">{visitasRestantes}</div>
+              <div className="mt-[2px] text-[10px] text-[rgba(255,255,255,0.3)]">
+                de {visitasTotalesSeguras} este ciclo
+              </div>
+            </div>
+
+            <div className="rounded-[10px] bg-[#1E1E1E] px-[14px] py-3">
+              <div className="mb-1 text-[9px] font-semibold uppercase tracking-[1.5px] text-[rgba(255,255,255,0.3)]">
+                Válido hasta
+              </div>
+              <div className="text-[15px] font-bold text-white">{fechaVencimientoSocio}</div>
+              <div className="mt-[2px] text-[10px] text-[rgba(255,255,255,0.3)]">{anoVencimientoSocio}</div>
+            </div>
+          </div>
+
+          <div className="mb-4 rounded-[10px] bg-[#1E1E1E] px-[14px] py-3">
+            <div className="mb-2 flex justify-between">
+              <span className="text-[10px] uppercase tracking-[1px] text-[rgba(255,255,255,0.4)]">
+                Visitas usadas
+              </span>
+              <span className="text-[10px] font-semibold text-[#E8FF47]">
+                {visitasUsadasLimitadas} de {visitasTotalesSeguras}
+              </span>
+            </div>
+            <div className="h-[6px] overflow-hidden rounded-[3px] bg-[rgba(255,255,255,0.08)]">
+              <div
+                className="h-full rounded-[3px] bg-[linear-gradient(90deg,#6B4FE8,#E8FF47)]"
+                style={{ width: `${porcentajeBarra}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-[14px] rounded-[12px] bg-white p-4">
+            <QRCodeSVG
+              value={qrValue}
+              size={80}
+              bgColor="#FFFFFF"
+              fgColor="#000000"
+              className="h-20 w-20 shrink-0"
+            />
+            <div>
+              <div className="mb-[3px] text-[12px] font-bold text-[#0A0A0A]">Tu pase MUVET</div>
+              <div className="text-[10px] leading-[1.4] text-[#888888]">
+                Muéstralo en recepción para registrar tu visita
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between bg-[#111111] px-5 py-[10px]">
+          <span className="text-[9px] tracking-[0.5px] text-[rgba(255,255,255,0.15)]">
+            muvet.mx · Membresía de bienestar
+          </span>
+          <span className="text-[9px] tracking-[0.5px] text-[rgba(255,255,255,0.15)]">
+            ID: {idSocioTexto}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

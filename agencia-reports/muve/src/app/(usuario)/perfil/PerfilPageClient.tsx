@@ -33,7 +33,9 @@ type ObjetivoOption = {
 type Props = {
   userId: string
   initialProfile: PerfilFormState
+  [key: string]: unknown
 }
+
 
 function inicialesDesdeTexto(value: string) {
   const iniciales = value
@@ -141,6 +143,7 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
 
   const hoyIso = new Date().toISOString().slice(0, 10)
   const inicialesUsuario = inicialesDesdeTexto(form.nombre || form.email || 'Muver')
+
 
   function actualizarCampo<K extends keyof PerfilFormState>(campo: K, valor: PerfilFormState[K]) {
     setForm((prev) => ({ ...prev, [campo]: valor }))
@@ -300,7 +303,7 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
         </p>
       </div>
 
-      <div className="mx-auto mt-4 w-full max-w-lg px-4">
+      <div className="mx-auto mt-4 w-full max-w-lg space-y-4 px-4">
         <form
           onSubmit={guardarCambios}
           className="rounded-xl border border-[#E5E5E5] bg-white p-4 shadow-sm"
