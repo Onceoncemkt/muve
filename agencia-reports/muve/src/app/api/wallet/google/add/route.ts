@@ -1,4 +1,4 @@
-import { createHash, createSign } from 'crypto'
+import { createSign } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
@@ -26,17 +26,16 @@ type SocioRow = {
   qr_code?: string | null
 }
 
-type WalletObjectPayload = {
+type LoyaltyObjectPayload = {
   objectId: string
   classId: string
+  userId: string
   nombre: string
   plan: 'BÁSICO' | 'PLUS' | 'TOTAL'
   ciudad: string
   visitasUsadas: number
   visitasTotales: number
   fechaVencimiento: string
-  idSocio: string
-  qrCode: string
 }
 
 function columnaNoExiste(error: { message?: string } | null | undefined, columna: string) {
@@ -81,60 +80,36 @@ function signJwt(payload: Record<string, unknown>) {
   return `${unsignedToken}.${signatureB64}`
 }
 
-function walletObjectFromMember(payload: WalletObjectPayload) {
+function loyaltyObjectFromMember(payload: LoyaltyObjectPayload) {
   return {
     id: payload.objectId,
     classId: payload.classId,
     state: 'ACTIVE',
-    cardTitle: {
-      defaultValue: {
-        language: 'es-MX',
-        value: process.env.GOOGLE_WALLET_CARD_TITLE || 'MUVET',
-      },
-    },
-    header: {
-      defaultValue: {
-        language: 'es-MX',
-        value: payload.nombre || 'Socio MUVET',
-      },
-    },
-    subheader: {
-      defaultValue: {
-        language: 'es-MX',
-        value: payload.plan,
-      },
-    },
-    logo: {
-      sourceUri: {
-        uri:
-          process.env.GOOGLE_WALLET_LOGO_URI ||
-          'https://storage.googleapis.com/wallet-lab-tools-codelab-artifacts-public/pass_google_logo.jpg',
-      },
-      contentDescription: {
-        defaultValue: {
-          language: 'es-MX',
-          value: 'Logo de MUVET',
-        },
+    accountId: payload.userId,
+    accountName: payload.nombre || 'Socio MUVET',
+    loyaltyPoints: {
+      label: 'VISITAS',
+      balance: {
+        string: `${payload.visitasUsadas}/${payload.visitasTotales}`,
       },
     },
     barcode: {
       type: 'QR_CODE',
-      value: payload.qrCode || payload.objectId,
-      alternateText: `MUVET-${payload.idSocio.substring(0, 8)}`,
+      value: payload.userId,
+      alternateText: `MUVET-${String(payload.userId).substring(0, 8)}`,
     },
-    hexBackgroundColor: process.env.GOOGLE_WALLET_BG_COLOR || '#0A0A0A',
     textModulesData: [
       { id: 'plan', header: 'PLAN', body: payload.plan },
       { id: 'ciudad', header: 'CIUDAD', body: payload.ciudad },
-      { id: 'visitas', header: 'VISITAS', body: `${payload.visitasUsadas}/${payload.visitasTotales}` },
       { id: 'vigencia', header: 'VÁLIDO HASTA', body: payload.fechaVencimiento },
     ],
+    hexBackgroundColor: process.env.GOOGLE_WALLET_BG_COLOR || '#0A0A0A',
   }
 }
 
-function generateAddToWalletLink(genericObject: ReturnType<typeof walletObjectFromMember>) {
+function generateAddToWalletLink(loyaltyObject: ReturnType<typeof loyaltyObjectFromMember>) {
   const email = SERVICE_ACCOUNT_EMAIL || requireEnv('GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL')
-  const origin = process.env.GOOGLE_WALLET_ORIGIN || 'https://muvet.app'
+  const origin = process.env.GOOGLE_WALLET_ORIGIN || 'https://muvet.mx'
   const now = Math.floor(Date.now() / 1000)
 
   const jwtPayload = {
@@ -144,7 +119,7 @@ function generateAddToWalletLink(genericObject: ReturnType<typeof walletObjectFr
     origins: [origin],
     iat: now,
     payload: {
-      genericObjects: [genericObject],
+      loyaltyObjects: [loyaltyObject],
     },
   }
 
@@ -219,25 +194,23 @@ export async function POST(request: NextRequest) {
   }
 
   const issuerId = ISSUER_ID || CLASS_ID.split('.')[0]
-  const objectId = `${issuerId}.muvet_${socio.id.replace(/[^a-zA-Z0-9]/g, '')}`
-  const qrCode = socio.qr_code || createHash('sha256').update(socio.id).digest('hex')
+  const objectId = `${issuerId}.muvet-${userId}`
 
-  const genericObject = walletObjectFromMember({
+  const loyaltyObject = loyaltyObjectFromMember({
     objectId,
     classId: CLASS_ID,
+    userId,
     nombre: (socio.nombre ?? user.email?.split('@')[0] ?? 'Socio MUVET').trim(),
     plan: plan as 'BÁSICO' | 'PLUS' | 'TOTAL',
     ciudad: CIUDAD_LABELS[ciudad],
     visitasUsadas,
     visitasTotales,
     fechaVencimiento: formatearFecha(socio.fecha_fin_plan),
-    idSocio: socio.id,
-    qrCode,
   })
 
   let walletUrl = ''
   try {
-    walletUrl = generateAddToWalletLink(genericObject)
+    walletUrl = generateAddToWalletLink(loyaltyObject)
   } catch (error) {
     console.error('[POST /api/wallet/google/add] error generando JWT/link:', error)
     return NextResponse.json({ error: 'No se pudo generar walletUrl' }, { status: 500 })
