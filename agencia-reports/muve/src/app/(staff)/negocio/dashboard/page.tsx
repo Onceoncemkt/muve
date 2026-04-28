@@ -205,6 +205,11 @@ function inicialesNegocio(nombre: string) {
     .map(fragmento => fragmento[0]?.toUpperCase() ?? '')
     .join('')
 }
+const PLAN_LABELS: Record<PlanMembresia, string> = {
+  basico: 'Básico',
+  plus: 'Plus',
+  total: 'Total',
+}
 
 
 const PLANES_MEMBRESIA: PlanMembresia[] = ['basico', 'plus', 'total']
@@ -284,6 +289,9 @@ function claseEstadoPago(estado: 'pagado' | 'pendiente') {
   return estado === 'pagado'
     ? 'bg-[#E8FF47] text-[#0A0A0A]'
     : 'bg-[#6B4FE8]/30 text-[#E5DEFF]'
+}
+function etiquetaEstadoPago(estado: 'pagado' | 'pendiente') {
+  return estado === 'pagado' ? 'Pagado' : 'Pendiente'
 }
 
 function formatFechaCorta(fechaISO: string) {
@@ -671,6 +679,40 @@ export default function NegocioDashboardPage() {
   )
   const tarifaFijaPorCheckin = ganancias.tarifas_por_plan.basico ?? 0
   const gananciasSemanaTarifaFija = totalVisitasSemana * tarifaFijaPorCheckin
+  const fechaProximoPago = useMemo(() => {
+    const fechaBase = new Date(`${fechaHoy}T00:00:00`)
+    const inicioSemana = inicioSemanaLocal(fechaBase)
+    const proximoLunes = new Date(inicioSemana)
+    proximoLunes.setDate(proximoLunes.getDate() + 7)
+    return proximoLunes
+  }, [fechaHoy])
+  const desglosePagoActual = useMemo(() => {
+    if (esClases) {
+      return PLANES_MEMBRESIA.map((plan) => {
+        const visitas = ganancias.semana.visitas_por_plan[plan] ?? 0
+        const tarifa = ganancias.tarifas_por_plan[plan] ?? 0
+        return {
+          id: plan,
+          etiqueta: `clases ${PLAN_LABELS[plan].toLowerCase()}`,
+          formula: `${visitas} × ${formatMonedaMXN(tarifa)}`,
+          total: visitas * tarifa,
+        }
+      })
+    }
+
+    const etiqueta = esGimnasio
+      ? 'gimnasio'
+      : esEstetica
+        ? 'estetica'
+        : 'restaurante'
+
+    return [{
+      id: etiqueta,
+      etiqueta,
+      formula: `${totalVisitasSemana} × ${formatMonedaMXN(tarifaFijaPorCheckin)}`,
+      total: totalVisitasSemana * tarifaFijaPorCheckin,
+    }]
+  }, [esClases, esEstetica, esGimnasio, ganancias.semana.visitas_por_plan, ganancias.tarifas_por_plan, tarifaFijaPorCheckin, totalVisitasSemana])
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-10">
