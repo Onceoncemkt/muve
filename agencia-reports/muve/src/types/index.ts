@@ -49,6 +49,9 @@ export interface Negocio {
   imagen_url: string | null
   instagram_handle?: string | null
   tiktok_handle?: string | null
+  telefono_contacto?: string | null
+  email_contacto?: string | null
+  horario_atencion?: string | null
   stripe_account_id?: string | null
   monto_maximo_visita?: number | null
   servicios_incluidos?: string | null
