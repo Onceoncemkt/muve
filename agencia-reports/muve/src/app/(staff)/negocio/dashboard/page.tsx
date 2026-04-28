@@ -651,13 +651,7 @@ export default function NegocioDashboardPage() {
               href="/negocio/perfil"
               className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
             >
-              Perfil negocio
-            </Link>
-            <Link
-              href="/perfil"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Perfil usuario
+              Perfil
             </Link>
             <BotonCerrarSesion />
           </div>
