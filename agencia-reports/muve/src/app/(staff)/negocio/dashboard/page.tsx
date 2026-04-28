@@ -191,12 +191,6 @@ function claseEstado(estado: string) {
   return 'bg-red-100 text-red-700'
 }
 
-function normalizarHandle(input: string | null | undefined) {
-  if (!input) return null
-  const limpio = input.trim().replace(/^@+/, '')
-  return limpio.length > 0 ? limpio : null
-}
-
 function inicialesNegocio(nombre: string) {
   return nombre
     .split(/\s+/)
@@ -337,10 +331,6 @@ export default function NegocioDashboardPage() {
   const [sinNegocio, setSinNegocio] = useState(false)
   const [cargando, setCargando] = useState(false)
   const [completandoId, setCompletandoId] = useState<string | null>(null)
-  const [guardandoPerfil, setGuardandoPerfil] = useState(false)
-  const [subiendoFoto, setSubiendoFoto] = useState(false)
-  const [instagramHandle, setInstagramHandle] = useState('')
-  const [tiktokHandle, setTiktokHandle] = useState('')
   const [montoMaximoRestauranteDraft, setMontoMaximoRestauranteDraft] = useState('0')
   const [configuracionRestaurante, setConfiguracionRestaurante] = useState<ConfiguracionRestaurante>(
     configuracionRestauranteInicial()
@@ -364,8 +354,6 @@ export default function NegocioDashboardPage() {
         setNegocio(null)
         setCheckinsHoy([])
         setServiciosDisponibles([])
-        setInstagramHandle('')
-        setTiktokHandle('')
         setMontoMaximoRestauranteDraft('0')
         setConfiguracionRestaurante(configuracionRestauranteInicial())
         setSinNegocio(false)
@@ -382,8 +370,6 @@ export default function NegocioDashboardPage() {
         setNegocio(null)
         setCheckinsHoy([])
         setServiciosDisponibles([])
-        setInstagramHandle('')
-        setTiktokHandle('')
         setMontoMaximoRestauranteDraft('0')
         setConfiguracionRestaurante(configuracionRestauranteInicial())
         setReservaciones([])
@@ -397,8 +383,6 @@ export default function NegocioDashboardPage() {
       setNegocio(negocioPerfil)
       setCheckinsHoy((data.checkins_hoy ?? []) as CheckinHoy[])
       setServiciosDisponibles((data.servicios_disponibles ?? []) as ServicioDisponible[])
-      setInstagramHandle(negocioPerfil?.instagram_handle ? `@${negocioPerfil.instagram_handle}` : '')
-      setTiktokHandle(negocioPerfil?.tiktok_handle ? `@${negocioPerfil.tiktok_handle}` : '')
       setMontoMaximoRestauranteDraft(String(
         typeof negocioPerfil?.monto_maximo_visita === 'number'
           ? Math.max(Math.trunc(negocioPerfil.monto_maximo_visita), 0)
@@ -418,8 +402,6 @@ export default function NegocioDashboardPage() {
       setNegocio(null)
       setCheckinsHoy([])
       setServiciosDisponibles([])
-      setInstagramHandle('')
-      setTiktokHandle('')
       setMontoMaximoRestauranteDraft('0')
       setConfiguracionRestaurante(configuracionRestauranteInicial())
       setSinNegocio(false)
@@ -477,90 +459,6 @@ export default function NegocioDashboardPage() {
     }
   }
 
-  async function guardarPerfilNegocio(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!negocio) return
-
-    setGuardandoPerfil(true)
-    setMensaje(null)
-
-    try {
-      const res = await fetch('/api/negocio/dashboard', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instagram_handle: instagramHandle,
-          tiktok_handle: tiktokHandle,
-        }),
-      })
-
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setMensaje({
-          tipo: 'error',
-          texto: typeof data.error === 'string' ? data.error : 'No se pudo guardar el perfil del negocio',
-        })
-        return
-      }
-
-      const instagramActualizado = normalizarHandle(data.negocio?.instagram_handle)
-      const tiktokActualizado = normalizarHandle(data.negocio?.tiktok_handle)
-
-      setNegocio(prev => prev ? {
-        ...prev,
-        instagram_handle: instagramActualizado,
-        tiktok_handle: tiktokActualizado,
-      } : prev)
-      setInstagramHandle(instagramActualizado ? `@${instagramActualizado}` : '')
-      setTiktokHandle(tiktokActualizado ? `@${tiktokActualizado}` : '')
-      setMensaje({ tipo: 'ok', texto: 'Perfil del negocio actualizado correctamente' })
-    } catch {
-      setMensaje({ tipo: 'error', texto: 'Error de conexión al guardar el perfil del negocio' })
-    } finally {
-      setGuardandoPerfil(false)
-    }
-  }
-
-  async function subirFotoNegocio(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!negocio) return
-
-    const form = event.currentTarget
-    const formData = new FormData(form)
-    const archivo = formData.get('foto_negocio')
-    if (!archivo || typeof archivo === 'string' || archivo.size <= 0) {
-      setMensaje({ tipo: 'error', texto: 'Selecciona una imagen antes de subirla.' })
-      return
-    }
-
-    setSubiendoFoto(true)
-    setMensaje(null)
-
-    try {
-      const res = await fetch('/api/negocio/imagen', {
-        method: 'POST',
-        body: formData,
-      })
-      const data = await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        setMensaje({
-          tipo: 'error',
-          texto: typeof data.error === 'string' ? data.error : 'No se pudo actualizar la foto del negocio',
-        })
-        return
-      }
-
-      const imagenUrl = typeof data.negocio?.imagen_url === 'string' ? data.negocio.imagen_url : null
-      setNegocio(prev => prev ? { ...prev, imagen_url: imagenUrl } : prev)
-      setMensaje({ tipo: 'ok', texto: 'Foto del negocio actualizada correctamente' })
-      form.reset()
-    } catch {
-      setMensaje({ tipo: 'error', texto: 'Error de conexión al subir la foto del negocio' })
-    } finally {
-      setSubiendoFoto(false)
-    }
-  }
 
   function toggleDiaActivoRestaurante(dia: DiaSemana) {
     setConfiguracionRestaurante((prev) => {
@@ -743,16 +641,14 @@ export default function NegocioDashboardPage() {
             >
               Inicio
             </Link>
-            {esClases && (
-              <Link
-                href="/negocio/horarios"
-                className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-              >
-                Horarios
-              </Link>
-            )}
             <Link
-              href="/perfil"
+              href="/negocio/horarios"
+              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+            >
+              Horarios
+            </Link>
+            <Link
+              href="/negocio/perfil"
               className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
             >
               Perfil
@@ -967,6 +863,12 @@ export default function NegocioDashboardPage() {
                       ))}
                     </ul>
                   )}
+                  <Link
+                    href="/negocio/perfil#servicios-disponibles"
+                    className="mt-3 inline-flex rounded-lg border border-[#6B4FE8] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white"
+                  >
+                    Editar servicios disponibles
+                  </Link>
                 </div>
               </>
             )}
@@ -995,22 +897,12 @@ export default function NegocioDashboardPage() {
                     <p className="text-xs text-[#666]">
                       {negocio.ciudad.charAt(0).toUpperCase() + negocio.ciudad.slice(1)} · {negocio.categoria}
                     </p>
-
-                    <form onSubmit={subirFotoNegocio} className="mt-3 flex flex-col gap-2">
-                      <input
-                        type="file"
-                        name="foto_negocio"
-                        accept="image/*"
-                        className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs text-[#555] file:mr-3 file:rounded-md file:border-0 file:bg-[#6B4FE8] file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:tracking-wide file:text-white hover:file:bg-[#5b40cd]"
-                      />
-                      <button
-                        type="submit"
-                        disabled={subiendoFoto}
-                        className="self-start rounded-lg bg-[#0A0A0A] px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {subiendoFoto ? 'Subiendo...' : 'Subir / cambiar foto'}
-                      </button>
-                    </form>
+                    <Link
+                      href="/negocio/perfil"
+                      className="mt-3 inline-flex rounded-lg border border-[#6B4FE8] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white"
+                    >
+                      Editar perfil del negocio
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -1100,48 +992,18 @@ export default function NegocioDashboardPage() {
               </Link>
             </div>
 
-            {esClases && (
-              <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
-                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Perfil del negocio</p>
-                <p className="mt-1 text-xs text-[#666]">
-                  Completa tus redes para que aparezcan en las cards del panel de usuario.
-                </p>
-
-                <form onSubmit={guardarPerfilNegocio} className="mt-3 space-y-3">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="block">
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#555]">Instagram</span>
-                      <input
-                        type="text"
-                        value={instagramHandle}
-                        onChange={event => setInstagramHandle(event.target.value)}
-                        placeholder="@tu_negocio"
-                        className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#555]">TikTok</span>
-                      <input
-                        type="text"
-                        value={tiktokHandle}
-                        onChange={event => setTiktokHandle(event.target.value)}
-                        placeholder="@tu_negocio"
-                        className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
-                      />
-                    </label>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={guardandoPerfil}
-                    className="rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {guardandoPerfil ? 'Guardando...' : 'Guardar perfil'}
-                  </button>
-                </form>
-              </div>
-            )}
+            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Perfil del negocio</p>
+              <p className="mt-1 text-xs text-[#666]">
+                Administra información comercial, redes, contacto, foto y Stripe en una pantalla dedicada.
+              </p>
+              <Link
+                href="/negocio/perfil"
+                className="mt-3 inline-flex rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222]"
+              >
+                Ir a perfil del negocio
+              </Link>
+            </div>
           </section>
         )}
 

@@ -661,6 +661,12 @@ export default function NegocioHorariosPage() {
             >
               Dashboard
             </Link>
+            <Link
+              href="/negocio/perfil"
+              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+            >
+              Perfil negocio
+            </Link>
             <BotonCerrarSesion />
           </div>
         </div>
