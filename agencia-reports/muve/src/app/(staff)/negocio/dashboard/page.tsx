@@ -641,14 +641,12 @@ export default function NegocioDashboardPage() {
             >
               Inicio
             </Link>
-            {esClases && (
-              <Link
-                href="/negocio/horarios"
-                className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-              >
-                Horarios
-              </Link>
-            )}
+            <Link
+              href="/negocio/horarios"
+              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+            >
+              Horarios
+            </Link>
             <Link
               href="/negocio/perfil"
               className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
@@ -871,6 +869,12 @@ export default function NegocioDashboardPage() {
                       ))}
                     </ul>
                   )}
+                  <Link
+                    href="/negocio/perfil#servicios-disponibles"
+                    className="mt-3 inline-flex rounded-lg border border-[#6B4FE8] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white"
+                  >
+                    Editar servicios disponibles
+                  </Link>
                 </div>
               </>
             )}

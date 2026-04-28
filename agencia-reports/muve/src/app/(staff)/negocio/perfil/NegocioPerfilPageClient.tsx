@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import { CATEGORIA_LABELS, CIUDAD_LABELS, type Categoria, type Ciudad } from '@/types'
 
@@ -19,6 +19,20 @@ type NegocioPerfil = {
   email_contacto: string
   horario_atencion: string
   stripe_account_id: string | null
+}
+type ServicioDisponible = {
+  id: string
+  negocio_id: string
+  nombre: string
+  precio_normal_mxn: number
+  descripcion: string | null
+  activo: boolean
+}
+
+type ServicioDraft = {
+  nombre: string
+  precio_normal_mxn: string
+  descripcion: string
 }
 
 const MAX_FOTO_SIZE_BYTES = 4 * 1024 * 1024
@@ -57,6 +71,71 @@ export default function NegocioPerfilPageClient() {
   const [guardando, setGuardando] = useState(false)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+  const [servicios, setServicios] = useState<ServicioDisponible[]>([])
+  const [cargandoServicios, setCargandoServicios] = useState(false)
+  const [guardandoServicio, setGuardandoServicio] = useState(false)
+  const [actualizandoServicioId, setActualizandoServicioId] = useState<string | null>(null)
+  const [editandoServicioId, setEditandoServicioId] = useState<string | null>(null)
+  const [nuevoServicio, setNuevoServicio] = useState<ServicioDraft>({
+    nombre: '',
+    precio_normal_mxn: '',
+    descripcion: '',
+  })
+  const [edicionServicio, setEdicionServicio] = useState<ServicioDraft | null>(null)
+
+  const cargarServicios = useCallback(async (negocioId: string) => {
+    setCargandoServicios(true)
+    try {
+      const res = await fetch(`/api/negocio/servicios?negocio_id=${encodeURIComponent(negocioId)}`, {
+        cache: 'no-store',
+      })
+      const data = await res.json().catch(() => ({})) as {
+        servicios?: Array<{
+          id?: string
+          negocio_id?: string
+          nombre?: string
+          precio_normal_mxn?: number
+          descripcion?: string | null
+          activo?: boolean
+        }>
+        error?: string
+      }
+
+      if (!res.ok) {
+        setMensaje({
+          tipo: 'error',
+          texto: typeof data.error === 'string'
+            ? data.error
+            : 'No se pudieron cargar los servicios disponibles',
+        })
+        setServicios([])
+        return
+      }
+
+      const listaServicios = (data.servicios ?? [])
+        .filter((servicio): servicio is NonNullable<typeof servicio> & { id: string; negocio_id: string; nombre: string } => (
+          typeof servicio?.id === 'string'
+          && typeof servicio?.negocio_id === 'string'
+          && typeof servicio?.nombre === 'string'
+        ))
+        .map((servicio) => ({
+          id: servicio.id,
+          negocio_id: servicio.negocio_id,
+          nombre: servicio.nombre,
+          precio_normal_mxn: typeof servicio.precio_normal_mxn === 'number'
+            ? Math.max(Math.trunc(servicio.precio_normal_mxn), 0)
+            : 0,
+          descripcion: typeof servicio.descripcion === 'string' ? servicio.descripcion : null,
+          activo: Boolean(servicio.activo),
+        }))
+      setServicios(listaServicios)
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar los servicios disponibles' })
+      setServicios([])
+    } finally {
+      setCargandoServicios(false)
+    }
+  }, [])
 
   useEffect(() => {
     let activo = true
@@ -134,8 +213,155 @@ export default function NegocioPerfilPageClient() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!perfil || perfil.categoria !== 'estetica') return
+    const timeoutId = window.setTimeout(() => {
+      void cargarServicios(perfil.id)
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [cargarServicios, perfil])
+
   function actualizarCampo<K extends keyof NegocioPerfil>(campo: K, valor: NegocioPerfil[K]) {
     setPerfil((prev) => (prev ? { ...prev, [campo]: valor } : prev))
+  }
+
+  async function crearServicioDisponible() {
+    if (!perfil) return
+
+    const nombre = nuevoServicio.nombre.trim()
+    const precio = Number.parseInt(nuevoServicio.precio_normal_mxn, 10)
+    if (!nombre) {
+      setMensaje({ tipo: 'error', texto: 'El nombre del servicio es obligatorio' })
+      return
+    }
+    if (!Number.isFinite(precio) || precio < 0) {
+      setMensaje({ tipo: 'error', texto: 'El precio normal debe ser un entero mayor o igual a 0' })
+      return
+    }
+
+    setGuardandoServicio(true)
+    setMensaje(null)
+    try {
+      const res = await fetch('/api/negocio/servicios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          negocio_id: perfil.id,
+          nombre,
+          precio_normal_mxn: precio,
+          descripcion: nuevoServicio.descripcion.trim() || null,
+        }),
+      })
+      const data = await res.json().catch(() => ({})) as { error?: string }
+      if (!res.ok) {
+        setMensaje({
+          tipo: 'error',
+          texto: typeof data.error === 'string'
+            ? data.error
+            : 'No se pudo crear el servicio',
+        })
+        return
+      }
+
+      setNuevoServicio({ nombre: '', precio_normal_mxn: '', descripcion: '' })
+      await cargarServicios(perfil.id)
+      setMensaje({ tipo: 'ok', texto: 'Servicio creado correctamente' })
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al crear el servicio' })
+    } finally {
+      setGuardandoServicio(false)
+    }
+  }
+
+  function iniciarEdicionServicio(servicio: ServicioDisponible) {
+    setEditandoServicioId(servicio.id)
+    setEdicionServicio({
+      nombre: servicio.nombre,
+      precio_normal_mxn: String(servicio.precio_normal_mxn),
+      descripcion: servicio.descripcion ?? '',
+    })
+  }
+
+  async function guardarEdicionServicio(servicioId: string) {
+    if (!perfil || !edicionServicio) return
+
+    const nombre = edicionServicio.nombre.trim()
+    const precio = Number.parseInt(edicionServicio.precio_normal_mxn, 10)
+    if (!nombre) {
+      setMensaje({ tipo: 'error', texto: 'El nombre del servicio es obligatorio' })
+      return
+    }
+    if (!Number.isFinite(precio) || precio < 0) {
+      setMensaje({ tipo: 'error', texto: 'El precio normal debe ser un entero mayor o igual a 0' })
+      return
+    }
+
+    setActualizandoServicioId(servicioId)
+    setMensaje(null)
+    try {
+      const res = await fetch(`/api/negocio/servicios/${servicioId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre,
+          precio_normal_mxn: precio,
+          descripcion: edicionServicio.descripcion.trim() || null,
+        }),
+      })
+      const data = await res.json().catch(() => ({})) as { error?: string }
+      if (!res.ok) {
+        setMensaje({
+          tipo: 'error',
+          texto: typeof data.error === 'string'
+            ? data.error
+            : 'No se pudo actualizar el servicio',
+        })
+        return
+      }
+
+      setEditandoServicioId(null)
+      setEdicionServicio(null)
+      await cargarServicios(perfil.id)
+      setMensaje({ tipo: 'ok', texto: 'Servicio actualizado correctamente' })
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al actualizar el servicio' })
+    } finally {
+      setActualizandoServicioId(null)
+    }
+  }
+
+  async function toggleServicioActivo(servicio: ServicioDisponible) {
+    if (!perfil) return
+
+    setActualizandoServicioId(servicio.id)
+    setMensaje(null)
+    try {
+      const res = await fetch(`/api/negocio/servicios/${servicio.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activo: !servicio.activo }),
+      })
+      const data = await res.json().catch(() => ({})) as { error?: string }
+      if (!res.ok) {
+        setMensaje({
+          tipo: 'error',
+          texto: typeof data.error === 'string'
+            ? data.error
+            : 'No se pudo actualizar el servicio',
+        })
+        return
+      }
+
+      await cargarServicios(perfil.id)
+      setMensaje({
+        tipo: 'ok',
+        texto: servicio.activo ? 'Servicio desactivado' : 'Servicio activado',
+      })
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al actualizar el servicio' })
+    } finally {
+      setActualizandoServicioId(null)
+    }
   }
 
   async function guardarPerfil(event: FormEvent<HTMLFormElement>) {
@@ -270,6 +496,7 @@ export default function NegocioPerfilPageClient() {
   const enlaceStripe = stripeConectado
     ? '/api/negocio/stripe-connect?modo=gestionar'
     : '/api/negocio/stripe-connect'
+  const esWellness = perfil.categoria === 'estetica'
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-10">
@@ -511,6 +738,202 @@ export default function NegocioPerfilPageClient() {
             {guardando ? 'Guardando...' : 'Guardar perfil del negocio'}
           </button>
         </form>
+
+        {esWellness && (
+          <section
+            id="servicios-disponibles"
+            className="rounded-xl border border-[#E5E5E5] bg-white p-4 shadow-sm"
+          >
+            <h2 className="text-[11px] font-black uppercase tracking-widest text-[#888]">
+              Servicios disponibles
+            </h2>
+            <p className="mt-1 text-xs text-[#666]">
+              Edita nombre, precio y estado de los servicios que se muestran a usuarios.
+            </p>
+
+            <div className="mt-3 grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                    Nombre del servicio
+                  </label>
+                  <input
+                    type="text"
+                    value={nuevoServicio.nombre}
+                    onChange={(event) => setNuevoServicio((prev) => ({ ...prev, nombre: event.target.value }))}
+                    placeholder="Ej. Manicure básica"
+                    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                    Precio normal (MXN)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={nuevoServicio.precio_normal_mxn}
+                    onChange={(event) => setNuevoServicio((prev) => ({ ...prev, precio_normal_mxn: event.target.value }))}
+                    placeholder="350"
+                    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                  Descripción (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={nuevoServicio.descripcion}
+                  onChange={(event) => setNuevoServicio((prev) => ({ ...prev, descripcion: event.target.value }))}
+                  placeholder="Detalles del servicio"
+                  className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void crearServicioDisponible()}
+                disabled={guardandoServicio}
+                className="self-start rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {guardandoServicio ? 'Creando...' : 'Agregar servicio'}
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {cargandoServicios ? (
+                <p className="text-sm text-[#666]">Cargando servicios...</p>
+              ) : servicios.length === 0 ? (
+                <p className="text-sm text-[#666]">Aún no hay servicios disponibles.</p>
+              ) : (
+                servicios.map((servicio) => {
+                  const editando = editandoServicioId === servicio.id && edicionServicio !== null
+                  return (
+                    <div
+                      key={servicio.id}
+                      className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3"
+                    >
+                      {editando ? (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="sm:col-span-2">
+                              <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                                Nombre
+                              </label>
+                              <input
+                                type="text"
+                                value={edicionServicio.nombre}
+                                onChange={(event) => setEdicionServicio((prev) => (
+                                  prev ? { ...prev, nombre: event.target.value } : prev
+                                ))}
+                                className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                                Precio
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={edicionServicio.precio_normal_mxn}
+                                onChange={(event) => setEdicionServicio((prev) => (
+                                  prev ? { ...prev, precio_normal_mxn: event.target.value } : prev
+                                ))}
+                                className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                              Descripción
+                            </label>
+                            <input
+                              type="text"
+                              value={edicionServicio.descripcion}
+                              onChange={(event) => setEdicionServicio((prev) => (
+                                prev ? { ...prev, descripcion: event.target.value } : prev
+                              ))}
+                              className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                            />
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void guardarEdicionServicio(servicio.id)}
+                              disabled={actualizandoServicioId === servicio.id}
+                              className="rounded-lg bg-[#0A0A0A] px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Guardar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditandoServicioId(null)
+                                setEdicionServicio(null)
+                              }}
+                              className="rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#666] transition-colors hover:border-[#0A0A0A] hover:text-[#0A0A0A]"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-[#0A0A0A]">{servicio.nombre}</p>
+                            <p className="text-xs font-semibold text-[#6B4FE8]">
+                              ${servicio.precio_normal_mxn.toLocaleString('es-MX')} MXN
+                            </p>
+                            {servicio.descripcion && (
+                              <p className="mt-1 text-xs text-[#666]">{servicio.descripcion}</p>
+                            )}
+                            <span
+                              className={`mt-2 inline-flex rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${
+                                servicio.activo
+                                  ? 'bg-[#E8FF47]/40 text-[#0A0A0A]'
+                                  : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {servicio.activo ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => iniciarEdicionServicio(servicio)}
+                              className="rounded-lg border border-[#6B4FE8] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void toggleServicioActivo(servicio)}
+                              disabled={actualizandoServicioId === servicio.id}
+                              className={`rounded-lg px-3 py-2 text-[11px] font-black uppercase tracking-widest transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                servicio.activo
+                                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                  : 'bg-[#E8FF47]/30 text-[#0A0A0A] hover:bg-[#E8FF47]/60'
+                              }`}
+                            >
+                              {servicio.activo ? 'Desactivar' : 'Activar'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   )
