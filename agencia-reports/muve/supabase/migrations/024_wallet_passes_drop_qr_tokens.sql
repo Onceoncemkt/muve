@@ -13,7 +13,7 @@ end
 $$;
 
 create index if not exists users_qr_hash_idx
-  on public.users ((encode(digest((id)::text, 'sha256'), 'hex')));
+  on public.users ((encode(digest((id)::text, 'sha256'::text), 'hex')));
 
 drop table if exists public.qr_tokens cascade;
 
@@ -31,7 +31,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select
     u.id as user_id,
@@ -43,7 +43,7 @@ as $$
     u.fecha_fin_plan,
     u.creditos_extra
   from public.users u
-  where encode(digest(u.id::text, 'sha256'), 'hex') = lower(trim(p_hash))
+  where encode(digest(u.id::text, 'sha256'::text), 'hex') = lower(trim(p_hash))
   limit 1;
 $$;
 

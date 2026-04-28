@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import WalletPassCard from '@/components/WalletPassCard'
+import WalletButtons from '@/components/wallet/WalletButtons'
 import BotonPortal from '@/components/BotonPortal'
 import MisReservaciones from '@/components/MisReservaciones'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
@@ -42,6 +43,11 @@ const PLAN_BADGE_LABEL: Record<PlanMembresia, string> = {
   basico: 'Plan Básico',
   plus: 'Plan Plus',
   total: 'Plan Total',
+}
+const PLAN_WALLET_LABEL: Record<PlanMembresia, 'BÁSICO' | 'PLUS' | 'TOTAL'> = {
+  basico: 'BÁSICO',
+  plus: 'PLUS',
+  total: 'TOTAL',
 }
 
 
@@ -244,6 +250,15 @@ export default async function DashboardPage({
     : visitasRestantes === 2
       ? 'text-[#FDE68A]'
       : 'text-[#86EFAC]'
+  const planWallet = planUsuario ? PLAN_WALLET_LABEL[planUsuario] : 'BÁSICO'
+  const fechaVencimientoDate = parseFechaSegura(perfil?.fecha_fin_plan)
+  const fechaVencimientoWallet = fechaVencimientoDate
+    ? new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(fechaVencimientoDate)
+    : 'Sin fecha'
+  const anoVencimientoWallet = fechaVencimientoDate
+    ? String(fechaVencimientoDate.getFullYear())
+    : '—'
+  const qrCodeWallet = `MUVET|${user.id}|${planWallet}|${CIUDAD_LABELS[ciudad]}`
 
   const consultaCreditosHistorial = await supabase
     .from('creditos_historial')
@@ -379,10 +394,19 @@ export default async function DashboardPage({
             Agrégalo para registrar tu visita.
           </p>
           <WalletPassCard
-            userId={user.id}
-            appleWalletAgregado={walletAppleAgregado}
-            googleWalletAgregado={walletGoogleAgregado}
+            nombre={nombre}
+            plan={planWallet}
+            ciudad={CIUDAD_LABELS[ciudad]}
+            visitasUsadas={checkInsRealizados}
+            visitasTotales={visitasDisponibles}
+            fechaVencimiento={fechaVencimientoWallet}
+            anoVencimiento={anoVencimientoWallet}
+            idSocio={user.id}
+            qrCode={qrCodeWallet}
           />
+          <div className="mx-auto mt-4 w-full max-w-sm">
+            <WalletButtons userId={user.id} />
+          </div>
         </div>
       </div>
 
