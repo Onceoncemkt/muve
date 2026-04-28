@@ -9,6 +9,18 @@ function diaSemanaDesdeFecha(fecha: string): DiaSemana | null {
   return dias[date.getDay()]
 }
 
+function esDiaSemana(value: unknown): value is DiaSemana {
+  return (
+    value === 'lunes'
+    || value === 'martes'
+    || value === 'miercoles'
+    || value === 'jueves'
+    || value === 'viernes'
+    || value === 'sabado'
+    || value === 'domingo'
+  )
+}
+
 function normalizarTextoOpcional(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const limpio = value.trim()
@@ -103,18 +115,27 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}))
-  const { negocio_id, dia_semana, hora_inicio, hora_fin, capacidad_total, nombre_coach, tipo_clase } = body as {
+  const { negocio_id, dia_semana, fecha, hora_inicio, hora_fin, capacidad_total, nombre_coach, tipo_clase, activo } = body as {
     negocio_id?: string
-    dia_semana?: DiaSemana
+    dia_semana?: DiaSemana | string
+    fecha?: string
     hora_inicio?: string
     hora_fin?: string
     capacidad_total?: number | string
     nombre_coach?: string | null
     tipo_clase?: string | null
+    activo?: boolean
   }
 
-  if (!negocio_id || !dia_semana || !hora_inicio || !hora_fin) {
-    return NextResponse.json({ error: 'negocio_id, dia_semana, hora_inicio y hora_fin son requeridos' }, { status: 400 })
+  const diaSemanaFinal = esDiaSemana(dia_semana)
+    ? dia_semana
+    : (typeof fecha === 'string' ? diaSemanaDesdeFecha(fecha) : null)
+
+  if (!negocio_id || !diaSemanaFinal || !hora_inicio || !hora_fin) {
+    return NextResponse.json({ error: 'negocio_id, dia_semana/fecha, hora_inicio y hora_fin son requeridos' }, { status: 400 })
+  }
+  if (hora_inicio >= hora_fin) {
+    return NextResponse.json({ error: 'hora_fin debe ser mayor a hora_inicio' }, { status: 400 })
   }
 
   let capacidadFinal: number | null = null
@@ -147,12 +168,13 @@ export async function POST(request: NextRequest) {
     .from('horarios')
     .insert({
       negocio_id,
-      dia_semana,
+      dia_semana: diaSemanaFinal,
       hora_inicio,
       hora_fin,
       capacidad_total: capacidadFinal,
       nombre_coach: nombreCoachNormalizado,
       tipo_clase: tipoClaseNormalizado,
+      activo: typeof activo === 'boolean' ? activo : true,
     })
     .select('*')
     .single()

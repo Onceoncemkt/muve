@@ -14,6 +14,7 @@ interface ResultadoValidacion {
   usuario?: string
   negocio?: string
   categoria_negocio?: string | null
+  monto_negocio_mxn?: number | null
   servicio_reservado?: {
     id: string
     nombre: string
@@ -324,7 +325,7 @@ function ResultadoBanner({
           </p>
           {categoriaNegocio === 'estetica' && resultado.servicio_reservado && (
             <div className="w-full rounded-lg border border-green-200 bg-white/80 px-3 py-2 text-left">
-              <p className="text-[11px] font-black uppercase tracking-widest text-green-700">Servicio reservado</p>
+              <p className="text-[11px] font-black uppercase tracking-widest text-green-700">Servicio a dar</p>
               <p className="text-sm font-semibold text-green-800">{resultado.servicio_reservado.nombre}</p>
               {typeof resultado.servicio_reservado.precio_normal_mxn === 'number' && (
                 <p className="text-xs text-green-700">
@@ -334,9 +335,14 @@ function ResultadoBanner({
               )}
             </div>
           )}
-          {categoriaNegocio === 'restaurante' && typeof resultado.monto_maximo_autorizado_mxn === 'number' && (
+          {categoriaNegocio === 'restaurante' && (
             <p className="rounded-full bg-green-600/90 px-3 py-1 text-xs font-black uppercase tracking-widest text-white">
-              Hasta {formatMoneyMxn(resultado.monto_maximo_autorizado_mxn)} en consumo
+              Monto a dar:{' '}
+              {formatMoneyMxn(
+                (typeof resultado.monto_maximo_autorizado_mxn === 'number'
+                  ? resultado.monto_maximo_autorizado_mxn
+                  : resultado.monto_negocio_mxn) ?? 0
+              )}
             </p>
           )}
           <p className="text-sm font-semibold text-green-700">

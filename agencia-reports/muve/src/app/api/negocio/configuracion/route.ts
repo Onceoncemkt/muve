@@ -71,6 +71,7 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as {
     negocio_id?: unknown
     monto_maximo_visita?: unknown
+    servicios_incluidos?: unknown
   }
 
   const negocioIdBody = typeof body.negocio_id === 'string' ? body.negocio_id : null
@@ -85,33 +86,89 @@ export async function PATCH(request: NextRequest) {
     )
   }
 
-  const montoMaximoVisita = normalizarEnteroNoNegativo(body.monto_maximo_visita)
-  if (montoMaximoVisita === null) {
-    return NextResponse.json({ error: 'monto_maximo_visita debe ser un entero mayor o igual a 0' }, { status: 400 })
+  const incluyeMontoMaximo = Object.prototype.hasOwnProperty.call(body, 'monto_maximo_visita')
+  const incluyeServiciosIncluidos = Object.prototype.hasOwnProperty.call(body, 'servicios_incluidos')
+
+  if (!incluyeMontoMaximo && !incluyeServiciosIncluidos) {
+    return NextResponse.json(
+      { error: 'Debes enviar al menos monto_maximo_visita o servicios_incluidos' },
+      { status: 400 }
+    )
+  }
+
+  const payload: Record<string, number | string | null> = {}
+
+  if (incluyeMontoMaximo) {
+    const montoMaximoVisita = normalizarEnteroNoNegativo(body.monto_maximo_visita)
+    if (montoMaximoVisita === null) {
+      return NextResponse.json(
+        { error: 'monto_maximo_visita debe ser un entero mayor o igual a 0' },
+        { status: 400 }
+      )
+    }
+    payload.monto_maximo_visita = montoMaximoVisita
+  }
+
+  if (incluyeServiciosIncluidos) {
+    if (body.servicios_incluidos !== null && typeof body.servicios_incluidos !== 'string') {
+      return NextResponse.json(
+        { error: 'servicios_incluidos debe ser texto o null' },
+        { status: 400 }
+      )
+    }
+    payload.servicios_incluidos = typeof body.servicios_incluidos === 'string'
+      ? body.servicios_incluidos.trim()
+      : null
   }
 
   const db = createServiceClient()
-  const { data, error } = await db
-    .from('negocios')
-    .update({ monto_maximo_visita: montoMaximoVisita })
-    .eq('id', negocioIdObjetivo)
-    .select('id, monto_maximo_visita')
-    .maybeSingle<{ id: string; monto_maximo_visita: number | null }>()
+  const payloadAActualizar: Record<string, number | string | null> = { ...payload }
+  let error: { message?: string } | null = null
 
-  if (faltaColumna(error, 'monto_maximo_visita')) {
+  for (let intento = 0; intento < 3; intento += 1) {
+    if (Object.keys(payloadAActualizar).length === 0) break
+
+    const resultado = await db
+      .from('negocios')
+      .update(payloadAActualizar)
+      .eq('id', negocioIdObjetivo)
+
+    if (!resultado.error) {
+      error = null
+      break
+    }
+
+    error = resultado.error
+    if (faltaColumna(resultado.error, 'monto_maximo_visita') && 'monto_maximo_visita' in payloadAActualizar) {
+      delete payloadAActualizar.monto_maximo_visita
+      continue
+    }
+    if (faltaColumna(resultado.error, 'servicios_incluidos') && 'servicios_incluidos' in payloadAActualizar) {
+      delete payloadAActualizar.servicios_incluidos
+      continue
+    }
+    break
+  }
+
+  if (Object.keys(payloadAActualizar).length === 0) {
     return NextResponse.json(
-      { error: 'Falta la columna monto_maximo_visita en negocios. Ejecuta la migración 017 en Supabase.' },
+      { error: 'Faltan columnas de configuración en negocios. Ejecuta la migración 017 en Supabase.' },
       { status: 500 }
     )
   }
 
-  if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? 'No se pudo actualizar configuración de negocio' }, { status: 500 })
+  if (error) {
+    return NextResponse.json({ error: error.message ?? 'No se pudo actualizar configuración de negocio' }, { status: 500 })
   }
 
   return NextResponse.json({
     ok: true,
-    negocio_id: data.id,
-    monto_maximo_visita: data.monto_maximo_visita ?? 0,
+    negocio_id: negocioIdObjetivo,
+    monto_maximo_visita: typeof payloadAActualizar.monto_maximo_visita === 'number'
+      ? payloadAActualizar.monto_maximo_visita
+      : null,
+    servicios_incluidos: typeof payloadAActualizar.servicios_incluidos === 'string'
+      ? payloadAActualizar.servicios_incluidos
+      : null,
   })
 }
