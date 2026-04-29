@@ -152,6 +152,7 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json({
+      authenticated: false,
       plan_activo: false,
       plan: null,
       fecha_inicio_ciclo: null,
@@ -247,6 +248,7 @@ export async function GET() {
     const visitasRestantesCiclo = Math.max(visitasDisponibles - visitasUsadasCiclo, 0)
 
     return NextResponse.json({
+      authenticated: true,
       plan_activo: planActivo,
       plan,
       creditos_extra: creditosExtra,

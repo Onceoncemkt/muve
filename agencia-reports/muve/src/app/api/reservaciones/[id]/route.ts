@@ -21,7 +21,12 @@ export async function PATCH(
 ) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Debes iniciar sesión y activar un plan para reservar.' },
+      { status: 401 }
+    )
+  }
 
   const { id } = await params
   const body = await request.json().catch(() => ({}))
@@ -32,6 +37,33 @@ export async function PATCH(
   }
 
   const db = admin()
+  const { data: perfilActual, error: perfilActualError } = await db
+    .from('users')
+    .select('rol, plan_activo, plan, fecha_fin_plan')
+    .eq('id', user.id)
+    .maybeSingle<{
+      rol: 'usuario' | 'staff' | 'admin'
+      plan_activo: boolean
+      plan: string | null
+      fecha_fin_plan: string | null
+    }>()
+
+  if (perfilActualError || !perfilActual) {
+    return NextResponse.json({ error: 'No se pudo validar tu membresía' }, { status: 500 })
+  }
+
+  if (perfilActual.rol === 'usuario') {
+    if (!perfilActual.plan_activo || !normalizarPlan(perfilActual.plan ?? null)) {
+      return NextResponse.json({ error: 'Necesitas un plan activo para reservar.' }, { status: 403 })
+    }
+    if (planExpirado(perfilActual.fecha_fin_plan)) {
+      await db
+        .from('users')
+        .update({ plan_activo: false })
+        .eq('id', user.id)
+      return NextResponse.json({ error: 'Necesitas un plan activo para reservar.' }, { status: 403 })
+    }
+  }
 
   // Obtener reservación
   const { data: reserva, error: fetchError } = await db
@@ -75,29 +107,7 @@ export async function PATCH(
         }>()
       negocioNombre = negocio?.nombre ?? 'negocio'
 
-      const { data: perfilUsuario, error: perfilUsuarioError } = await db
-        .from('users')
-        .select('plan_activo, plan, fecha_fin_plan')
-        .eq('id', user.id)
-        .maybeSingle<{ plan_activo: boolean; plan: string | null; fecha_fin_plan: string | null }>()
-
-      if (perfilUsuarioError) {
-        return NextResponse.json({ error: 'No se pudo validar tu membresía' }, { status: 500 })
-      }
-
-      if (!perfilUsuario?.plan_activo) {
-        return NextResponse.json({ error: 'Tu membresía está inactiva' }, { status: 403 })
-      }
-
-      if (planExpirado(perfilUsuario.fecha_fin_plan)) {
-        await db
-          .from('users')
-          .update({ plan_activo: false })
-          .eq('id', user.id)
-        return NextResponse.json({ error: 'Tu membresía está expirada' }, { status: 403 })
-      }
-
-      const planUsuario = normalizarPlan(perfilUsuario.plan ?? null) ?? 'basico'
+      const planUsuario = normalizarPlan(perfilActual.plan ?? null) ?? 'basico'
       const nivelNegocio = negocio?.nivel === 'plus' || negocio?.nivel === 'total'
         ? negocio.nivel
         : negocio?.plan_requerido === 'plus' || negocio?.plan_requerido === 'total'
@@ -124,12 +134,7 @@ export async function PATCH(
 
   if (estado === 'completada') {
     // Solo staff/admin puede marcar completada
-    const { data: perfil } = await db
-      .from('users')
-      .select('rol')
-      .eq('id', user.id)
-      .single()
-    if (!perfil || !['staff', 'admin'].includes(perfil.rol)) {
+    if (!['staff', 'admin'].includes(perfilActual.rol)) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
   }

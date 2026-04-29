@@ -24,6 +24,7 @@ import {
 } from '@/lib/planes'
 
 type EstadoPlanUsuario = {
+  authenticated: boolean
   plan_activo: boolean
   plan: PlanMembresia | null
   creditos_extra: number
@@ -70,6 +71,7 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
     const res = await fetch('/api/usuario/plan', { cache: 'no-store' })
     if (!res.ok) {
       return {
+        authenticated: false,
         plan_activo: false,
         plan: null,
         creditos_extra: 0,
@@ -83,6 +85,7 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
 
     const data = await res.json()
     const plan = normalizarPlan(data.plan)
+    const authenticated = Boolean(data.authenticated)
     const planActivo = Boolean(data.plan_activo) || Boolean(plan)
     const creditosExtra = Number.isFinite(data.creditos_extra) ? Number(data.creditos_extra) : 0
     const creditosTotalesPlan = plan ? CREDITOS_POR_PLAN[plan] : 0
@@ -100,6 +103,7 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
       ? Number(data.limite_creditos_ciclo ?? data.limite_visitas_mensuales)
       : creditosTotalesPlan
     return {
+      authenticated,
       plan_activo: planActivo,
       plan,
       creditos_extra: creditosExtra,
@@ -113,6 +117,7 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
     }
   } catch {
     return {
+      authenticated: false,
       plan_activo: false,
       plan: null,
       creditos_extra: 0,
@@ -179,6 +184,7 @@ export default function ExplorarPage() {
   const router = useRouter()
   const [negocios, setNegocios] = useState<Negocio[]>([])
   const [cargando, setCargando] = useState(true)
+  const [autenticado, setAutenticado] = useState(false)
   const [planActivo, setPlanActivo] = useState(false)
   const [planUsuario, setPlanUsuario] = useState<PlanMembresia | null>(null)
   const [visitasDisponiblesMes, setVisitasDisponiblesMes] = useState(0)
@@ -251,6 +257,7 @@ export default function ExplorarPage() {
 
       if (!activo) return
 
+      setAutenticado(estadoPlan.authenticated)
       setPlanActivo(estadoPlan.plan_activo)
       setPlanUsuario(estadoPlan.plan)
       setVisitasDisponiblesMes(estadoPlan.creditos_disponibles)
@@ -386,6 +393,7 @@ export default function ExplorarPage() {
   }, [cargarHorarios, servicioSeleccionadoPorNegocioId])
 
   const planEfectivo = planActivo ? (planUsuario ?? 'basico') : null
+  const requiereMembresia = !autenticado || !planEfectivo
   const ciudadesDisponibles = useMemo(() => {
     const ciudadesUnicas = Array.from(new Set(negocios.map((negocio) => negocio.ciudad)))
     return ciudadesUnicas.sort((a, b) =>
@@ -415,7 +423,7 @@ export default function ExplorarPage() {
   }, [router])
 
   return (
-    <div className="min-h-screen bg-[#F7F7F7] pb-20">
+    <div className={`min-h-screen bg-[#F7F7F7] ${requiereMembresia ? 'pb-36' : 'pb-20'}`}>
       <div className="bg-white px-4 py-6 shadow-sm">
         <button
           type="button"
@@ -431,6 +439,36 @@ export default function ExplorarPage() {
         <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-[#6B4FE8]">
           {planEfectivo ? `Plan ${PLAN_LABELS[planEfectivo]}` : 'Sin membresía activa'}
         </p>
+        {!autenticado && (
+          <div className="mt-3 rounded-2xl bg-[#E8FF47] p-4 text-[#0A0A0A]">
+            <h2 className="text-lg font-black">Activa tu membresía MUVET</h2>
+            <p className="mt-1 text-sm">
+              Accede a gimnasios, estudios, spas y más con un solo plan mensual.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push('/planes')}
+              className="mt-3 rounded-full bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-wider text-[#E8FF47] transition-colors hover:bg-[#222]"
+            >
+              Ver planes
+            </button>
+          </div>
+        )}
+        {autenticado && !planEfectivo && (
+          <div className="mt-3 rounded-2xl bg-[#E8FF47] p-4 text-[#0A0A0A]">
+            <h2 className="text-lg font-black">Tu plan está inactivo</h2>
+            <p className="mt-1 text-sm">
+              Reactívalo para reservar en los lugares de MUVET.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push('/planes')}
+              className="mt-3 rounded-full bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-wider text-[#E8FF47] transition-colors hover:bg-[#222]"
+            >
+              Reactivar plan
+            </button>
+          </div>
+        )}
         {planEfectivo && (
           <div className="mt-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
             <p className="text-sm font-bold text-[#0A0A0A]">
@@ -439,19 +477,6 @@ export default function ExplorarPage() {
             <p className="mt-1 text-xs text-[#666]">
               Máximo {maxVisitasPorLugar} créditos por lugar con tu plan.
             </p>
-          </div>
-        )}
-        {!planEfectivo && (
-          <div className="mt-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
-            <p className="text-sm font-bold text-[#0A0A0A]">
-              Activa un plan para empezar
-            </p>
-            <a
-              href="/planes"
-              className="mt-2 inline-flex rounded-full bg-[#6B4FE8] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-[#5b40cd]"
-            >
-              Ver planes
-            </a>
           </div>
         )}
 
@@ -540,7 +565,8 @@ export default function ExplorarPage() {
             {negociosFiltrados.map((negocio) => {
               const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
               const planRequerido = planRequeridoNegocio(negocio)
-              const puedeReservar = planEfectivo
+              const bloqueadoPorMembresia = !planEfectivo
+              const puedeReservar = !bloqueadoPorMembresia && planEfectivo
                 ? puedeReservarConPlan(planEfectivo, planRequerido)
                 : false
               const instagramHandle = normalizarHandleSocial(negocio.instagram_handle)
@@ -560,23 +586,40 @@ export default function ExplorarPage() {
                 ? serviciosWellnessReservables(negocio)
                 : []
               const servicioSeleccionadoId = servicioSeleccionadoPorNegocioId[negocio.id] ?? ''
-              const badgeNivel = planRequerido === 'plus'
+              const badgeNivel = bloqueadoPorMembresia
                 ? {
-                  texto: puedeReservar ? 'Beneficio Plus' : 'Requiere Plus',
-                  clase: puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]',
+                  texto: '🔒 Requiere membresía',
+                  clase: 'bg-[#E5E5E5] text-[#666]',
                 }
-                : planRequerido === 'total'
+                : planRequerido === 'plus'
                   ? {
-                    texto: puedeReservar ? 'Beneficio Total' : 'Requiere Total',
-                    clase: puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]',
+                    texto: puedeReservar ? 'Beneficio Plus' : '🔒 Requiere Plus',
+                    clase: puedeReservar ? 'bg-[#E8FF47] text-[#0A0A0A]' : 'bg-[#E5E5E5] text-[#666]',
                   }
-                  : null
+                  : planRequerido === 'total'
+                    ? {
+                      texto: puedeReservar ? 'Beneficio Total' : '🔒 Requiere Total',
+                      clase: puedeReservar ? 'bg-[#6B4FE8] text-white' : 'bg-[#E5E5E5] text-[#666]',
+                    }
+                    : null
               const urlVerMasRestaurante = instagramHandle
                 ? `https://instagram.com/${instagramHandle}`
                 : enlaceMapaNegocio(negocio)
 
               return (
-                <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+                <div
+                  key={negocio.id}
+                  className={`rounded-xl border border-[#E5E5E5] bg-white p-4 ${bloqueadoPorMembresia ? 'opacity-70' : ''}`}
+                  onClick={bloqueadoPorMembresia ? () => router.push('/planes') : undefined}
+                  onKeyDown={bloqueadoPorMembresia ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      router.push('/planes')
+                    }
+                  } : undefined}
+                  role={bloqueadoPorMembresia ? 'button' : undefined}
+                  tabIndex={bloqueadoPorMembresia ? 0 : undefined}
+                >
                   <div className="relative mb-3 overflow-hidden rounded-lg border border-[#E5E5E5]">
                     {negocio.imagen_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -674,7 +717,9 @@ export default function ExplorarPage() {
                           Servicios incluidos
                         </p>
                         <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]'}`}>
-                          {puedeReservar
+                          {bloqueadoPorMembresia
+                            ? '🔒 Requiere membresía'
+                            : puedeReservar
                             ? (planRequerido === 'total' ? 'Beneficio Total' : planRequerido === 'plus' ? 'Beneficio Plus' : 'Disponible en Básico')
                             : (planRequerido === 'total' ? 'Requiere Total' : planRequerido === 'plus' ? 'Requiere Plus' : 'Disponible en Básico')}
                         </span>
@@ -704,6 +749,7 @@ export default function ExplorarPage() {
                         href={urlVerMasRestaurante}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={(event) => event.stopPropagation()}
                         className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#0A0A0A] px-3 py-2 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-[#E8FF47]"
                       >
                         Ver más
@@ -711,25 +757,38 @@ export default function ExplorarPage() {
                     ) : (
                       <button
                         type="button"
-                        disabled
-                        className="mt-4 w-full cursor-not-allowed rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-3 py-2 text-sm font-bold text-[#888]"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          router.push('/planes')
+                        }}
+                        className="mt-4 w-full rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-3 py-2 text-sm font-bold text-[#888]"
                       >
-                        {planRequerido === 'plus' ? 'Requiere Plus' : 'Requiere Total'}
+                        {bloqueadoPorMembresia ? '🔒 Activar plan' : planRequerido === 'plus' ? 'Requiere Plus' : 'Requiere Total'}
                       </button>
                     )
                   ) : (
                     <button
                       type="button"
-                      onClick={() => abrirOCerrarMenuReservas(negocio, menuReservasAbierto)}
-                      disabled={!puedeReservar}
+                      onClick={() => {
+                        if (bloqueadoPorMembresia) {
+                          router.push('/planes')
+                          return
+                        }
+                        abrirOCerrarMenuReservas(negocio, menuReservasAbierto)
+                      }}
+                      disabled={!puedeReservar && !bloqueadoPorMembresia}
                       className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
                         puedeReservar
                           ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
-                          : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                          : bloqueadoPorMembresia
+                            ? 'border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                            : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
                       }`}
                     >
                       {!puedeReservar
-                        ? planRequerido === 'plus'
+                        ? bloqueadoPorMembresia
+                          ? '🔒 Activar plan'
+                          : planRequerido === 'plus'
                           ? 'Requiere Plus'
                           : 'Requiere Total'
                         : menuReservasAbierto
@@ -744,10 +803,15 @@ export default function ExplorarPage() {
                   {!puedeReservar && (
                     <div className="mt-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-center">
                       <p className="text-[11px] font-bold uppercase tracking-widest text-[#666]">
-                        {planRequerido === 'plus' ? 'Desbloquea Beneficio Plus' : 'Desbloquea Beneficio Total'}
+                        {bloqueadoPorMembresia
+                          ? 'Activa tu membresía'
+                          : planRequerido === 'plus'
+                            ? 'Desbloquea Beneficio Plus'
+                            : 'Desbloquea Beneficio Total'}
                       </p>
                       <a
                         href="/planes"
+                        onClick={(event) => event.stopPropagation()}
                         className="mt-1 inline-flex rounded-full bg-[#6B4FE8] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-[#5b40cd]"
                       >
                         Mejorar plan
@@ -879,6 +943,17 @@ export default function ExplorarPage() {
           </div>
         )}
       </div>
+      {requiereMembresia && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t-2 border-[#E8FF47] bg-[#0A0A0A] p-4">
+          <button
+            type="button"
+            onClick={() => router.push('/planes')}
+            className="w-full rounded-full bg-[#E8FF47] py-3 text-base font-black text-[#0A0A0A] transition-colors hover:bg-[#d8ef3f]"
+          >
+            🔒 Activar mi plan
+          </button>
+        </div>
+      )}
     </div>
   )
 }

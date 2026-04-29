@@ -191,7 +191,12 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Debes iniciar sesión y activar un plan para reservar.' },
+      { status: 401 }
+    )
+  }
 
   const body = await request.json().catch(() => ({}))
   const { horario_id, fecha, servicio_id } = body as { horario_id?: string; fecha?: string; servicio_id?: string }
@@ -313,8 +318,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No se pudo validar tu membresía' }, { status: 500 })
   }
 
-  if (!perfilUsuario?.plan_activo) {
-    return NextResponse.json({ error: 'Tu membresía está inactiva' }, { status: 403 })
+  if (!perfilUsuario?.plan_activo || !normalizarPlan(perfilUsuario.plan ?? null)) {
+    return NextResponse.json({ error: 'Necesitas un plan activo para reservar.' }, { status: 403 })
   }
 
   if (planExpirado(perfilUsuario.fecha_fin_plan)) {
