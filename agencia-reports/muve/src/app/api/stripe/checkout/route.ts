@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
 import { normalizarPlan, obtenerStripePriceIdsPorRegion, planDesdePriceId } from '@/lib/planes'
-const { centro: PRICE_IDS_CENTRO, bc: PRICE_IDS_BC } = obtenerStripePriceIdsPorRegion()
 
 type PerfilCheckout = {
   nombre: string | null
@@ -98,7 +97,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ya tienes una membresía activa' }, { status: 400 })
   }
 
-  const priceIdsCiudad = esCiudadBC(perfil?.ciudad) ? PRICE_IDS_BC : PRICE_IDS_CENTRO
+  let priceIdsCiudad: Record<'basico' | 'plus' | 'total', string>
+  try {
+    const { centro, bc } = obtenerStripePriceIdsPorRegion()
+    priceIdsCiudad = esCiudadBC(perfil?.ciudad) ? bc : centro
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error
+          ? error.message
+          : 'Configuración de Stripe incompleta',
+      },
+      { status: 500 }
+    )
+  }
   const priceIdFinal = priceIdsCiudad[planSolicitado]
   if (!priceIdFinal) {
     return NextResponse.json({ error: 'Configuración de precios incompleta' }, { status: 500 })
