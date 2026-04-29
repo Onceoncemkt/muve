@@ -69,7 +69,7 @@ function planTarifaParaVisita({
     categoriaNormalizada
     && (
       (zonaNegocio === 'zona1' && categoriaNormalizada !== 'clases')
-      || (zonaNegocio === 'zona2' && ['estetica', 'restaurante'].includes(categoriaNormalizada))
+      || (zonaNegocio === 'zona2' && ['gimnasio', 'estetica', 'restaurante'].includes(categoriaNormalizada))
     )
   ) {
     return 'basico'

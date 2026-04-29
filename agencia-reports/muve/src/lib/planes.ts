@@ -28,15 +28,16 @@ const TARIFA_NEGOCIO_CLASES_ZONA1_POR_PLAN: Record<PlanMembresia, number> = {
 }
 const TARIFA_NEGOCIO_FIJA_ZONA1_POR_CATEGORIA: Record<Exclude<Categoria, 'clases'>, number> = {
   gimnasio: 40,
-  estetica: 50,
+  estetica: 60,
   restaurante: 60,
 }
-const TARIFA_NEGOCIO_ZONA2_POR_PLAN: Record<PlanMembresia, number> = {
+const TARIFA_NEGOCIO_CLASES_ZONA2_POR_PLAN: Record<PlanMembresia, number> = {
   basico: 100,
   plus: 130,
   total: 150,
 }
-const TARIFA_NEGOCIO_FIJA_ZONA2_POR_CATEGORIA: Record<Exclude<Categoria, 'clases' | 'gimnasio'>, number> = {
+const TARIFA_NEGOCIO_FIJA_ZONA2_POR_CATEGORIA: Record<Exclude<Categoria, 'clases'>, number> = {
+  gimnasio: 80,
   estetica: 150,
   restaurante: 150,
 }
@@ -104,9 +105,9 @@ export function obtenerTarifasNegocioPorPlan(
   const zonaNormalizada = normalizarZonaNegocio(zona) ?? 'zona1'
 
   if (zonaNormalizada === 'zona2') {
-    if (!categoriaNormalizada) return { ...TARIFA_NEGOCIO_ZONA2_POR_PLAN }
-    if (categoriaNormalizada === 'clases' || categoriaNormalizada === 'gimnasio') {
-      return { ...TARIFA_NEGOCIO_ZONA2_POR_PLAN }
+    if (!categoriaNormalizada) return { ...TARIFA_NEGOCIO_CLASES_ZONA2_POR_PLAN }
+    if (categoriaNormalizada === 'clases') {
+      return { ...TARIFA_NEGOCIO_CLASES_ZONA2_POR_PLAN }
     }
     const tarifaFijaZona2 = TARIFA_NEGOCIO_FIJA_ZONA2_POR_CATEGORIA[categoriaNormalizada]
     return { basico: tarifaFijaZona2, plus: tarifaFijaZona2, total: tarifaFijaZona2 }
