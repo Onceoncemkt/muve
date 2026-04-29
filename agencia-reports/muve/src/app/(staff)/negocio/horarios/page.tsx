@@ -667,6 +667,12 @@ export default function NegocioHorariosPage() {
             >
               Perfil negocio
             </Link>
+            <Link
+              href="/negocio/validadores"
+              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+            >
+              Validadores
+            </Link>
             <BotonCerrarSesion />
           </div>
         </div>

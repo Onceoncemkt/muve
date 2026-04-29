@@ -10,14 +10,11 @@ import {
   zonaPorCiudad,
 } from '@/lib/planes'
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
+import { getValidadorSession } from '@/lib/validador-auth'
 
 export async function POST(request: NextRequest) {
   const authClient = await createClient()
-
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+  const validadorSession = await getValidadorSession()
 
   const db = createServiceClient()
 
@@ -31,36 +28,60 @@ export async function POST(request: NextRequest) {
     return message.includes('column') && message.includes(columna.toLowerCase())
   }
 
-  // Verificar que sea staff o admin
-  let perfil: { rol: string; nombre: string | null; negocio_id: string | null } | null = null
-  const consultaPerfil = await db
-    .from('users')
-    .select('rol, nombre, negocio_id')
-    .eq('id', user.id)
-    .single<{ rol: string; nombre: string | null; negocio_id: string | null }>()
+  let perfil: { rol: 'staff' | 'admin' | 'validador'; nombre: string | null; negocio_id: string | null } | null = null
+  let validadorId: string | null = null
 
-  if (!consultaPerfil.error && consultaPerfil.data) {
-    perfil = consultaPerfil.data
-  } else if (faltaColumnaNegocioId(consultaPerfil.error)) {
-    const fallback = await db
+  if (validadorSession) {
+    perfil = {
+      rol: 'validador',
+      nombre: validadorSession.nombre,
+      negocio_id: validadorSession.negocio_id,
+    }
+    validadorId = validadorSession.validador_id
+  } else {
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    }
+
+    const consultaPerfil = await db
       .from('users')
-      .select('rol, nombre')
+      .select('rol, nombre, negocio_id')
       .eq('id', user.id)
-      .single<{ rol: string; nombre: string | null }>()
-    if (!fallback.error && fallback.data) {
-      perfil = { ...fallback.data, negocio_id: null }
+      .single<{ rol: string; nombre: string | null; negocio_id: string | null }>()
+
+    if (!consultaPerfil.error && consultaPerfil.data && (consultaPerfil.data.rol === 'staff' || consultaPerfil.data.rol === 'admin')) {
+      perfil = {
+        rol: consultaPerfil.data.rol,
+        nombre: consultaPerfil.data.nombre,
+        negocio_id: consultaPerfil.data.negocio_id,
+      }
+    } else if (faltaColumnaNegocioId(consultaPerfil.error)) {
+      const fallback = await db
+        .from('users')
+        .select('rol, nombre')
+        .eq('id', user.id)
+        .single<{ rol: string; nombre: string | null }>()
+      if (!fallback.error && fallback.data && (fallback.data.rol === 'staff' || fallback.data.rol === 'admin')) {
+        perfil = {
+          rol: fallback.data.rol,
+          nombre: fallback.data.nombre,
+          negocio_id: null,
+        }
+      }
     }
   }
 
-  if (!perfil || !['staff', 'admin'].includes(perfil.rol)) {
+  if (!perfil || !['staff', 'admin', 'validador'].includes(perfil.rol)) {
     return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   }
   const body = await request.json().catch(() => ({}))
   const token = typeof body.token === 'string' ? body.token.trim() : ''
+  const userIdBody = typeof body.user_id === 'string' ? body.user_id.trim() : ''
   const negocioIdBody = typeof body.negocio_id === 'string' ? body.negocio_id : ''
   const soloCotizar = body.solo_cotizar === true
-  if (!token) {
-    return NextResponse.json({ error: 'Falta token' }, { status: 400 })
+  if (!token && !userIdBody) {
+    return NextResponse.json({ error: 'Falta token o user_id' }, { status: 400 })
   }
 
   if (
@@ -75,7 +96,9 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const negocioIdObjetivo = perfil.rol === 'staff' ? (perfil.negocio_id ?? '') : negocioIdBody
+  const negocioIdObjetivo = perfil.rol === 'validador'
+    ? (perfil.negocio_id ?? '')
+    : (perfil.rol === 'staff' ? (perfil.negocio_id ?? '') : negocioIdBody)
   if (!negocioIdObjetivo) {
     return NextResponse.json(
       {
@@ -87,56 +110,103 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const tokenNormalizado = token.toLowerCase()
-  const { data: usuarioPorHash, error: usuarioPorHashError } = await db
-    .rpc('buscar_usuario_por_qr_hash', { p_hash: tokenNormalizado })
-    .maybeSingle<{
-      user_id: string
-      nombre: string
-      ciudad: string
-      plan_activo: boolean
-      plan?: unknown
-      fecha_inicio_ciclo?: string | null
-      fecha_fin_plan?: string | null
-      creditos_extra?: number | null
-    }>()
+  let usuarioId = ''
+  let usuario: {
+    nombre: string
+    ciudad: string
+    plan_activo: boolean
+    plan?: unknown
+    fecha_inicio_ciclo?: string | null
+    fecha_fin_plan?: string | null
+    creditos_extra?: number | null
+  } | null = null
 
-  if (usuarioPorHashError) {
-    const message = usuarioPorHashError.message?.toLowerCase() ?? ''
-    if (message.includes('buscar_usuario_por_qr_hash')) {
-      return NextResponse.json(
-        { error: 'Falta la función buscar_usuario_por_qr_hash. Ejecuta la migración 024 en Supabase.' },
-        { status: 500 }
-      )
+  if (token) {
+    const tokenNormalizado = token.toLowerCase()
+    const { data: usuarioPorHash, error: usuarioPorHashError } = await db
+      .rpc('buscar_usuario_por_qr_hash', { p_hash: tokenNormalizado })
+      .maybeSingle<{
+        user_id: string
+        nombre: string
+        ciudad: string
+        plan_activo: boolean
+        plan?: unknown
+        fecha_inicio_ciclo?: string | null
+        fecha_fin_plan?: string | null
+        creditos_extra?: number | null
+      }>()
+
+    if (usuarioPorHashError) {
+      const message = usuarioPorHashError.message?.toLowerCase() ?? ''
+      if (message.includes('buscar_usuario_por_qr_hash')) {
+        return NextResponse.json(
+          { error: 'Falta la función buscar_usuario_por_qr_hash. Ejecuta la migración 024 en Supabase.' },
+          { status: 500 }
+        )
+      }
+      if (faltaColumna(usuarioPorHashError, 'fecha_inicio_ciclo')) {
+        return NextResponse.json(
+          { error: 'Falta la columna users.fecha_inicio_ciclo. Ejecuta la migración 019 en Supabase.' },
+          { status: 500 }
+        )
+      }
+      if (faltaColumna(usuarioPorHashError, 'creditos_extra')) {
+        return NextResponse.json(
+          { error: 'Falta la columna users.creditos_extra. Ejecuta la migración 020 en Supabase.' },
+          { status: 500 }
+        )
+      }
+      return NextResponse.json({ error: 'No se pudo validar el pase del usuario' }, { status: 500 })
     }
-    if (faltaColumna(usuarioPorHashError, 'fecha_inicio_ciclo')) {
-      return NextResponse.json(
-        { error: 'Falta la columna users.fecha_inicio_ciclo. Ejecuta la migración 019 en Supabase.' },
-        { status: 500 }
-      )
+
+    if (!usuarioPorHash) {
+      return NextResponse.json({ valido: false, error: 'Token no encontrado' }, { status: 404 })
     }
-    if (faltaColumna(usuarioPorHashError, 'creditos_extra')) {
-      return NextResponse.json(
-        { error: 'Falta la columna users.creditos_extra. Ejecuta la migración 020 en Supabase.' },
-        { status: 500 }
-      )
+
+    usuarioId = usuarioPorHash.user_id
+    usuario = {
+      nombre: usuarioPorHash.nombre,
+      ciudad: usuarioPorHash.ciudad,
+      plan_activo: usuarioPorHash.plan_activo,
+      plan: usuarioPorHash.plan,
+      fecha_inicio_ciclo: usuarioPorHash.fecha_inicio_ciclo,
+      fecha_fin_plan: usuarioPorHash.fecha_fin_plan,
+      creditos_extra: usuarioPorHash.creditos_extra,
     }
-    return NextResponse.json({ error: 'No se pudo validar el pase del usuario' }, { status: 500 })
+  } else {
+    const { data: usuarioDirecto, error: usuarioDirectoError } = await db
+      .from('users')
+      .select('id, nombre, ciudad, plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, rol')
+      .eq('id', userIdBody)
+      .single<{
+        id: string
+        nombre: string
+        ciudad: string
+        plan_activo: boolean
+        plan: string | null
+        fecha_inicio_ciclo: string | null
+        fecha_fin_plan: string | null
+        creditos_extra: number | null
+        rol: string
+      }>()
+
+    if (usuarioDirectoError || !usuarioDirecto || usuarioDirecto.rol !== 'usuario') {
+      return NextResponse.json({ valido: false, error: 'Usuario no encontrado' }, { status: 404 })
+    }
+
+    usuarioId = usuarioDirecto.id
+    usuario = {
+      nombre: usuarioDirecto.nombre,
+      ciudad: usuarioDirecto.ciudad,
+      plan_activo: usuarioDirecto.plan_activo,
+      plan: usuarioDirecto.plan,
+      fecha_inicio_ciclo: usuarioDirecto.fecha_inicio_ciclo,
+      fecha_fin_plan: usuarioDirecto.fecha_fin_plan,
+      creditos_extra: usuarioDirecto.creditos_extra,
+    }
   }
-
-  if (!usuarioPorHash) {
-    return NextResponse.json({ valido: false, error: 'Token no encontrado' }, { status: 404 })
-  }
-
-  const usuarioId = usuarioPorHash.user_id
-  const usuario = {
-    nombre: usuarioPorHash.nombre,
-    ciudad: usuarioPorHash.ciudad,
-    plan_activo: usuarioPorHash.plan_activo,
-    plan: usuarioPorHash.plan,
-    fecha_inicio_ciclo: usuarioPorHash.fecha_inicio_ciclo,
-    fecha_fin_plan: usuarioPorHash.fecha_fin_plan,
-    creditos_extra: usuarioPorHash.creditos_extra,
+  if (!usuario) {
+    return NextResponse.json({ valido: false, error: 'Usuario no encontrado' }, { status: 404 })
   }
   const planUsuario = normalizarPlan(usuario?.plan ?? null) ?? 'basico'
   const zonaUsuario = zonaPorCiudad(usuario.ciudad)
@@ -485,6 +555,19 @@ export async function POST(request: NextRequest) {
   if (visitaError) {
     return NextResponse.json({ error: 'Error al registrar crédito' }, { status: 500 })
   }
+  const payloadCheckin = {
+    user_id: usuarioId,
+    negocio_id: negocioIdObjetivo,
+    exitoso: true,
+    validado_por: validadorId,
+  }
+  const { error: checkinError } = await db
+    .from('check_ins')
+    .insert(payloadCheckin)
+
+  if (checkinError) {
+    console.warn('[POST /api/validar] No se pudo registrar check_in', checkinError)
+  }
 
   if (reservacionACompletarId) {
     const updateConNegocio = await db
@@ -518,6 +601,12 @@ export async function POST(request: NextRequest) {
     .eq('id', usuarioId)
   if (ultimoCheckinError && !faltaColumna(ultimoCheckinError, 'ultimo_checkin')) {
     console.warn('[POST /api/validar] No se pudo actualizar ultimo_checkin', ultimoCheckinError)
+  }
+  if (perfil.rol === 'validador' && validadorId) {
+    await db
+      .from('validadores')
+      .update({ ultima_actividad: new Date().toISOString() })
+      .eq('id', validadorId)
   }
 
   const visitasUsadasCiclo = (visitasCiclo ?? 0) + creditosServicio

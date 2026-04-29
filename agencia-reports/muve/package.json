@@ -12,6 +12,7 @@
     "@stripe/stripe-js": "^9.3.1",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.1",
+    "bcryptjs": "^3.0.3",
     "html5-qrcode": "^2.3.8",
     "next": "16.2.4",
     "qrcode": "^1.5.4",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",

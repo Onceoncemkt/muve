@@ -653,6 +653,12 @@ export default function NegocioDashboardPage() {
             >
               Perfil
             </Link>
+            <Link
+              href="/negocio/validadores"
+              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+            >
+              Validadores
+            </Link>
             <BotonCerrarSesion />
           </div>
         </div>
@@ -989,6 +995,19 @@ export default function NegocioDashboardPage() {
                 className="inline-flex rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222]"
               >
                 Abrir escáner QR
+              </Link>
+            </div>
+
+            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Validadores</p>
+              <p className="mt-1 text-xs text-[#666]">
+                Crea y administra recepcionistas con PIN para validar visitas desde mostrador.
+              </p>
+              <Link
+                href="/negocio/validadores"
+                className="mt-3 inline-flex rounded-lg bg-[#6B4FE8] px-4 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-[#5a3fd6]"
+              >
+                Ir a validadores
               </Link>
             </div>
 
