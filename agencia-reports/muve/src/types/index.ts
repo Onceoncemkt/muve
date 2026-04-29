@@ -3,6 +3,7 @@ export type ZonaNegocio = 'zona1' | 'zona2'
 export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante'
 export type Rol = 'usuario' | 'staff' | 'admin'
 export type PlanMembresia = 'basico' | 'plus' | 'total'
+export type NivelNegocio = 'basico' | 'plus' | 'total'
 export type GeneroPerfil = 'masculino' | 'femenino' | 'prefiero_no_decir'
 export type ObjetivoFitness = 'perder_peso' | 'ganar_musculo' | 'bienestar' | 'flexibilidad' | 'energia' | 'social'
 export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
@@ -61,6 +62,7 @@ export interface Negocio {
   requiere_reserva?: boolean
   capacidad_default?: number | null
   plan_requerido?: PlanMembresia | null
+  nivel?: NivelNegocio
   activo: boolean
 }
 

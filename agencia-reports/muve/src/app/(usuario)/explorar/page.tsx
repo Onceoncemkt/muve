@@ -115,10 +115,8 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
 }
 
 function planRequeridoNegocio(negocio: Negocio): PlanMembresia {
-  const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
-  if (categoriaNegocio === 'estetica') return 'plus'
-  if (categoriaNegocio === 'restaurante') return 'total'
-  return normalizarPlan(negocio.plan_requerido ?? null) ?? 'basico'
+  if (negocio.nivel === 'plus' || negocio.nivel === 'total') return negocio.nivel
+  return 'basico'
 }
 
 function formatearFechaISO(fecha: Date): string {
@@ -377,15 +375,24 @@ export default function ExplorarPage() {
   }, [cargarHorarios, servicioSeleccionadoPorNegocioId])
 
   const planEfectivo = planActivo ? (planUsuario ?? 'basico') : null
+  const puedeVerNegocio = useCallback((negocio: Negocio) => {
+    if (!planActivo || !planUsuario) return true
+    const requerido = planRequeridoNegocio(negocio)
+    return puedeReservarConPlan(planUsuario, requerido)
+  }, [planActivo, planUsuario])
   const ciudadesDisponibles = useMemo(() => {
-    const ciudadesUnicas = Array.from(new Set(negocios.map((negocio) => negocio.ciudad)))
+    const ciudadesUnicas = Array.from(new Set(
+      negocios
+        .filter((negocio) => puedeVerNegocio(negocio))
+        .map((negocio) => negocio.ciudad)
+    ))
     return ciudadesUnicas.sort((a, b) =>
       CIUDAD_LABELS[a].localeCompare(CIUDAD_LABELS[b], 'es')
     )
-  }, [negocios])
+  }, [negocios, puedeVerNegocio])
 
   const negociosFiltrados = useMemo(() => {
-    let resultado = negocios
+    let resultado = negocios.filter((negocio) => puedeVerNegocio(negocio))
 
     if (filtroCiudad !== 'todas') {
       resultado = resultado.filter((negocio) => negocio.ciudad === filtroCiudad)
@@ -400,7 +407,7 @@ export default function ExplorarPage() {
     }
 
     return resultado
-  }, [negocios, filtroCiudad, filtroCategoria])
+  }, [negocios, filtroCiudad, filtroCategoria, puedeVerNegocio])
   const regresarOInicio = useCallback(() => {
     router.push('/dashboard')
   }, [router])
@@ -538,12 +545,12 @@ export default function ExplorarPage() {
                 ? serviciosWellnessReservables(negocio)
                 : []
               const servicioSeleccionadoId = servicioSeleccionadoPorNegocioId[negocio.id] ?? ''
-              const badgeCategoria = esWellness
+              const badgeNivel = planRequerido === 'plus'
                 ? {
                   texto: puedeReservar ? 'Beneficio Plus' : 'Requiere Plus',
                   clase: puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]',
                 }
-                : esRestaurante
+                : planRequerido === 'total'
                   ? {
                     texto: puedeReservar ? 'Beneficio Total' : 'Requiere Total',
                     clase: puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]',
@@ -568,9 +575,9 @@ export default function ExplorarPage() {
                         {iniciales}
                       </div>
                     )}
-                    {badgeCategoria && (
-                      <span className={`absolute right-2 top-2 shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${badgeCategoria.clase}`}>
-                        {badgeCategoria.texto}
+                    {badgeNivel && (
+                      <span className={`absolute right-2 top-2 shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${badgeNivel.clase}`}>
+                        {badgeNivel.texto}
                       </span>
                     )}
                   </div>
@@ -652,7 +659,9 @@ export default function ExplorarPage() {
                           Servicios incluidos
                         </p>
                         <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]'}`}>
-                          {puedeReservar ? 'Beneficio Plus' : 'Requiere Plus'}
+                          {puedeReservar
+                            ? (planRequerido === 'total' ? 'Beneficio Total' : 'Beneficio Plus')
+                            : (planRequerido === 'total' ? 'Requiere Total' : 'Requiere Plus')}
                         </span>
                       </div>
                       {serviciosWellness.length === 0 ? (

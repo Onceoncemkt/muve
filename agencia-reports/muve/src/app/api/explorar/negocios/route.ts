@@ -122,6 +122,7 @@ export async function GET() {
     return {
       ...negocio,
       categoria: categoriaNormalizada ?? negocio.categoria,
+      nivel: negocio.nivel === 'plus' || negocio.nivel === 'total' ? negocio.nivel : 'basico',
       monto_maximo_visita: typeof negocio.monto_maximo_visita === 'number'
         ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
         : 0,

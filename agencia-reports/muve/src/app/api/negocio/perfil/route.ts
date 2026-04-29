@@ -13,6 +13,7 @@ type NegocioPerfilDB = {
   nombre: string
   categoria: string
   ciudad: string
+  nivel?: 'basico' | 'plus' | 'total' | null
   direccion?: string | null
   descripcion?: string | null
   imagen_url?: string | null
@@ -101,6 +102,7 @@ function normalizarNegocioPerfil(data: NegocioPerfilDB) {
     nombre: data.nombre,
     categoria: data.categoria,
     ciudad: data.ciudad,
+    nivel: data.nivel === 'plus' || data.nivel === 'total' ? data.nivel : 'basico',
     direccion: data.direccion ?? '',
     descripcion: data.descripcion ?? '',
     imagen_url: data.imagen_url ?? null,
@@ -251,6 +253,19 @@ export async function GET(request: NextRequest) {
       { error: negocioError?.message ?? 'No se pudo cargar el perfil del negocio' },
       { status: 500 }
     )
+  }
+
+  const consultaNivel = await db
+    .from('negocios')
+    .select('nivel')
+    .eq('id', negocioIdObjetivo)
+    .maybeSingle<{ nivel?: string | null }>()
+  if (!consultaNivel.error) {
+    negocio.nivel = consultaNivel.data?.nivel === 'plus' || consultaNivel.data?.nivel === 'total'
+      ? consultaNivel.data.nivel
+      : 'basico'
+  } else {
+    negocio.nivel = 'basico'
   }
 
   return NextResponse.json({

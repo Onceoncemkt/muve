@@ -10,7 +10,7 @@ import AdminUsuarioRolControl from '@/components/admin/AdminUsuarioRolControl'
 import AdminUsuarioPlanToggle from '@/components/admin/AdminUsuarioPlanToggle'
 import AdminInvitarUsuarioModal from '@/components/admin/AdminInvitarUsuarioModal'
 import AdminInvitarNegocioForm from '@/components/admin/AdminInvitarNegocioForm'
-import type { Ciudad, Categoria, Rol, ZonaNegocio } from '@/types'
+import type { Ciudad, Categoria, NivelNegocio, Rol, ZonaNegocio } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 
 type UsuarioAdmin = {
@@ -30,6 +30,7 @@ type NegocioAdmin = {
   nombre: string
   ciudad: Ciudad
   zona?: ZonaNegocio | null
+  nivel?: NivelNegocio
   categoria: Categoria
   direccion: string
   descripcion: string | null
@@ -44,9 +45,15 @@ type NegocioAdmin = {
 const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 const CATEGORIAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
 const ZONAS: ZonaNegocio[] = ['zona1', 'zona2']
+const NIVELES: NivelNegocio[] = ['basico', 'plus', 'total']
 const ZONA_LABELS: Record<ZonaNegocio, string> = {
   zona1: 'Zona 1',
   zona2: 'Zona 2',
+}
+const NIVEL_LABELS: Record<NivelNegocio, string> = {
+  basico: 'Básico',
+  plus: 'Plus',
+  total: 'Total',
 }
 
 function admin() {
@@ -67,6 +74,7 @@ function faltaColumnaRequiereReserva(error: { message?: string } | null | undefi
       || message.includes('imagen_url')
       || message.includes('stripe_account_id')
       || message.includes('zona')
+      || message.includes('nivel')
     )
 }
 
@@ -180,7 +188,7 @@ export default async function AdminPage({
 
   const consultaNegocios = await db
     .from('negocios')
-    .select('id, nombre, ciudad, zona, categoria, direccion, descripcion, imagen_url, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
+    .select('id, nombre, ciudad, zona, nivel, categoria, direccion, descripcion, imagen_url, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
     .order('ciudad')
     .order('nombre')
 
@@ -188,7 +196,7 @@ export default async function AdminPage({
   if (!consultaNegocios.error) {
     negociosAfiliados = (consultaNegocios.data ?? []) as NegocioAdmin[]
   } else if (faltaColumnaRequiereReserva(consultaNegocios.error)) {
-    type NegocioAdminLegacy = Omit<NegocioAdmin, 'zona' | 'imagen_url' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default' | 'stripe_account_id'>
+    type NegocioAdminLegacy = Omit<NegocioAdmin, 'zona' | 'nivel' | 'imagen_url' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default' | 'stripe_account_id'>
     const fallback = await db
       .from('negocios')
       .select('id, nombre, ciudad, categoria, direccion, descripcion, activo')
@@ -199,6 +207,7 @@ export default async function AdminPage({
       negociosAfiliados = ((fallback.data ?? []) as NegocioAdminLegacy[]).map(negocio => ({
         ...negocio,
         zona: 'zona1',
+        nivel: 'basico',
         imagen_url: null,
         instagram_handle: null,
         requiere_reserva: true,
@@ -442,6 +451,7 @@ export default async function AdminPage({
                       <th className="px-2 py-2">Categoría</th>
                       <th className="px-2 py-2">Ciudad</th>
                       <th className="px-2 py-2">Zona</th>
+                      <th className="px-2 py-2">Nivel</th>
                       <th className="px-2 py-2">Activo</th>
                       <th className="px-2 py-2">Staff asignado</th>
                       <th className="px-2 py-2">Acciones</th>
@@ -467,6 +477,7 @@ export default async function AdminPage({
                           <td className="px-2 py-2">{CATEGORIA_LABELS[negocio.categoria]}</td>
                           <td className="px-2 py-2">{CIUDAD_LABELS[negocio.ciudad]}</td>
                           <td className="px-2 py-2">{ZONA_LABELS[(negocio.zona ?? 'zona1') as ZonaNegocio]}</td>
+                          <td className="px-2 py-2">{NIVEL_LABELS[(negocio.nivel ?? 'basico') as NivelNegocio]}</td>
                           <td className="px-2 py-2">
                             <span
                               className={`rounded-md px-2 py-1 text-xs font-bold ${
@@ -557,6 +568,23 @@ export default async function AdminPage({
                                           {ZONAS.map(zona => (
                                             <option key={zona} value={zona}>
                                               {ZONA_LABELS[zona]}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                          Nivel
+                                        </label>
+                                        <select
+                                          name="nivel"
+                                          required
+                                          defaultValue={negocio.nivel ?? 'basico'}
+                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                        >
+                                          {NIVELES.map(nivel => (
+                                            <option key={nivel} value={nivel}>
+                                              {NIVEL_LABELS[nivel]}
                                             </option>
                                           ))}
                                         </select>
@@ -700,7 +728,7 @@ export default async function AdminPage({
                     })}
                     {negociosAfiliados.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-2 py-4 text-sm text-white/50">
+                        <td colSpan={8} className="px-2 py-4 text-sm text-white/50">
                           No hay negocios registrados.
                         </td>
                       </tr>
@@ -780,6 +808,23 @@ export default async function AdminPage({
                       {ZONAS.map(zona => (
                         <option key={zona} value={zona}>
                           {ZONA_LABELS[zona]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                      Nivel
+                    </label>
+                    <select
+                      name="nivel"
+                      required
+                      defaultValue="basico"
+                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                    >
+                      {NIVELES.map(nivel => (
+                        <option key={nivel} value={nivel}>
+                          {NIVEL_LABELS[nivel]}
                         </option>
                       ))}
                     </select>
