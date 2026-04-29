@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import PlanesPrecios from '@/components/PlanesPrecios'
-import { obtenerStripePriceIdsPorRegion } from '@/lib/planes'
 import { createClient } from '@/lib/supabase/server'
 import type { Ciudad } from '@/types'
 
@@ -39,7 +38,6 @@ export default async function LandingPage() {
   }
 
   const usuarioAutenticado = Boolean(user)
-  const priceIds = obtenerStripePriceIdsPorRegion()
 
   return (
     <div className="bg-white">
@@ -138,7 +136,6 @@ export default async function LandingPage() {
       {/* ── PLANES ──────────────────────────────────────────── */}
       <div className="bg-[#F7F7F7]">
         <PlanesPrecios
-          priceIds={priceIds}
           ciudadInicial={ciudadInicial}
           usuarioAutenticado={usuarioAutenticado}
         />

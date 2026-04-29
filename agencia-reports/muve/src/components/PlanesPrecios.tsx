@@ -1,17 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Ciudad } from '@/types'
-
-interface PriceIds {
-  basico: string
-  plus: string
-  total: string
-}
 
 type RegionPrecios = 'centro' | 'bc'
 type PlanId = 'basico' | 'plus' | 'total'
-type PriceIdsPorRegion = Record<RegionPrecios, PriceIds>
 
 const PRECIOS_POR_REGION: Record<RegionPrecios, Record<PlanId, number>> = {
   centro: {
@@ -96,43 +90,27 @@ function normalizarCodigoDescuento(value: string | null | undefined) {
 function BotonPlan({
   planId,
   planNombre,
-  priceId,
+  ciudad,
   esRecomendado,
   codigoDescuento,
 }: {
   planId: string
   planNombre: string
-  priceId: string
+  ciudad: Ciudad
   esRecomendado: boolean
   codigoDescuento: string
 }) {
+  const router = useRouter()
   const [cargando, setCargando] = useState(false)
-
-  async function iniciarCheckout() {
+  function irAConfirmacion() {
     setCargando(true)
-    try {
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          priceId,
-          planId,
-          plan: planId,
-          codigo_descuento: normalizarCodigoDescuento(codigoDescuento) || undefined,
-        }),
-      })
-      if (res.status === 401) {
-        window.location.href = `/registro?plan=${planId}`
-        return
-      }
-      const data = await res.json()
-      if (data.error) { alert(data.error); return }
-      window.location.href = data.url
-    } catch {
-      alert('Error de conexión. Intenta de nuevo.')
-    } finally {
-      setCargando(false)
-    }
+    const params = new URLSearchParams({
+      plan: planId,
+      ciudad,
+    })
+    const codigo = normalizarCodigoDescuento(codigoDescuento)
+    if (codigo) params.set('codigo_descuento', codigo)
+    router.push(`/planes/confirmar?${params.toString()}`)
   }
 
   const label = cargando ? 'Redirigiendo...' : `Empezar con ${planNombre}`
@@ -140,7 +118,7 @@ function BotonPlan({
   if (esRecomendado) {
     return (
       <button
-        onClick={iniciarCheckout}
+        onClick={irAConfirmacion}
         disabled={cargando}
         className="mt-8 w-full rounded-lg bg-[#E8FF47] py-3.5 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-white disabled:opacity-50"
       >
@@ -151,7 +129,7 @@ function BotonPlan({
 
   return (
     <button
-      onClick={iniciarCheckout}
+      onClick={irAConfirmacion}
       disabled={cargando}
       className="mt-8 w-full rounded-lg border border-[#6B4FE8] bg-white py-3.5 text-sm font-bold text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white disabled:opacity-50"
     >
@@ -165,13 +143,11 @@ function esCiudadBC(ciudad: Ciudad) {
 }
 
 export default function PlanesPrecios({
-  priceIds,
   ciudadInicial,
   usuarioAutenticado,
   codigoDescuentoInicial = null,
   mostrarCampoDescuento = false,
 }: {
-  priceIds: PriceIdsPorRegion
   ciudadInicial: Ciudad
   usuarioAutenticado: boolean
   codigoDescuentoInicial?: string | null
@@ -203,7 +179,6 @@ export default function PlanesPrecios({
     ? ciudadInicial
     : (ciudadSeleccionada ?? 'tulancingo')
   const regionActiva: RegionPrecios = esCiudadBC(ciudadActiva) ? 'bc' : 'centro'
-  const priceIdsActivos = priceIds[regionActiva]
   const preciosActivos = PRECIOS_POR_REGION[regionActiva]
   const preciosAnterioresActivos = PRECIOS_ANTERIORES_POR_REGION[regionActiva]
   return (
@@ -255,7 +230,6 @@ export default function PlanesPrecios({
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:items-start">
           {PLANES.map(plan => {
-            const priceId = priceIdsActivos[plan.id]
             const precio = preciosActivos[plan.id]
             const precioAnterior = preciosAnterioresActivos[plan.id]
             const esPlusCard = plan.recomendado
@@ -340,7 +314,7 @@ export default function PlanesPrecios({
                 <BotonPlan
                   planId={plan.id}
                   planNombre={plan.nombre}
-                  priceId={priceId}
+                  ciudad={ciudadActiva}
                   esRecomendado={plan.recomendado}
                   codigoDescuento={codigoDescuento}
                 />
