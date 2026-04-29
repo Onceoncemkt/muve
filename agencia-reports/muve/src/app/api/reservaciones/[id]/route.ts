@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import type { EstadoReserva } from '@/types'
 import { enviarPushAUsuarios, obtenerStaffIdsPorNegocio } from '@/lib/push/server'
+import { normalizarPlan, puedeReservarConPlan } from '@/lib/planes'
+import { planExpirado } from '@/lib/ciclos'
 
 function admin() {
   return createAdmin(
@@ -64,10 +66,43 @@ export async function PATCH(
     if (negocioId) {
       const { data: negocio } = await db
         .from('negocios')
-        .select('nombre')
+        .select('nombre, nivel')
         .eq('id', negocioId)
-        .maybeSingle<{ nombre: string }>()
+        .maybeSingle<{ nombre: string; nivel?: 'basico' | 'plus' | 'total' | null }>()
       negocioNombre = negocio?.nombre ?? 'negocio'
+
+      const { data: perfilUsuario, error: perfilUsuarioError } = await db
+        .from('users')
+        .select('plan_activo, plan, fecha_fin_plan')
+        .eq('id', user.id)
+        .maybeSingle<{ plan_activo: boolean; plan: string | null; fecha_fin_plan: string | null }>()
+
+      if (perfilUsuarioError) {
+        return NextResponse.json({ error: 'No se pudo validar tu membresía' }, { status: 500 })
+      }
+
+      if (!perfilUsuario?.plan_activo) {
+        return NextResponse.json({ error: 'Tu membresía está inactiva' }, { status: 403 })
+      }
+
+      if (planExpirado(perfilUsuario.fecha_fin_plan)) {
+        await db
+          .from('users')
+          .update({ plan_activo: false })
+          .eq('id', user.id)
+        return NextResponse.json({ error: 'Tu membresía está expirada' }, { status: 403 })
+      }
+
+      const planUsuario = normalizarPlan(perfilUsuario.plan ?? null) ?? 'basico'
+      const nivelNegocio = negocio?.nivel === 'plus' || negocio?.nivel === 'total'
+        ? negocio.nivel
+        : 'basico'
+      if (!puedeReservarConPlan(planUsuario, nivelNegocio)) {
+        return NextResponse.json(
+          { error: nivelNegocio === 'plus' ? 'Este lugar requiere plan Plus' : 'Este lugar requiere plan Total' },
+          { status: 403 }
+        )
+      }
     }
 
     // Solo se puede cancelar con más de 2h de anticipación

@@ -675,14 +675,23 @@ export default function ExplorarPage() {
                   )}
 
                   {esRestaurante ? (
-                    <a
-                      href={urlVerMasRestaurante}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#0A0A0A] px-3 py-2 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-[#E8FF47]"
-                    >
-                      Ver más
-                    </a>
+                    puedeReservar ? (
+                      <a
+                        href={urlVerMasRestaurante}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#0A0A0A] px-3 py-2 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-[#E8FF47]"
+                      >
+                        Ver más
+                      </a>
+                    ) : (
+                      <a
+                        href="/planes"
+                        className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#6B4FE8] bg-[#6B4FE8] px-3 py-2 text-sm font-black text-white transition-colors hover:bg-[#5b40cd]"
+                      >
+                        🔒 Mejorar mi plan
+                      </a>
+                    )
                   ) : (
                     <button
                       type="button"
