@@ -6,6 +6,8 @@ import {
   PLAN_MAX_VISITAS_POR_LUGAR,
   PLAN_VISITAS_MENSUALES,
   normalizarPlan,
+  resolverZonaNegocio,
+  zonaPorCiudad,
 } from '@/lib/planes'
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const token = typeof body.token === 'string' ? body.token.trim() : ''
   const negocioIdBody = typeof body.negocio_id === 'string' ? body.negocio_id : ''
+  const soloCotizar = body.solo_cotizar === true
   if (!token) {
     return NextResponse.json({ error: 'Falta token' }, { status: 400 })
   }
@@ -136,6 +139,7 @@ export async function POST(request: NextRequest) {
     creditos_extra: usuarioPorHash.creditos_extra,
   }
   const planUsuario = normalizarPlan(usuario?.plan ?? null) ?? 'basico'
+  const zonaUsuario = zonaPorCiudad(usuario.ciudad)
 
   if (!usuario?.plan_activo) {
     return NextResponse.json({ valido: false, error: 'Usuario sin membresía activa' })
@@ -194,17 +198,7 @@ export async function POST(request: NextRequest) {
   const limiteMensual = PLAN_VISITAS_MENSUALES[planUsuario]
   const creditosExtra = Math.max(Math.trunc(usuario.creditos_extra ?? 0), 0)
   const visitasDisponibles = limiteMensual + creditosExtra
-  if ((visitasCiclo ?? 0) >= visitasDisponibles) {
-    return NextResponse.json({ valido: false, error: 'Usuario agotó sus créditos del ciclo actual' })
-  }
-
   const limitePorLugar = PLAN_MAX_VISITAS_POR_LUGAR[planUsuario]
-  if ((visitasLugarCiclo ?? 0) >= limitePorLugar) {
-    return NextResponse.json({
-      valido: false,
-      error: 'Límite de créditos en este lugar alcanzado',
-    })
-  }
   let negocio: {
     nombre: string
     categoria: string | null
@@ -281,6 +275,21 @@ export async function POST(request: NextRequest) {
   }
 
   const categoriaNegocio = typeof negocio.categoria === 'string' ? negocio.categoria : null
+  const zonaNegocio = resolverZonaNegocio({ zona: negocio.zona, ciudad: negocio.ciudad })
+  const creditosNormalesServicio = 1
+  const costoDobleZonaPremium = zonaUsuario === 'zona1' && zonaNegocio === 'zona2'
+  const creditosServicio = costoDobleZonaPremium
+    ? (creditosNormalesServicio * 2)
+    : creditosNormalesServicio
+  if (((visitasCiclo ?? 0) + creditosServicio) > visitasDisponibles) {
+    return NextResponse.json({ valido: false, error: 'Usuario agotó sus créditos del ciclo actual' })
+  }
+  if (((visitasLugarCiclo ?? 0) + creditosServicio) > limitePorLugar) {
+    return NextResponse.json({
+      valido: false,
+      error: 'Límite de créditos en este lugar alcanzado',
+    })
+  }
   const montoNegocioMxn = calcularMontoNegocioPorVisita({
     categoria: categoriaNegocio,
     planUsuario,
@@ -398,6 +407,36 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  if (soloCotizar) {
+    return NextResponse.json({
+      valido: true,
+      requiere_confirmacion: true,
+      usuario: usuario.nombre,
+      negocio: negocio.nombre,
+      categoria_negocio: categoriaNegocio,
+      servicio_reservado: servicioReservado,
+      monto_negocio_mxn: montoNegocioMxn,
+      monto_maximo_autorizado_mxn: montoMaximoAutorizadoMxn,
+      creditos_servicio: creditosServicio,
+      costo_doble_aplicado: costoDobleZonaPremium,
+      mensaje_costo: costoDobleZonaPremium
+        ? `Este servicio cuesta ${creditosServicio} créditos (zona premium, costo doble)`
+        : `Este servicio cuesta ${creditosServicio} crédito${creditosServicio === 1 ? '' : 's'}`,
+      creditos_restantes_ciclo: Math.max(visitasDisponibles - ((visitasCiclo ?? 0) + creditosServicio), 0),
+      creditos_usados_ciclo: (visitasCiclo ?? 0),
+      limite_creditos_ciclo: limiteMensual,
+      creditos_disponibles: visitasDisponibles,
+      visitas_restantes_mes: Math.max(visitasDisponibles - ((visitasCiclo ?? 0) + creditosServicio), 0),
+      visitas_usadas_mes: (visitasCiclo ?? 0),
+      limite_visitas_mensuales: limiteMensual,
+      visitas_disponibles: visitasDisponibles,
+      visitas_restantes_ciclo: Math.max(visitasDisponibles - ((visitasCiclo ?? 0) + creditosServicio), 0),
+      visitas_usadas_ciclo: (visitasCiclo ?? 0),
+      ciclo_inicio: ciclo.inicio.toISOString(),
+      ciclo_fin: ciclo.fin.toISOString(),
+    })
+  }
+
   // Registrar visita y actualizar último check-in
   const payloadVisita = {
     user_id: usuarioId,
@@ -462,7 +501,7 @@ export async function POST(request: NextRequest) {
     console.warn('[POST /api/validar] No se pudo actualizar ultimo_checkin', ultimoCheckinError)
   }
 
-  const visitasUsadasCiclo = (visitasCiclo ?? 0) + 1
+  const visitasUsadasCiclo = (visitasCiclo ?? 0) + creditosServicio
   const visitasRestantesCiclo = Math.max(visitasDisponibles - visitasUsadasCiclo, 0)
 
   return NextResponse.json({
@@ -473,6 +512,11 @@ export async function POST(request: NextRequest) {
     servicio_reservado: servicioReservado,
     monto_negocio_mxn: montoNegocioMxn,
     monto_maximo_autorizado_mxn: montoMaximoAutorizadoMxn,
+    creditos_servicio: creditosServicio,
+    costo_doble_aplicado: costoDobleZonaPremium,
+    mensaje_costo: costoDobleZonaPremium
+      ? `Este servicio cuesta ${creditosServicio} créditos (zona premium, costo doble)`
+      : `Este servicio cuesta ${creditosServicio} crédito${creditosServicio === 1 ? '' : 's'}`,
     creditos_restantes_ciclo: visitasRestantesCiclo,
     creditos_usados_ciclo: visitasUsadasCiclo,
     limite_creditos_ciclo: limiteMensual,
