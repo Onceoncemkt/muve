@@ -54,7 +54,7 @@ export default function MuvetCardPreview({ socio }: Props) {
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Visitas restantes</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Créditos restantes</p>
           <p className="mt-1 text-lg font-black text-[#E8FF47]">{visitasRestantes}</p>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 p-3">
@@ -65,7 +65,7 @@ export default function MuvetCardPreview({ socio }: Props) {
 
       <div className="mt-4">
         <div className="flex items-center justify-between text-[11px] font-semibold">
-          <span className="text-white/70">Progreso de visitas</span>
+          <span className="text-white/70">Progreso de créditos</span>
           <span className="text-white">{visitasUsadas}/{visitasTotales}</span>
         </div>
         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/15">

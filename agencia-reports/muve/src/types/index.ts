@@ -1,4 +1,5 @@
 export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana'
+export type ZonaNegocio = 'zona1' | 'zona2'
 export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante'
 export type Rol = 'usuario' | 'staff' | 'admin'
 export type PlanMembresia = 'basico' | 'plus' | 'total'
@@ -44,6 +45,7 @@ export interface Negocio {
   nombre: string
   categoria: Categoria
   ciudad: Ciudad
+  zona?: ZonaNegocio | null
   direccion: string
   descripcion: string | null
   imagen_url: string | null

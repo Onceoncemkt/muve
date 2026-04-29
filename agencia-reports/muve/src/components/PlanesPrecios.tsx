@@ -15,24 +15,28 @@ type PriceIdsPorRegion = Record<RegionPrecios, PriceIds>
 
 const PRECIOS_POR_REGION: Record<RegionPrecios, Record<PlanId, number>> = {
   centro: {
-    basico: 549,
-    plus: 1199,
-    total: 2199,
+    basico: 649,
+    plus: 1299,
+    total: 1999,
   },
   bc: {
     basico: 699,
     plus: 1399,
-    total: 2499,
+    total: 2299,
   },
 }
 
 const PRECIOS_ANTERIORES_POR_REGION: Record<RegionPrecios, Partial<Record<PlanId, number>>> = {
   centro: {
-    basico: 750,
-    plus: 1600,
-    total: 3100,
+    basico: 800,
+    plus: 1700,
+    total: 2600,
   },
-  bc: {},
+  bc: {
+    basico: 900,
+    plus: 1800,
+    total: 3000,
+  },
 }
 
 const CIUDADES: Array<{ value: Ciudad; label: string }> = [
@@ -47,10 +51,10 @@ const PLANES = [
     id: 'basico' as const,
     nombre: 'BÁSICO',
     visitas: 8,
-    maxPorLugar: 2,
+    maxPorLugar: 4,
     features: [
-      '8 visitas al mes',
-      'máx 2 por lugar',
+      '8 créditos al ciclo',
+      'máx 4 por lugar',
       'Gimnasios y clases',
       'Las 4 ciudades',
     ],
@@ -59,11 +63,11 @@ const PLANES = [
   {
     id: 'plus' as const,
     nombre: 'PLUS',
-    visitas: 12,
-    maxPorLugar: 3,
+    visitas: 16,
+    maxPorLugar: 6,
     features: [
-      '12 visitas al mes',
-      'máx 3 por lugar',
+      '16 créditos al ciclo',
+      'máx 6 por lugar',
       'Gimnasios, clases, estéticas y wellness',
       'Las 4 ciudades',
     ],
@@ -75,7 +79,7 @@ const PLANES = [
     visitas: 25,
     maxPorLugar: 10,
     features: [
-      '25 visitas al mes',
+      '25 créditos al ciclo',
       'máx 10 por lugar',
       'Gimnasios, clases, estéticas, restaurantes',
       'Las 4 ciudades',
@@ -155,7 +159,7 @@ function BotonPlan({
 }
 
 function esCiudadBC(ciudad: Ciudad) {
-  return ciudad === 'tijuana' || ciudad === 'ensenada'
+  return ciudad === 'tijuana'
 }
 
 export default function PlanesPrecios({
@@ -310,7 +314,7 @@ export default function PlanesPrecios({
                 <div className={`mt-5 flex gap-4 rounded-lg p-3 text-center ${esPlusCard ? 'bg-white/10' : 'bg-[#F7F7F7]'}`}>
                   <div className="flex-1">
                     <p className={`text-xl font-black ${esPlusCard ? 'text-white' : 'text-[#0A0A0A]'}`}>{plan.visitas}</p>
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${esPlusCard ? 'text-white/50' : 'text-[#888]'}`}>vis/mes</p>
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${esPlusCard ? 'text-white/50' : 'text-[#888]'}`}>créd/ciclo</p>
                   </div>
                   <div className={`w-px ${esPlusCard ? 'bg-white/20' : 'bg-[#E5E5E5]'}`} />
                   <div className="flex-1">

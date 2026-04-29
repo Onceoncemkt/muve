@@ -4,6 +4,7 @@ import { createClient as createAdmin } from '@supabase/supabase-js'
 import {
   normalizarCategoriaNegocio,
   normalizarPlan,
+  resolverZonaNegocio,
   obtenerTarifasNegocioPorPlan,
 } from '@/lib/planes'
 import type { PlanMembresia, Rol } from '@/types'
@@ -15,14 +16,25 @@ type Perfil = {
 
 function planTarifaParaVisita({
   categoria,
+  zona,
+  ciudad,
   planUsuario,
 }: {
   categoria: string | null | undefined
+  zona: string | null | undefined
+  ciudad: string | null | undefined
   planUsuario: string | null | undefined
 }) {
+  const zonaNegocio = resolverZonaNegocio({ zona, ciudad })
 
   const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
-  if (categoriaNormalizada && categoriaNormalizada !== 'clases') {
+  if (
+    categoriaNormalizada
+    && (
+      (zonaNegocio === 'zona1' && categoriaNormalizada !== 'clases')
+      || (zonaNegocio === 'zona2' && ['estetica', 'restaurante'].includes(categoriaNormalizada))
+    )
+  ) {
     return 'basico'
   }
   const planNormalizado = normalizarPlan(planUsuario)
@@ -35,6 +47,7 @@ type NegocioDashboard = {
   id: string
   nombre: string
   ciudad: string
+  zona?: string | null
   categoria: string
   imagen_url?: string | null
   instagram_handle?: string | null
@@ -312,13 +325,14 @@ export async function GET(request: NextRequest) {
   }
 
   const consultasNegocio = [
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita, servicios_incluidos', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: true },
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle, stripe_account_id', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, categoria, imagen_url, instagram_handle', incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, categoria, imagen_url', incluyeImagen: true, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, categoria', incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita, servicios_incluidos', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: true },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, stripe_account_id', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url', incluyeZona: true, incluyeImagen: true, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, zona, categoria', incluyeZona: true, incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, categoria', incluyeZona: false, incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
   ] as const
 
   let negocio: NegocioDashboard | null = null
@@ -336,6 +350,9 @@ export async function GET(request: NextRequest) {
         id: resultado.data.id,
         nombre: resultado.data.nombre,
         ciudad: resultado.data.ciudad,
+        zona: consulta.incluyeZona
+          ? (typeof resultado.data.zona === 'string' ? resultado.data.zona : null)
+          : null,
         categoria: resultado.data.categoria,
         imagen_url: consulta.incluyeImagen ? (resultado.data.imagen_url ?? null) : null,
         instagram_handle: consulta.incluyeInstagram ? (resultado.data.instagram_handle ?? null) : null,
@@ -361,6 +378,7 @@ export async function GET(request: NextRequest) {
       (consulta.incluyeImagen && faltaColumna(resultado.error, 'imagen_url'))
       || (consulta.incluyeInstagram && faltaColumna(resultado.error, 'instagram_handle'))
       || (consulta.incluyeTiktok && faltaColumna(resultado.error, 'tiktok_handle'))
+      || (consulta.incluyeZona && faltaColumna(resultado.error, 'zona'))
       || (consulta.incluyeStripeAccountId && faltaColumna(resultado.error, 'stripe_account_id'))
       || (consulta.incluyeMontoMaximoVisita && faltaColumna(resultado.error, 'monto_maximo_visita'))
       || (consulta.incluyeServiciosIncluidos && faltaColumna(resultado.error, 'servicios_incluidos'))
@@ -501,7 +519,8 @@ export async function GET(request: NextRequest) {
   const inicioSemana = inicioSemanaLocal(new Date())
   const finSemana = new Date(inicioSemana)
   finSemana.setDate(finSemana.getDate() + 7)
-  const tarifasPorPlan = obtenerTarifasNegocioPorPlan(categoriaParaDashboard)
+  const zonaNegocio = resolverZonaNegocio({ zona: negocio.zona, ciudad: negocio.ciudad })
+  const tarifasPorPlan = obtenerTarifasNegocioPorPlan(categoriaParaDashboard, zonaNegocio)
 
   const visitasSemana = recordPlanInicial()
   const totalSemanaPorPlan = recordPlanInicial()
@@ -512,6 +531,8 @@ export async function GET(request: NextRequest) {
     if (Number.isNaN(fechaVisita.getTime())) continue
     const planTarifa = planTarifaParaVisita({
       categoria: categoriaParaDashboard,
+      zona: negocio.zona ?? null,
+      ciudad: negocio.ciudad ?? null,
       planUsuario: visita.plan_usuario,
     })
     const tarifa = planTarifa ? tarifasPorPlan[planTarifa] : 0

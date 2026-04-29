@@ -19,13 +19,10 @@ export const revalidate = 0
 type PerfilDashboard = {
   nombre: string
   ciudad: Ciudad
-  foto_url?: string | null
   plan_activo: boolean | string | number | null
   plan: PlanMembresia | null
   rol: 'usuario' | 'staff' | 'admin'
   creditos_extra?: number | null
-  wallet_apple_agregado?: boolean | null
-  wallet_google_agregado?: boolean | null
   fecha_inicio_ciclo?: string | null
   fecha_fin_plan?: string | null
 }
@@ -115,7 +112,7 @@ export default async function DashboardPage({
 
   const consultaPerfil = await supabase
     .from('users')
-    .select('nombre, ciudad, foto_url, plan_activo, plan, rol, creditos_extra, wallet_apple_agregado, wallet_google_agregado, fecha_fin_plan, fecha_inicio_ciclo')
+    .select('nombre, ciudad, plan_activo, plan, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo')
     .eq('id', user.id)
     .single<PerfilDashboard>()
   let perfil = consultaPerfil.data ?? null
@@ -130,7 +127,6 @@ export default async function DashboardPage({
     if (fallbackConCiclo.data) {
       perfil = {
         ...fallbackConCiclo.data,
-        foto_url: null,
         creditos_extra: null,
       }
     }
@@ -146,13 +142,17 @@ export default async function DashboardPage({
     if (fallbackMinimo.data) {
       perfil = {
         ...fallbackMinimo.data,
-        foto_url: null,
         creditos_extra: null,
         fecha_inicio_ciclo: null,
         fecha_fin_plan: null,
       }
     }
   }
+  const { data: fotoPerfilData } = await supabase
+    .from('users')
+    .select('foto_url')
+    .eq('id', user.id)
+    .maybeSingle<{ foto_url?: string | null }>()
 
   const { count: totalVisitas } = await supabase
     .from('visitas')
@@ -161,9 +161,7 @@ export default async function DashboardPage({
 
   const nombre = perfil?.nombre ?? user.email?.split('@')[0] ?? 'Muver'
   const ciudad = perfil?.ciudad ?? 'tulancingo'
-  const fotoUrl = typeof perfil?.foto_url === 'string' ? perfil.foto_url : null
-  const walletAppleAgregado = parseBooleanSegura(perfil?.wallet_apple_agregado) === true
-  const walletGoogleAgregado = parseBooleanSegura(perfil?.wallet_google_agregado) === true
+  const fotoUrl = typeof fotoPerfilData?.foto_url === 'string' ? fotoPerfilData.foto_url : null
   const inicialesUsuario = inicialesDesdeNombre(nombre)
   const params = await searchParams
   const recienActivada = params.membresia === 'activada'
@@ -340,7 +338,7 @@ export default async function DashboardPage({
             )}
             {creditosExtra > 0 && (
               <p className="mt-2 inline-flex rounded-full bg-[#6B4FE8] px-3 py-1 text-xs font-black uppercase tracking-wider text-white">
-                Tienes {creditosExtra} visitas de regalo
+                Tienes {creditosExtra} créditos de regalo
               </p>
             )}
           </div>
@@ -351,7 +349,7 @@ export default async function DashboardPage({
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 sm:col-span-2">
             <p className="text-xs text-white/40">
-              {checkInsRealizados} de {visitasDisponibles} visitas usadas
+              {checkInsRealizados} de {visitasDisponibles} créditos usados
             </p>
             <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
               <div
@@ -360,7 +358,7 @@ export default async function DashboardPage({
               />
             </div>
             <p className={`mt-2 text-sm font-bold ${textoRestantesColor}`}>
-              Visitas restantes: {visitasRestantes}
+              Créditos restantes: {visitasRestantes}
             </p>
             {hasActiveMembership && (
               <>
@@ -368,7 +366,7 @@ export default async function DashboardPage({
                 <p className="mt-1 text-xs text-white/40">Ciclo nuevo el {cicloNuevoTexto}</p>
                 {creditosExtra > 0 && (
                   <p className="mt-1 text-xs text-[#A78BFA]">
-                    Incluye {creditosExtra} visitas extra de regalo.
+                    Incluye {creditosExtra} créditos extra de regalo.
                   </p>
                 )}
                 <p className="mt-1 text-[11px] font-semibold text-[#E8FF47]">
@@ -379,7 +377,7 @@ export default async function DashboardPage({
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
             <p className="text-2xl font-black text-[#E8FF47]">{totalVisitas ?? 0}</p>
-            <p className="text-xs text-white/40">visitas totales</p>
+            <p className="text-xs text-white/40">créditos totales</p>
           </div>
         </div>
       </div>
@@ -391,7 +389,7 @@ export default async function DashboardPage({
             Tu pase Wallet
           </h2>
           <p className="mb-6 text-center text-xs text-[#888]">
-            Agrégalo para registrar tu visita.
+            Agrégalo para registrar tu crédito.
           </p>
           <WalletPassCard
             nombre={nombre}
@@ -461,7 +459,7 @@ export default async function DashboardPage({
           className="flex flex-col gap-2 rounded-xl border border-[#E5E5E5] bg-white p-4 transition-shadow hover:shadow-sm"
         >
           <span className="text-xs font-black uppercase tracking-widest text-[#6B4FE8]">Historial</span>
-          <span className="text-sm font-semibold text-[#0A0A0A]">Tus visitas registradas</span>
+          <span className="text-sm font-semibold text-[#0A0A0A]">Tus créditos registrados</span>
         </Link>
       </div>
 

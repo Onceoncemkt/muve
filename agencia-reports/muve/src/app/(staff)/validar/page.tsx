@@ -23,6 +23,9 @@ interface ResultadoValidacion {
   } | null
   monto_maximo_autorizado_mxn?: number | null
   error?: string
+  creditos_restantes_ciclo?: number
+  creditos_usados_ciclo?: number
+  limite_creditos_ciclo?: number
   visitas_restantes_mes?: number
   visitas_usadas_mes?: number
   limite_visitas_mensuales?: number
@@ -80,7 +83,7 @@ export default function ValidarPage() {
         setNegocios([])
         setNegocioAsignado(null)
         setNegocioId('')
-        setErrorContexto('Sin permisos para validar visitas')
+        setErrorContexto('Sin permisos para validar créditos')
         setCargandoContexto(false)
         return
       }
@@ -176,7 +179,7 @@ export default function ValidarPage() {
       <div className="mx-auto max-w-sm space-y-4">
 
         <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
-          <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Validar visita</h1>
+          <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Validar crédito</h1>
           <p className="mt-1 text-sm text-[#888]">
             Escanea el QR del cliente para registrar su entrada
           </p>
@@ -286,7 +289,7 @@ export default function ValidarPage() {
                 disabled={cargando || !token.trim() || !negocioId}
                 className="rounded-lg bg-[#6B4FE8] py-3 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6] disabled:opacity-40"
               >
-                {cargando ? 'Validando...' : 'Validar visita'}
+                {cargando ? 'Validando...' : 'Validar crédito'}
               </button>
 
               {resultado && (
@@ -319,7 +322,7 @@ function ResultadoBanner({
     >
       {resultado.valido ? (
         <>
-          <p className="text-lg font-black text-green-700">Visita registrada</p>
+          <p className="text-lg font-black text-green-700">Crédito validado</p>
           <p className="text-sm text-green-700">
             {resultado.usuario} — {resultado.negocio}
           </p>
@@ -346,9 +349,9 @@ function ResultadoBanner({
             </p>
           )}
           <p className="text-sm font-semibold text-green-700">
-            Visitas restantes: {resultado.visitas_restantes_mes ?? 0}
-            {typeof resultado.limite_visitas_mensuales === 'number'
-              ? ` de ${resultado.limite_visitas_mensuales}`
+            Créditos restantes: {(resultado.creditos_restantes_ciclo ?? resultado.visitas_restantes_mes) ?? 0}
+            {typeof (resultado.limite_creditos_ciclo ?? resultado.limite_visitas_mensuales) === 'number'
+              ? ` de ${resultado.limite_creditos_ciclo ?? resultado.limite_visitas_mensuales}`
               : ''}
           </p>
         </>

@@ -25,11 +25,11 @@ type EstadoPlanUsuario = {
   plan_activo: boolean
   plan: PlanMembresia | null
   creditos_extra: number
-  visitas_disponibles: number
-  limite_visitas_mensuales: number
-  max_visitas_por_lugar: number
-  visitas_usadas_mes: number
-  visitas_restantes_mes: number
+  creditos_disponibles: number
+  limite_creditos_ciclo: number
+  max_creditos_por_lugar: number
+  creditos_usados_ciclo: number
+  creditos_restantes_ciclo: number
 }
 type FiltroCategoria = 'todas' | 'gimnasio' | 'clases' | 'wellness' | 'restaurantes'
 type HorarioExplorar = {
@@ -71,11 +71,11 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
         plan_activo: false,
         plan: null,
         creditos_extra: 0,
-        visitas_disponibles: 0,
-        limite_visitas_mensuales: 0,
-        max_visitas_por_lugar: 0,
-        visitas_usadas_mes: 0,
-        visitas_restantes_mes: 0,
+        creditos_disponibles: 0,
+        limite_creditos_ciclo: 0,
+        max_creditos_por_lugar: 0,
+        creditos_usados_ciclo: 0,
+        creditos_restantes_ciclo: 0,
       }
     }
 
@@ -84,24 +84,32 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
       plan_activo: Boolean(data.plan_activo),
       plan: normalizarPlan(data.plan),
       creditos_extra: Number.isFinite(data.creditos_extra) ? Number(data.creditos_extra) : 0,
-      visitas_disponibles: Number.isFinite(data.visitas_disponibles)
-        ? Number(data.visitas_disponibles)
+      creditos_disponibles: Number.isFinite(data.creditos_disponibles ?? data.visitas_disponibles)
+        ? Number(data.creditos_disponibles ?? data.visitas_disponibles)
         : 0,
-      limite_visitas_mensuales: Number.isFinite(data.limite_visitas_mensuales) ? Number(data.limite_visitas_mensuales) : 0,
-      max_visitas_por_lugar: Number.isFinite(data.max_visitas_por_lugar) ? Number(data.max_visitas_por_lugar) : 0,
-      visitas_usadas_mes: Number.isFinite(data.visitas_usadas_mes) ? Number(data.visitas_usadas_mes) : 0,
-      visitas_restantes_mes: Number.isFinite(data.visitas_restantes_mes) ? Number(data.visitas_restantes_mes) : 0,
+      limite_creditos_ciclo: Number.isFinite(data.limite_creditos_ciclo ?? data.limite_visitas_mensuales)
+        ? Number(data.limite_creditos_ciclo ?? data.limite_visitas_mensuales)
+        : 0,
+      max_creditos_por_lugar: Number.isFinite(data.max_creditos_por_lugar ?? data.max_visitas_por_lugar)
+        ? Number(data.max_creditos_por_lugar ?? data.max_visitas_por_lugar)
+        : 0,
+      creditos_usados_ciclo: Number.isFinite(data.creditos_usados_ciclo ?? data.visitas_usadas_mes)
+        ? Number(data.creditos_usados_ciclo ?? data.visitas_usadas_mes)
+        : 0,
+      creditos_restantes_ciclo: Number.isFinite(data.creditos_restantes_ciclo ?? data.visitas_restantes_mes)
+        ? Number(data.creditos_restantes_ciclo ?? data.visitas_restantes_mes)
+        : 0,
     }
   } catch {
     return {
       plan_activo: false,
       plan: null,
       creditos_extra: 0,
-      visitas_disponibles: 0,
-      limite_visitas_mensuales: 0,
-      max_visitas_por_lugar: 0,
-      visitas_usadas_mes: 0,
-      visitas_restantes_mes: 0,
+      creditos_disponibles: 0,
+      limite_creditos_ciclo: 0,
+      max_creditos_por_lugar: 0,
+      creditos_usados_ciclo: 0,
+      creditos_restantes_ciclo: 0,
     }
   }
 }
@@ -236,9 +244,9 @@ export default function ExplorarPage() {
 
       setPlanActivo(estadoPlan.plan_activo)
       setPlanUsuario(estadoPlan.plan)
-      setVisitasDisponiblesMes(estadoPlan.visitas_disponibles || estadoPlan.limite_visitas_mensuales)
-      setMaxVisitasPorLugar(estadoPlan.max_visitas_por_lugar)
-      setVisitasRestantesMes(estadoPlan.visitas_restantes_mes)
+      setVisitasDisponiblesMes(estadoPlan.creditos_disponibles || estadoPlan.limite_creditos_ciclo)
+      setMaxVisitasPorLugar(estadoPlan.max_creditos_por_lugar)
+      setVisitasRestantesMes(estadoPlan.creditos_restantes_ciclo)
       setNegocios(negociosCargados)
       setErrorCargaNegocios(ultimoErrorNegocios)
       setReintentandoNegocios(false)
@@ -394,10 +402,6 @@ export default function ExplorarPage() {
     return resultado
   }, [negocios, filtroCiudad, filtroCategoria])
   const regresarOInicio = useCallback(() => {
-    if (window.history.length > 1) {
-      router.back()
-      return
-    }
     router.push('/dashboard')
   }, [router])
 
@@ -409,7 +413,7 @@ export default function ExplorarPage() {
           onClick={regresarOInicio}
           className="mb-3 inline-flex items-center rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold uppercase tracking-wider text-[#555] hover:border-[#0A0A0A] hover:text-[#0A0A0A]"
         >
-          ← Regresar / Inicio
+          ← Inicio
         </button>
         <h1 className="text-2xl font-black tracking-tight text-[#0A0A0A]">Explorar</h1>
         <p className="mt-1 text-sm text-[#888]">
@@ -421,10 +425,10 @@ export default function ExplorarPage() {
         {planEfectivo && (
           <div className="mt-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
             <p className="text-sm font-bold text-[#0A0A0A]">
-              Visitas disponibles este mes: {visitasRestantesMes} de {visitasDisponiblesMes}
+              Créditos disponibles este ciclo: {visitasRestantesMes} de {visitasDisponiblesMes}
             </p>
             <p className="mt-1 text-xs text-[#666]">
-              Máximo {maxVisitasPorLugar} visitas por lugar con tu plan.
+              Máximo {maxVisitasPorLugar} créditos por lugar con tu plan.
             </p>
           </div>
         )}
@@ -534,8 +538,17 @@ export default function ExplorarPage() {
                 ? serviciosWellnessReservables(negocio)
                 : []
               const servicioSeleccionadoId = servicioSeleccionadoPorNegocioId[negocio.id] ?? ''
-              const textoBadgeWellness = 'Beneficio Plus y Total'
-              const claseBadgeWellness = 'bg-[#6B4FE8]/10 text-[#6B4FE8]'
+              const badgeCategoria = esWellness
+                ? {
+                  texto: puedeReservar ? 'Beneficio Plus' : 'Requiere Plus',
+                  clase: puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]',
+                }
+                : esRestaurante
+                  ? {
+                    texto: puedeReservar ? 'Beneficio Total' : 'Requiere Total',
+                    clase: puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]',
+                  }
+                  : null
               const urlVerMasRestaurante = instagramHandle
                 ? `https://instagram.com/${instagramHandle}`
                 : enlaceMapaNegocio(negocio)
@@ -555,9 +568,11 @@ export default function ExplorarPage() {
                         {iniciales}
                       </div>
                     )}
-                    <span className="absolute right-2 top-2 shrink-0 rounded-full bg-[#6B4FE8]/10 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#6B4FE8]">
-                      {esRestaurante ? 'Llegar directo — Plan Total' : PLAN_LABELS[planRequerido]}
-                    </span>
+                    {badgeCategoria && (
+                      <span className={`absolute right-2 top-2 shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${badgeCategoria.clase}`}>
+                        {badgeCategoria.texto}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-base font-black text-[#0A0A0A]">{negocio.nombre}</h2>
@@ -636,8 +651,8 @@ export default function ExplorarPage() {
                         <p className="text-[11px] font-black uppercase tracking-widest text-[#555]">
                           Servicios incluidos
                         </p>
-                        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${claseBadgeWellness}`}>
-                          {textoBadgeWellness}
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]'}`}>
+                          {puedeReservar ? 'Beneficio Plus' : 'Requiere Plus'}
                         </span>
                       </div>
                       {serviciosWellness.length === 0 ? (
@@ -680,7 +695,9 @@ export default function ExplorarPage() {
                       }`}
                     >
                       {!puedeReservar
-                        ? 'Requiere membresía'
+                        ? planRequerido === 'plus'
+                          ? 'Requiere Plus'
+                          : 'Requiere Total'
                         : menuReservasAbierto
                           ? esWellness
                             ? 'Ocultar disponibilidad'

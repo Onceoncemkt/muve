@@ -626,7 +626,7 @@ export default function NegocioDashboardPage() {
             <h1 className="text-2xl font-black tracking-tight text-white">Panel de negocio</h1>
             <p className="mt-1 text-sm text-white/40">
               {esRestaurante
-                ? 'Control de entradas y resumen de visitas del restaurante'
+                ? 'Control de entradas y resumen de créditos del restaurante'
                 : esEstetica
                   ? 'Reservaciones wellness y servicios disponibles'
                   : esGimnasio
@@ -711,7 +711,7 @@ export default function NegocioDashboardPage() {
 
                 {esRestaurante && (
                   <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-                    <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Visitas de la semana</p>
+                    <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Créditos de la semana</p>
                     <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{totalVisitasSemana}</p>
                   </div>
                 )}
@@ -739,7 +739,7 @@ export default function NegocioDashboardPage() {
                   <div className="grid gap-3 md:grid-cols-3">
                     <label className="block">
                       <span className="text-xs font-bold uppercase tracking-wider text-[#555]">
-                        Monto máximo por visita (MXN)
+                        Monto máximo por crédito (MXN)
                       </span>
                       <input
                         type="number"
@@ -831,7 +831,7 @@ export default function NegocioDashboardPage() {
                 </div>
 
                 <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Visitas de la semana</p>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Créditos de la semana</p>
                   <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{totalVisitasSemana}</p>
                 </div>
 
@@ -952,7 +952,7 @@ export default function NegocioDashboardPage() {
                       <thead>
                         <tr className="border-b border-white/20 text-left text-[11px] font-black uppercase tracking-widest text-white/60">
                           <th className="px-2 py-2">Semana (del - al)</th>
-                          <th className="px-2 py-2">Visitas totales</th>
+                          <th className="px-2 py-2">Créditos totales</th>
                           <th className="px-2 py-2 text-right">Monto pagado</th>
                           <th className="px-2 py-2 text-right">Estado</th>
                         </tr>
