@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { stripe } from '@/lib/stripe'
 import {
-  PLAN_MAX_VISITAS_POR_LUGAR,
-  PLAN_VISITAS_MENSUALES,
+  CREDITOS_POR_PLAN,
+  MAX_VISITAS_POR_LUGAR,
   normalizarPlan,
   planDesdePriceId,
 } from '@/lib/planes'
@@ -152,10 +152,16 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json({
+      authenticated: false,
       plan_activo: false,
       plan: null,
       fecha_inicio_ciclo: null,
       fecha_fin_ciclo: null,
+      limite_creditos_ciclo: 0,
+      max_creditos_por_lugar: 0,
+      creditos_usados_ciclo: 0,
+      creditos_restantes_ciclo: 0,
+      creditos_disponibles: 0,
       limite_visitas_mensuales: 0,
       max_visitas_por_lugar: 0,
       visitas_usadas_mes: 0,
@@ -169,8 +175,11 @@ export async function GET() {
     let perfil = await obtenerPerfilPlan(user.id)
     perfil = await desactivarPlanSiExpirado(user.id, perfil)
 
-    const planActivo = Boolean(perfil.plan_activo)
     let plan = normalizarPlan(perfil.plan ?? null)
+    let planActivo = Boolean(perfil.plan_activo)
+    if (!planActivo && Boolean(plan)) {
+      planActivo = true
+    }
 
     if (planActivo && !plan) {
       try {
@@ -187,11 +196,15 @@ export async function GET() {
       }
     }
 
+    if (planActivo && !plan) {
+      plan = 'basico'
+    }
+
     const limiteVisitasMensuales = planActivo && plan
-      ? PLAN_VISITAS_MENSUALES[plan]
+      ? CREDITOS_POR_PLAN[plan]
       : 0
     const maxVisitasPorLugar = planActivo && plan
-      ? PLAN_MAX_VISITAS_POR_LUGAR[plan]
+      ? MAX_VISITAS_POR_LUGAR[plan]
       : 0
 
     let visitasUsadasCiclo = 0
@@ -235,11 +248,18 @@ export async function GET() {
     const visitasRestantesCiclo = Math.max(visitasDisponibles - visitasUsadasCiclo, 0)
 
     return NextResponse.json({
+      authenticated: true,
       plan_activo: planActivo,
       plan,
       creditos_extra: creditosExtra,
       fecha_inicio_ciclo: fechaInicioCiclo,
       fecha_fin_ciclo: fechaFinCiclo,
+      limite_creditos_ciclo: limiteVisitasMensuales,
+      max_creditos_por_lugar: maxVisitasPorLugar,
+      creditos_disponibles: visitasDisponibles,
+      creditos_usados_ciclo: visitasUsadasCiclo,
+      creditos_usados: visitasUsadasCiclo,
+      creditos_restantes_ciclo: visitasRestantesCiclo,
       limite_visitas_mensuales: limiteVisitasMensuales,
       visitas_disponibles: visitasDisponibles,
       max_visitas_por_lugar: maxVisitasPorLugar,

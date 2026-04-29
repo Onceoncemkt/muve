@@ -7,6 +7,7 @@ import {
   PLAN_MAX_VISITAS_POR_LUGAR,
   PLAN_VISITAS_MENSUALES,
   normalizarPlan,
+  puedeReservarConPlan,
 } from '@/lib/planes'
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 function diaSemanaDesdeFecha(fecha: string): DiaSemana | null {
@@ -190,7 +191,12 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Debes iniciar sesión y activar un plan para reservar.' },
+      { status: 401 }
+    )
+  }
 
   const body = await request.json().catch(() => ({}))
   const { horario_id, fecha, servicio_id } = body as { horario_id?: string; fecha?: string; servicio_id?: string }
@@ -236,9 +242,14 @@ export async function POST(request: NextRequest) {
 
   const { data: negocioContexto, error: negocioContextoError } = await db
     .from('negocios')
-    .select('nombre, categoria')
+    .select('nombre, categoria, nivel, plan_requerido')
     .eq('id', horario.negocio_id)
-    .maybeSingle<{ nombre: string; categoria: string }>()
+    .maybeSingle<{
+      nombre: string
+      categoria: string
+      nivel?: 'basico' | 'plus' | 'total' | null
+      plan_requerido?: 'basico' | 'plus' | 'total' | null
+    }>()
 
   if (negocioContextoError || !negocioContexto) {
     return NextResponse.json({ error: 'No se pudo validar el negocio de la reservación' }, { status: 400 })
@@ -307,8 +318,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No se pudo validar tu membresía' }, { status: 500 })
   }
 
-  if (!perfilUsuario?.plan_activo) {
-    return NextResponse.json({ error: 'Tu membresía está inactiva' }, { status: 403 })
+  if (!perfilUsuario?.plan_activo || !normalizarPlan(perfilUsuario.plan ?? null)) {
+    return NextResponse.json({ error: 'Necesitas un plan activo para reservar.' }, { status: 403 })
   }
 
   if (planExpirado(perfilUsuario.fecha_fin_plan)) {
@@ -320,6 +331,17 @@ export async function POST(request: NextRequest) {
   }
 
   const planUsuario = normalizarPlan(perfilUsuario.plan ?? null) ?? 'basico'
+  const nivelNegocio = negocioContexto.nivel === 'plus' || negocioContexto.nivel === 'total'
+    ? negocioContexto.nivel
+    : negocioContexto.plan_requerido === 'plus' || negocioContexto.plan_requerido === 'total'
+      ? negocioContexto.plan_requerido
+    : 'basico'
+  if (!puedeReservarConPlan(planUsuario, nivelNegocio)) {
+    return NextResponse.json(
+      { error: nivelNegocio === 'plus' ? 'Este lugar requiere plan Plus' : 'Este lugar requiere plan Total' },
+      { status: 403 }
+    )
+  }
   const ciclo = resolverVentanaCiclo({
     fechaInicioCiclo: perfilUsuario.fecha_inicio_ciclo,
     fechaFinPlan: perfilUsuario.fecha_fin_plan,

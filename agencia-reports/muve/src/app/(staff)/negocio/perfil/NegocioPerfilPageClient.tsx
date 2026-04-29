@@ -10,6 +10,7 @@ type NegocioPerfil = {
   nombre: string
   categoria: string
   ciudad: string
+  nivel: 'basico' | 'plus' | 'total'
   direccion: string
   descripcion: string
   imagen_url: string | null
@@ -53,6 +54,11 @@ function ciudadLabel(ciudad: string) {
 
 function categoriaLabel(categoria: string) {
   return CATEGORIA_LABELS[categoria as Categoria] ?? categoria
+}
+function nivelLabel(nivel: 'basico' | 'plus' | 'total') {
+  if (nivel === 'plus') return 'Plus'
+  if (nivel === 'total') return 'Total'
+  return 'Básico'
 }
 
 function normalizarHandleEnVista(value: string | null | undefined) {
@@ -150,6 +156,7 @@ export default function NegocioPerfilPageClient() {
             nombre?: string
             categoria?: string
             ciudad?: string
+            nivel?: 'basico' | 'plus' | 'total'
             direccion?: string
             descripcion?: string
             imagen_url?: string | null
@@ -185,6 +192,7 @@ export default function NegocioPerfilPageClient() {
           nombre: data.negocio.nombre ?? '',
           categoria: data.negocio.categoria ?? '',
           ciudad: data.negocio.ciudad ?? '',
+          nivel: data.negocio.nivel === 'plus' || data.negocio.nivel === 'total' ? data.negocio.nivel : 'basico',
           direccion: data.negocio.direccion ?? '',
           descripcion: data.negocio.descripcion ?? '',
           imagen_url: data.negocio.imagen_url ?? null,
@@ -614,6 +622,17 @@ export default function NegocioPerfilPageClient() {
                 <input
                   type="text"
                   value={ciudadLabel(perfil.ciudad)}
+                  readOnly
+                  className="w-full cursor-not-allowed rounded-lg border border-[#E5E5E5] bg-[#F3F4F6] px-3 py-2.5 text-sm text-[#666] outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                  Nivel (solo lectura)
+                </label>
+                <input
+                  type="text"
+                  value={nivelLabel(perfil.nivel)}
                   readOnly
                   className="w-full cursor-not-allowed rounded-lg border border-[#E5E5E5] bg-[#F3F4F6] px-3 py-2.5 text-sm text-[#666] outline-none"
                 />

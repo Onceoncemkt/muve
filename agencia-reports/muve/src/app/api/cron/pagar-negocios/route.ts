@@ -4,6 +4,7 @@ import { stripe } from '@/lib/stripe'
 import {
   normalizarCategoriaNegocio,
   normalizarPlan,
+  resolverZonaNegocio,
   obtenerTarifasNegocioPorPlan,
 } from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
@@ -15,6 +16,8 @@ type NegocioConStripe = {
   id: string
   nombre: string
   categoria: string | null
+  ciudad: string | null
+  zona: string | null
   stripe_account_id: string | null
 }
 
@@ -50,14 +53,25 @@ function admin() {
 
 function planTarifaParaVisita({
   categoria,
+  zona,
+  ciudad,
   planUsuario,
 }: {
   categoria: string | null | undefined
+  zona: string | null | undefined
+  ciudad: string | null | undefined
   planUsuario: string | null | undefined
 }) {
+  const zonaNegocio = resolverZonaNegocio({ zona, ciudad })
 
   const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
-  if (categoriaNormalizada && categoriaNormalizada !== 'clases') {
+  if (
+    categoriaNormalizada
+    && (
+      (zonaNegocio === 'zona1' && categoriaNormalizada !== 'clases')
+      || (zonaNegocio === 'zona2' && ['gimnasio', 'estetica', 'restaurante'].includes(categoriaNormalizada))
+    )
+  ) {
     return 'basico'
   }
   const planNormalizado = normalizarPlan(planUsuario)
@@ -149,11 +163,23 @@ export async function GET(request: NextRequest) {
   const db = admin()
   const { inicioConsulta, finConsultaExclusivo, inicioRegistro, finRegistro } = obtenerPeriodoSemanal()
 
-  const { data: negocios, error: negociosError } = await db
+  const consultaNegocios = await db
     .from('negocios')
-    .select('id, nombre, categoria, stripe_account_id')
+    .select('id, nombre, categoria, ciudad, zona, stripe_account_id')
     .not('stripe_account_id', 'is', null)
     .returns<NegocioConStripe[]>()
+  let negocios = consultaNegocios.data
+  let negociosError = consultaNegocios.error
+
+  if (faltaColumna(negociosError, 'zona')) {
+    const fallbackNegocios = await db
+      .from('negocios')
+      .select('id, nombre, categoria, ciudad, stripe_account_id')
+      .not('stripe_account_id', 'is', null)
+      .returns<Array<Omit<NegocioConStripe, 'zona'>>>()
+    negociosError = fallbackNegocios.error
+    negocios = (fallbackNegocios.data ?? []).map((negocio) => ({ ...negocio, zona: null }))
+  }
 
   if (faltaColumna(negociosError, 'stripe_account_id')) {
     return NextResponse.json(
@@ -253,14 +279,17 @@ export async function GET(request: NextRequest) {
   for (const negocio of negociosPendientes) {
     resumenPorNegocio.set(negocio.id, crearResumenVacio())
   }
-  const categoriaPorNegocioId = new Map(
-    negociosPendientes.map((negocio) => [negocio.id, negocio.categoria])
+  const negocioPorId = new Map(
+    negociosPendientes.map((negocio) => [negocio.id, negocio])
   )
 
   for (const visita of visitasPeriodo ?? []) {
-    const categoriaNegocio = categoriaPorNegocioId.get(visita.negocio_id) ?? null
+    const negocioVisita = negocioPorId.get(visita.negocio_id)
+    const categoriaNegocio = negocioVisita?.categoria ?? null
     const plan = planTarifaParaVisita({
       categoria: categoriaNegocio,
+      zona: negocioVisita?.zona ?? null,
+      ciudad: negocioVisita?.ciudad ?? null,
       planUsuario: visita.plan_usuario,
     })
     if (!plan) continue
@@ -275,7 +304,8 @@ export async function GET(request: NextRequest) {
 
   for (const negocio of negociosPendientes) {
     const resumen = resumenPorNegocio.get(negocio.id) ?? crearResumenVacio()
-    const tarifasPorPlan = obtenerTarifasNegocioPorPlan(negocio.categoria)
+    const zonaNegocio = resolverZonaNegocio({ zona: negocio.zona, ciudad: negocio.ciudad })
+    const tarifasPorPlan = obtenerTarifasNegocioPorPlan(negocio.categoria, zonaNegocio)
     const totalMXN = calcularTotalMXN(resumen, tarifasPorPlan)
 
     if (totalMXN <= 0) {

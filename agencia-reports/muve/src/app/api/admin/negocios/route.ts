@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import type { Categoria, Ciudad, Rol } from '@/types'
+import type { Categoria, Ciudad, NivelNegocio, Rol, ZonaNegocio } from '@/types'
 
 const CIUDADES_VALIDAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 const CATEGORIAS_VALIDAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
+const ZONAS_VALIDAS: ZonaNegocio[] = ['zona1', 'zona2']
+const NIVELES_VALIDOS: NivelNegocio[] = ['basico', 'plus', 'total']
 const COLUMNAS_OPCIONALES_NEGOCIO = [
+  'zona',
+  'nivel',
   'requiere_reserva',
   'capacidad_default',
   'instagram_handle',
@@ -146,6 +150,8 @@ export async function POST(request: NextRequest) {
   const nombre = texto(formData.get('nombre'))
   const categoriaRaw = texto(formData.get('categoria')).toLowerCase()
   const ciudadRaw = texto(formData.get('ciudad')).toLowerCase()
+  const zonaRaw = texto(formData.get('zona')).toLowerCase()
+  const nivelRaw = texto(formData.get('nivel')).toLowerCase()
   const direccion = texto(formData.get('direccion'))
   const descripcionRaw = texto(formData.get('descripcion'))
   const instagramRaw = texto(formData.get('instagram_handle'))
@@ -159,6 +165,12 @@ export async function POST(request: NextRequest) {
   const ciudad = CIUDADES_VALIDAS.includes(ciudadRaw as Ciudad)
     ? (ciudadRaw as Ciudad)
     : null
+  const zona = ZONAS_VALIDAS.includes(zonaRaw as ZonaNegocio)
+    ? (zonaRaw as ZonaNegocio)
+    : 'zona1'
+  const nivel = NIVELES_VALIDOS.includes(nivelRaw as NivelNegocio)
+    ? (nivelRaw as NivelNegocio)
+    : 'basico'
 
   if (!nombre || !categoria || !ciudad || !direccion) {
     return redireccionConEstado(
@@ -225,6 +237,8 @@ export async function POST(request: NextRequest) {
     nombre,
     categoria,
     ciudad,
+    zona,
+    nivel,
     direccion,
     descripcion,
     instagram_handle: instagramHandle,

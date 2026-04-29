@@ -11,6 +11,7 @@ type NegocioContexto = Pick<Negocio, 'id' | 'nombre' | 'ciudad'>
 
 interface ResultadoValidacion {
   valido: boolean
+  requiere_confirmacion?: boolean
   usuario?: string
   negocio?: string
   categoria_negocio?: string | null
@@ -22,7 +23,13 @@ interface ResultadoValidacion {
     fecha: string
   } | null
   monto_maximo_autorizado_mxn?: number | null
+  creditos_servicio?: number
+  costo_doble_aplicado?: boolean
+  mensaje_costo?: string
   error?: string
+  creditos_restantes_ciclo?: number
+  creditos_usados_ciclo?: number
+  limite_creditos_ciclo?: number
   visitas_restantes_mes?: number
   visitas_usadas_mes?: number
   limite_visitas_mensuales?: number
@@ -53,6 +60,7 @@ export default function ValidarPage() {
   const [cargandoContexto, setCargandoContexto] = useState(true)
   const [errorContexto, setErrorContexto] = useState<string | null>(null)
   const [scannerActivo, setScannerActivo] = useState(true)
+  const [tokenPendienteConfirmacion, setTokenPendienteConfirmacion] = useState<string | null>(null)
 
   useEffect(() => {
     let activo = true
@@ -80,7 +88,7 @@ export default function ValidarPage() {
         setNegocios([])
         setNegocioAsignado(null)
         setNegocioId('')
-        setErrorContexto('Sin permisos para validar visitas')
+        setErrorContexto('Sin permisos para validar créditos')
         setCargandoContexto(false)
         return
       }
@@ -120,7 +128,7 @@ export default function ValidarPage() {
     }
   }, [])
 
-  async function enviarValidacion(tokenAValidar: string) {
+  async function enviarValidacion(tokenAValidar: string, soloCotizar = true) {
     if (!negocioId) {
       setResultado({
         valido: false,
@@ -133,21 +141,39 @@ export default function ValidarPage() {
     setCargando(true)
     setResultado(null)
     setScannerActivo(false)
+    if (!soloCotizar) {
+      setTokenPendienteConfirmacion(tokenAValidar.trim())
+    }
 
     try {
       const res = await fetch('/api/validar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: tokenAValidar.trim(), negocio_id: negocioId }),
+        body: JSON.stringify({
+          token: tokenAValidar.trim(),
+          negocio_id: negocioId,
+          solo_cotizar: soloCotizar,
+        }),
       })
       const data: ResultadoValidacion = await res.json()
       setResultado(data)
-      if (data.valido) setToken('')
+      if (data.valido && data.requiere_confirmacion) {
+        setTokenPendienteConfirmacion(tokenAValidar.trim())
+      } else if (data.valido) {
+        setToken('')
+        setTokenPendienteConfirmacion(null)
+      }
     } catch {
       setResultado({ valido: false, error: 'Error de conexión' })
+      setTokenPendienteConfirmacion(null)
     } finally {
       setCargando(false)
     }
+  }
+
+  async function confirmarValidacion() {
+    if (!tokenPendienteConfirmacion) return
+    await enviarValidacion(tokenPendienteConfirmacion, false)
   }
 
   const handleScan = useCallback((texto: string) => {
@@ -160,6 +186,7 @@ export default function ValidarPage() {
     setResultado(null)
     setToken('')
     setScannerActivo(true)
+    setTokenPendienteConfirmacion(null)
   }
 
   function handleTabChange(nuevaTab: Tab) {
@@ -167,6 +194,7 @@ export default function ValidarPage() {
     setResultado(null)
     setToken('')
     setScannerActivo(nuevaTab === 'scanner')
+    setTokenPendienteConfirmacion(null)
   }
 
   const inputCls = 'w-full rounded-lg border border-[#E5E5E5] bg-white px-4 py-3 text-sm text-[#0A0A0A] outline-none transition-colors focus:border-[#6B4FE8] focus:ring-1 focus:ring-[#6B4FE8]/20'
@@ -176,7 +204,7 @@ export default function ValidarPage() {
       <div className="mx-auto max-w-sm space-y-4">
 
         <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
-          <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Validar visita</h1>
+          <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Validar crédito</h1>
           <p className="mt-1 text-sm text-[#888]">
             Escanea el QR del cliente para registrar su entrada
           </p>
@@ -248,7 +276,12 @@ export default function ValidarPage() {
                 </div>
               )}
               {resultado ? (
-                <ResultadoBanner resultado={resultado} onReiniciar={reiniciarEscaner} />
+                <ResultadoBanner
+                  resultado={resultado}
+                  onReiniciar={reiniciarEscaner}
+                  onConfirmar={resultado.requiere_confirmacion ? confirmarValidacion : undefined}
+                  confirmando={cargando && Boolean(tokenPendienteConfirmacion)}
+                />
               ) : (
                 <>
                   {cargando ? (
@@ -263,7 +296,7 @@ export default function ValidarPage() {
             </div>
           ) : (
             <form
-              onSubmit={e => { e.preventDefault(); enviarValidacion(token) }}
+              onSubmit={e => { e.preventDefault(); enviarValidacion(token, true) }}
               className="flex flex-col gap-4"
             >
               <div>
@@ -286,11 +319,16 @@ export default function ValidarPage() {
                 disabled={cargando || !token.trim() || !negocioId}
                 className="rounded-lg bg-[#6B4FE8] py-3 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6] disabled:opacity-40"
               >
-                {cargando ? 'Validando...' : 'Validar visita'}
+                {cargando ? 'Validando...' : 'Validar crédito'}
               </button>
 
               {resultado && (
-                <ResultadoBanner resultado={resultado} onReiniciar={reiniciarEscaner} />
+                <ResultadoBanner
+                  resultado={resultado}
+                  onReiniciar={reiniciarEscaner}
+                  onConfirmar={resultado.requiere_confirmacion ? confirmarValidacion : undefined}
+                  confirmando={cargando && Boolean(tokenPendienteConfirmacion)}
+                />
               )}
             </form>
           )}
@@ -304,9 +342,13 @@ export default function ValidarPage() {
 function ResultadoBanner({
   resultado,
   onReiniciar,
+  onConfirmar,
+  confirmando = false,
 }: {
   resultado: ResultadoValidacion
   onReiniciar: () => void
+  onConfirmar?: () => void
+  confirmando?: boolean
 }) {
   const categoriaNegocio = normalizarCategoriaNegocio(resultado.categoria_negocio)
   return (
@@ -319,10 +361,17 @@ function ResultadoBanner({
     >
       {resultado.valido ? (
         <>
-          <p className="text-lg font-black text-green-700">Visita registrada</p>
+          <p className="text-lg font-black text-green-700">
+            {resultado.requiere_confirmacion ? 'Confirma check-in' : 'Crédito validado'}
+          </p>
           <p className="text-sm text-green-700">
             {resultado.usuario} — {resultado.negocio}
           </p>
+          {resultado.mensaje_costo && (
+            <p className={`rounded-lg px-3 py-2 text-xs font-bold ${resultado.costo_doble_aplicado ? 'bg-[#E8FF47] text-[#0A0A0A]' : 'bg-green-100 text-green-800'}`}>
+              {resultado.mensaje_costo}
+            </p>
+          )}
           {categoriaNegocio === 'estetica' && resultado.servicio_reservado && (
             <div className="w-full rounded-lg border border-green-200 bg-white/80 px-3 py-2 text-left">
               <p className="text-[11px] font-black uppercase tracking-widest text-green-700">Servicio a dar</p>
@@ -346,9 +395,9 @@ function ResultadoBanner({
             </p>
           )}
           <p className="text-sm font-semibold text-green-700">
-            Visitas restantes: {resultado.visitas_restantes_mes ?? 0}
-            {typeof resultado.limite_visitas_mensuales === 'number'
-              ? ` de ${resultado.limite_visitas_mensuales}`
+            Créditos restantes: {(resultado.creditos_restantes_ciclo ?? resultado.visitas_restantes_mes) ?? 0}
+            {typeof (resultado.limite_creditos_ciclo ?? resultado.limite_visitas_mensuales) === 'number'
+              ? ` de ${resultado.limite_creditos_ciclo ?? resultado.limite_visitas_mensuales}`
               : ''}
           </p>
         </>
@@ -358,16 +407,34 @@ function ResultadoBanner({
           <p className="text-sm text-red-700">{resultado.error}</p>
         </>
       )}
-      <button
-        onClick={onReiniciar}
-        className={`mt-1 rounded-lg px-5 py-2 text-sm font-bold transition-colors ${
-          resultado.valido
-            ? 'bg-green-600 text-white hover:bg-green-700'
-            : 'bg-red-600 text-white hover:bg-red-700'
-        }`}
-      >
-        Siguiente
-      </button>
+      {resultado.valido && resultado.requiere_confirmacion && onConfirmar ? (
+        <div className="mt-1 flex w-full gap-2">
+          <button
+            onClick={onReiniciar}
+            className="flex-1 rounded-lg bg-white px-4 py-2 text-sm font-bold text-[#0A0A0A] ring-1 ring-[#D0D0D0] transition-colors hover:bg-[#F3F4F6]"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirmar}
+            disabled={confirmando}
+            className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-green-700 disabled:opacity-60"
+          >
+            {confirmando ? 'Confirmando...' : 'Confirmar check-in'}
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={onReiniciar}
+          className={`mt-1 rounded-lg px-5 py-2 text-sm font-bold transition-colors ${
+            resultado.valido
+              ? 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-red-600 text-white hover:bg-red-700'
+          }`}
+        >
+          Siguiente
+        </button>
+      )}
     </div>
   )
 }

@@ -71,7 +71,7 @@ export default function WalletPassCard({
           <div className="mb-4 grid grid-cols-2 gap-[10px]">
             <div className="rounded-[10px] bg-[#1E1E1E] px-[14px] py-3">
               <div className="mb-1 text-[9px] font-semibold uppercase tracking-[1.5px] text-[rgba(255,255,255,0.3)]">
-                Visitas restantes
+                Créditos restantes
               </div>
               <div className="text-[18px] font-bold text-[#E8FF47]">{visitasRestantes}</div>
               <div className="mt-[2px] text-[10px] text-[rgba(255,255,255,0.3)]">
@@ -91,7 +91,7 @@ export default function WalletPassCard({
           <div className="mb-4 rounded-[10px] bg-[#1E1E1E] px-[14px] py-3">
             <div className="mb-2 flex justify-between">
               <span className="text-[10px] uppercase tracking-[1px] text-[rgba(255,255,255,0.4)]">
-                Visitas usadas
+                Créditos usados
               </span>
               <span className="text-[10px] font-semibold text-[#E8FF47]">
                 {visitasUsadasLimitadas} de {visitasTotalesSeguras}
@@ -116,7 +116,7 @@ export default function WalletPassCard({
             <div>
               <div className="mb-[3px] text-[12px] font-bold text-[#0A0A0A]">Tu pase MUVET</div>
               <div className="text-[10px] leading-[1.4] text-[#888888]">
-                Muéstralo en recepción para registrar tu visita
+                Muéstralo en recepción para registrar tu crédito
               </div>
             </div>
           </div>

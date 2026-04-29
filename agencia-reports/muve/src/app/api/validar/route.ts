@@ -6,6 +6,8 @@ import {
   PLAN_MAX_VISITAS_POR_LUGAR,
   PLAN_VISITAS_MENSUALES,
   normalizarPlan,
+  resolverZonaNegocio,
+  zonaPorCiudad,
 } from '@/lib/planes'
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const token = typeof body.token === 'string' ? body.token.trim() : ''
   const negocioIdBody = typeof body.negocio_id === 'string' ? body.negocio_id : ''
+  const soloCotizar = body.solo_cotizar === true
   if (!token) {
     return NextResponse.json({ error: 'Falta token' }, { status: 400 })
   }
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
     && negocioIdBody !== perfil.negocio_id
   ) {
     return NextResponse.json(
-      { error: 'No puedes validar visitas de otro negocio' },
+      { error: 'No puedes validar créditos de otro negocio' },
       { status: 403 }
     )
   }
@@ -136,6 +139,7 @@ export async function POST(request: NextRequest) {
     creditos_extra: usuarioPorHash.creditos_extra,
   }
   const planUsuario = normalizarPlan(usuario?.plan ?? null) ?? 'basico'
+  const zonaUsuario = zonaPorCiudad(usuario.ciudad)
 
   if (!usuario?.plan_activo) {
     return NextResponse.json({ valido: false, error: 'Usuario sin membresía activa' })
@@ -188,49 +192,55 @@ export async function POST(request: NextRequest) {
   ])
 
   if (visitasCicloError || visitasLugarCicloError) {
-    return NextResponse.json({ error: 'No se pudieron validar límites de visitas' }, { status: 500 })
+    return NextResponse.json({ error: 'No se pudieron validar límites de créditos' }, { status: 500 })
   }
 
   const limiteMensual = PLAN_VISITAS_MENSUALES[planUsuario]
   const creditosExtra = Math.max(Math.trunc(usuario.creditos_extra ?? 0), 0)
   const visitasDisponibles = limiteMensual + creditosExtra
-  if ((visitasCiclo ?? 0) >= visitasDisponibles) {
-    return NextResponse.json({ valido: false, error: 'Usuario agotó sus visitas del ciclo actual' })
-  }
-
   const limitePorLugar = PLAN_MAX_VISITAS_POR_LUGAR[planUsuario]
-  if ((visitasLugarCiclo ?? 0) >= limitePorLugar) {
-    return NextResponse.json({
-      valido: false,
-      error: 'Límite de visitas en este lugar alcanzado',
-    })
-  }
   let negocio: {
     nombre: string
     categoria: string | null
+    nivel: 'basico' | 'plus' | 'total'
+    ciudad: string | null
+    zona: string | null
     monto_maximo_visita: number | null
     requiere_reserva: boolean
   } | null = null
   const consultaNegocio = await db
     .from('negocios')
-    .select('nombre, categoria, monto_maximo_visita, requiere_reserva')
+    .select('nombre, categoria, nivel, ciudad, zona, monto_maximo_visita, requiere_reserva')
     .eq('id', negocioIdObjetivo)
     .maybeSingle<{
       nombre: string
       categoria: string | null
+      nivel?: 'basico' | 'plus' | 'total' | null
+      ciudad: string | null
+      zona: string | null
       monto_maximo_visita: number | null
       requiere_reserva: boolean
     }>()
 
   if (!consultaNegocio.error && consultaNegocio.data) {
-    negocio = consultaNegocio.data
+    negocio = {
+      ...consultaNegocio.data,
+      nivel: consultaNegocio.data.nivel === 'plus' || consultaNegocio.data.nivel === 'total'
+        ? consultaNegocio.data.nivel
+        : 'basico',
+    }
   } else if (
-    faltaColumna(consultaNegocio.error, 'monto_maximo_visita')
+    faltaColumna(consultaNegocio.error, 'zona')
+    || faltaColumna(consultaNegocio.error, 'ciudad')
+    || faltaColumna(consultaNegocio.error, 'monto_maximo_visita')
     || faltaColumna(consultaNegocio.error, 'requiere_reserva')
   ) {
     const faltaMontoMaximoVisita = faltaColumna(consultaNegocio.error, 'monto_maximo_visita')
     const faltaRequiereReserva = faltaColumna(consultaNegocio.error, 'requiere_reserva')
-    const columnasFallback = ['nombre', 'categoria']
+    const columnasFallback = ['nombre', 'categoria', 'ciudad']
+    if (!faltaColumna(consultaNegocio.error, 'zona')) {
+      columnasFallback.push('zona')
+    }
     if (!faltaMontoMaximoVisita) {
       columnasFallback.push('monto_maximo_visita')
     }
@@ -244,6 +254,9 @@ export async function POST(request: NextRequest) {
       .maybeSingle<{
         nombre: string
         categoria: string | null
+        nivel?: 'basico' | 'plus' | 'total' | null
+        ciudad?: string | null
+        zona?: string | null
         monto_maximo_visita?: number | null
         requiere_reserva?: boolean
       }>()
@@ -253,6 +266,11 @@ export async function POST(request: NextRequest) {
         : null
       negocio = {
         ...fallbackNegocio.data,
+        nivel: fallbackNegocio.data.nivel === 'plus' || fallbackNegocio.data.nivel === 'total'
+          ? fallbackNegocio.data.nivel
+          : 'basico',
+        ciudad: typeof fallbackNegocio.data.ciudad === 'string' ? fallbackNegocio.data.ciudad : null,
+        zona: typeof fallbackNegocio.data.zona === 'string' ? fallbackNegocio.data.zona : null,
         monto_maximo_visita: typeof fallbackNegocio.data.monto_maximo_visita === 'number'
           ? fallbackNegocio.data.monto_maximo_visita
           : null,
@@ -266,11 +284,36 @@ export async function POST(request: NextRequest) {
   if (!negocio) {
     return NextResponse.json({ error: 'No se pudo validar el negocio' }, { status: 400 })
   }
+  if (negocio.nivel !== 'plus' && negocio.nivel !== 'total') {
+    negocio.nivel = 'basico'
+  }
 
   const categoriaNegocio = typeof negocio.categoria === 'string' ? negocio.categoria : null
+  const zonaNegocio = resolverZonaNegocio({ zona: negocio.zona, ciudad: negocio.ciudad })
+  const creditosNormalesServicio = 1
+  const costoDobleZonaPremium = zonaUsuario === 'zona1' && zonaNegocio === 'zona2'
+  const creditosServicio = costoDobleZonaPremium
+    ? (creditosNormalesServicio * 2)
+    : creditosNormalesServicio
+  if (((visitasCiclo ?? 0) + creditosServicio) > visitasDisponibles) {
+    return NextResponse.json({ valido: false, error: 'Usuario agotó sus créditos del ciclo actual' })
+  }
+  if (((visitasLugarCiclo ?? 0) + creditosServicio) > limitePorLugar) {
+    return NextResponse.json({
+      valido: false,
+      error: 'Límite de créditos en este lugar alcanzado',
+    })
+  }
+  const planTarifaMontoNegocio = (
+    categoriaNegocio === 'clases' && negocio.nivel === 'total'
+      ? 'total'
+      : planUsuario
+  )
   const montoNegocioMxn = calcularMontoNegocioPorVisita({
     categoria: categoriaNegocio,
-    planUsuario,
+    planUsuario: planTarifaMontoNegocio,
+    zona: negocio.zona,
+    ciudad: negocio.ciudad,
   })
   const montoMaximoAutorizadoMxn = categoriaNegocio === 'restaurante'
     ? Math.max(Math.trunc(negocio.monto_maximo_visita ?? 0), 0)
@@ -299,7 +342,7 @@ export async function POST(request: NextRequest) {
         valido: false,
         error: categoriaNegocio === 'estetica'
           ? 'Este negocio wellness no tiene horarios configurados'
-          : 'Este negocio requiere reservación para validar visitas',
+          : 'Este negocio requiere reservación para validar créditos',
       },
       { status: 400 }
     )
@@ -383,6 +426,36 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  if (soloCotizar) {
+    return NextResponse.json({
+      valido: true,
+      requiere_confirmacion: true,
+      usuario: usuario.nombre,
+      negocio: negocio.nombre,
+      categoria_negocio: categoriaNegocio,
+      servicio_reservado: servicioReservado,
+      monto_negocio_mxn: montoNegocioMxn,
+      monto_maximo_autorizado_mxn: montoMaximoAutorizadoMxn,
+      creditos_servicio: creditosServicio,
+      costo_doble_aplicado: costoDobleZonaPremium,
+      mensaje_costo: costoDobleZonaPremium
+        ? `Este servicio cuesta ${creditosServicio} créditos (zona premium, costo doble)`
+        : `Este servicio cuesta ${creditosServicio} crédito${creditosServicio === 1 ? '' : 's'}`,
+      creditos_restantes_ciclo: Math.max(visitasDisponibles - ((visitasCiclo ?? 0) + creditosServicio), 0),
+      creditos_usados_ciclo: (visitasCiclo ?? 0),
+      limite_creditos_ciclo: limiteMensual,
+      creditos_disponibles: visitasDisponibles,
+      visitas_restantes_mes: Math.max(visitasDisponibles - ((visitasCiclo ?? 0) + creditosServicio), 0),
+      visitas_usadas_mes: (visitasCiclo ?? 0),
+      limite_visitas_mensuales: limiteMensual,
+      visitas_disponibles: visitasDisponibles,
+      visitas_restantes_ciclo: Math.max(visitasDisponibles - ((visitasCiclo ?? 0) + creditosServicio), 0),
+      visitas_usadas_ciclo: (visitasCiclo ?? 0),
+      ciclo_inicio: ciclo.inicio.toISOString(),
+      ciclo_fin: ciclo.fin.toISOString(),
+    })
+  }
+
   // Registrar visita y actualizar último check-in
   const payloadVisita = {
     user_id: usuarioId,
@@ -410,20 +483,32 @@ export async function POST(request: NextRequest) {
   }
 
   if (visitaError) {
-    return NextResponse.json({ error: 'Error al registrar visita' }, { status: 500 })
+    return NextResponse.json({ error: 'Error al registrar crédito' }, { status: 500 })
   }
 
   if (reservacionACompletarId) {
-    const { error: completarReservacionError } = await db
+    const updateConNegocio = await db
       .from('reservaciones')
       .update({ estado: 'completada' })
       .eq('id', reservacionACompletarId)
       .eq('user_id', usuarioId)
+      .eq('negocio_id', negocioIdObjetivo)
+      .eq('fecha', hoy)
       .eq('estado', 'confirmada')
-      .in('horario_id', horarioIds)
-
-    if (completarReservacionError) {
-      console.warn('[POST /api/validar] No se pudo completar la reservación', completarReservacionError)
+    if (updateConNegocio.error && faltaColumna(updateConNegocio.error, 'negocio_id')) {
+      const updateConHorarios = await db
+        .from('reservaciones')
+        .update({ estado: 'completada' })
+        .eq('id', reservacionACompletarId)
+        .eq('user_id', usuarioId)
+        .eq('fecha', hoy)
+        .eq('estado', 'confirmada')
+        .in('horario_id', horarioIds)
+      if (updateConHorarios.error) {
+        console.warn('[POST /api/validar] No se pudo completar la reservación', updateConHorarios.error)
+      }
+    } else if (updateConNegocio.error) {
+      console.warn('[POST /api/validar] No se pudo completar la reservación', updateConNegocio.error)
     }
   }
 
@@ -435,7 +520,7 @@ export async function POST(request: NextRequest) {
     console.warn('[POST /api/validar] No se pudo actualizar ultimo_checkin', ultimoCheckinError)
   }
 
-  const visitasUsadasCiclo = (visitasCiclo ?? 0) + 1
+  const visitasUsadasCiclo = (visitasCiclo ?? 0) + creditosServicio
   const visitasRestantesCiclo = Math.max(visitasDisponibles - visitasUsadasCiclo, 0)
 
   return NextResponse.json({
@@ -446,6 +531,15 @@ export async function POST(request: NextRequest) {
     servicio_reservado: servicioReservado,
     monto_negocio_mxn: montoNegocioMxn,
     monto_maximo_autorizado_mxn: montoMaximoAutorizadoMxn,
+    creditos_servicio: creditosServicio,
+    costo_doble_aplicado: costoDobleZonaPremium,
+    mensaje_costo: costoDobleZonaPremium
+      ? `Este servicio cuesta ${creditosServicio} créditos (zona premium, costo doble)`
+      : `Este servicio cuesta ${creditosServicio} crédito${creditosServicio === 1 ? '' : 's'}`,
+    creditos_restantes_ciclo: visitasRestantesCiclo,
+    creditos_usados_ciclo: visitasUsadasCiclo,
+    limite_creditos_ciclo: limiteMensual,
+    creditos_disponibles: visitasDisponibles,
     visitas_restantes_mes: visitasRestantesCiclo,
     visitas_usadas_mes: visitasUsadasCiclo,
     limite_visitas_mensuales: limiteMensual,

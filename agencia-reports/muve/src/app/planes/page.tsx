@@ -27,14 +27,14 @@ export default async function PlanesPage({
   const usuarioAutenticado = Boolean(user)
   const priceIds = {
     centro: {
-      basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_1TPWhLRzNt1SyOBv8EYKsGGP',
-      plus: process.env.STRIPE_PRICE_ID_PLUS ?? 'price_1TPS4eRzNt1SyOBv47steWqz',
-      total: process.env.STRIPE_PRICE_ID_TOTAL ?? 'price_1TPWhgRzNt1SyOBvrA0F50v1',
+      basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_1TQbbSRo19oeOodTVcnXQ6oh',
+      plus: process.env.STRIPE_PRICE_ID_PLUS ?? 'price_1TQbbSRo19oeOodTQkrWChOF',
+      total: process.env.STRIPE_PRICE_ID_TOTAL ?? 'price_1TQbbPRo19oeOodTjiy16knM',
     },
     bc: {
-      basico: process.env.STRIPE_PRICE_ID_BASICO_BC ?? 'price_1TPwv9RzNt1SyOBvJZIhqZKT',
-      plus: process.env.STRIPE_PRICE_ID_PLUS_BC ?? 'price_1TPwxRRzNt1SyOBvIxIRS4sM',
-      total: process.env.STRIPE_PRICE_ID_TOTAL_BC ?? 'price_1TPwyuRzNt1SyOBv5lQXhhLS',
+      basico: process.env.STRIPE_PRICE_ID_BASICO_BC ?? 'price_1TQbbSRo19oeOodTCxciBYe5',
+      plus: process.env.STRIPE_PRICE_ID_PLUS_BC ?? 'price_1TQbbORo19oeOodTCmHnUhn9',
+      total: process.env.STRIPE_PRICE_ID_TOTAL_BC ?? 'price_1TQbbORo19oeOodTLBaSGk8d',
     },
   }
 

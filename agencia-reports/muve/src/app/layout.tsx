@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import './globals.css'
 
@@ -8,12 +8,14 @@ export const metadata: Metadata = {
   title: 'MUVET — Membresía de bienestar',
   description: 'Un pase. Todo el bienestar. Gimnasios, clases, estéticas y restaurantes saludables en tu ciudad.',
   manifest: '/manifest.json',
-  themeColor: '#E8FF47',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'MUVET',
   },
+}
+export const viewport: Viewport = {
+  themeColor: '#E8FF47',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

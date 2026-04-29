@@ -15,6 +15,8 @@ import {
   type ServicioNegocio,
 } from '@/types'
 import {
+  CREDITOS_POR_PLAN,
+  MAX_VISITAS_POR_LUGAR,
   PLAN_LABELS,
   normalizarCategoriaNegocio,
   normalizarPlan,
@@ -22,14 +24,15 @@ import {
 } from '@/lib/planes'
 
 type EstadoPlanUsuario = {
+  authenticated: boolean
   plan_activo: boolean
   plan: PlanMembresia | null
   creditos_extra: number
-  visitas_disponibles: number
-  limite_visitas_mensuales: number
-  max_visitas_por_lugar: number
-  visitas_usadas_mes: number
-  visitas_restantes_mes: number
+  creditos_disponibles: number
+  limite_creditos_ciclo: number
+  max_creditos_por_lugar: number
+  creditos_usados_ciclo: number
+  creditos_restantes_ciclo: number
 }
 type FiltroCategoria = 'todas' | 'gimnasio' | 'clases' | 'wellness' | 'restaurantes'
 type HorarioExplorar = {
@@ -68,49 +71,68 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
     const res = await fetch('/api/usuario/plan', { cache: 'no-store' })
     if (!res.ok) {
       return {
+        authenticated: false,
         plan_activo: false,
         plan: null,
         creditos_extra: 0,
-        visitas_disponibles: 0,
-        limite_visitas_mensuales: 0,
-        max_visitas_por_lugar: 0,
-        visitas_usadas_mes: 0,
-        visitas_restantes_mes: 0,
+        creditos_disponibles: 0,
+        limite_creditos_ciclo: 0,
+        max_creditos_por_lugar: 0,
+        creditos_usados_ciclo: 0,
+        creditos_restantes_ciclo: 0,
       }
     }
 
     const data = await res.json()
+    const plan = normalizarPlan(data.plan)
+    const authenticated = Boolean(data.authenticated)
+    const planActivo = Boolean(data.plan_activo) || Boolean(plan)
+    const creditosExtra = Number.isFinite(data.creditos_extra) ? Number(data.creditos_extra) : 0
+    const creditosTotalesPlan = plan ? CREDITOS_POR_PLAN[plan] : 0
+    const maxPorLugarPlan = plan ? MAX_VISITAS_POR_LUGAR[plan] : 0
+    const creditosUsados = Number.isFinite(data.creditos_usados_ciclo ?? data.creditos_usados ?? data.visitas_usadas_mes)
+      ? Number(data.creditos_usados_ciclo ?? data.creditos_usados ?? data.visitas_usadas_mes)
+      : 0
+    const creditosDisponibles = Number.isFinite(data.creditos_disponibles ?? data.visitas_disponibles)
+      ? Number(data.creditos_disponibles ?? data.visitas_disponibles)
+      : (creditosTotalesPlan + creditosExtra)
+    const creditosRestantes = Number.isFinite(data.creditos_restantes_ciclo ?? data.visitas_restantes_mes)
+      ? Number(data.creditos_restantes_ciclo ?? data.visitas_restantes_mes)
+      : Math.max(creditosDisponibles - creditosUsados, 0)
+    const limiteCreditosCiclo = Number.isFinite(data.limite_creditos_ciclo ?? data.limite_visitas_mensuales)
+      ? Number(data.limite_creditos_ciclo ?? data.limite_visitas_mensuales)
+      : creditosTotalesPlan
     return {
-      plan_activo: Boolean(data.plan_activo),
-      plan: normalizarPlan(data.plan),
-      creditos_extra: Number.isFinite(data.creditos_extra) ? Number(data.creditos_extra) : 0,
-      visitas_disponibles: Number.isFinite(data.visitas_disponibles)
-        ? Number(data.visitas_disponibles)
-        : 0,
-      limite_visitas_mensuales: Number.isFinite(data.limite_visitas_mensuales) ? Number(data.limite_visitas_mensuales) : 0,
-      max_visitas_por_lugar: Number.isFinite(data.max_visitas_por_lugar) ? Number(data.max_visitas_por_lugar) : 0,
-      visitas_usadas_mes: Number.isFinite(data.visitas_usadas_mes) ? Number(data.visitas_usadas_mes) : 0,
-      visitas_restantes_mes: Number.isFinite(data.visitas_restantes_mes) ? Number(data.visitas_restantes_mes) : 0,
+      authenticated,
+      plan_activo: planActivo,
+      plan,
+      creditos_extra: creditosExtra,
+      creditos_disponibles: creditosDisponibles,
+      limite_creditos_ciclo: limiteCreditosCiclo,
+      max_creditos_por_lugar: Number.isFinite(data.max_creditos_por_lugar ?? data.max_visitas_por_lugar)
+        ? Number(data.max_creditos_por_lugar ?? data.max_visitas_por_lugar)
+        : maxPorLugarPlan,
+      creditos_usados_ciclo: creditosUsados,
+      creditos_restantes_ciclo: creditosRestantes,
     }
   } catch {
     return {
+      authenticated: false,
       plan_activo: false,
       plan: null,
       creditos_extra: 0,
-      visitas_disponibles: 0,
-      limite_visitas_mensuales: 0,
-      max_visitas_por_lugar: 0,
-      visitas_usadas_mes: 0,
-      visitas_restantes_mes: 0,
+      creditos_disponibles: 0,
+      limite_creditos_ciclo: 0,
+      max_creditos_por_lugar: 0,
+      creditos_usados_ciclo: 0,
+      creditos_restantes_ciclo: 0,
     }
   }
 }
 
 function planRequeridoNegocio(negocio: Negocio): PlanMembresia {
-  const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
-  if (categoriaNegocio === 'estetica') return 'plus'
-  if (categoriaNegocio === 'restaurante') return 'total'
-  return normalizarPlan(negocio.plan_requerido ?? null) ?? 'basico'
+  if (negocio.nivel === 'plus' || negocio.nivel === 'total') return negocio.nivel
+  return 'basico'
 }
 
 function formatearFechaISO(fecha: Date): string {
@@ -162,6 +184,7 @@ export default function ExplorarPage() {
   const router = useRouter()
   const [negocios, setNegocios] = useState<Negocio[]>([])
   const [cargando, setCargando] = useState(true)
+  const [autenticado, setAutenticado] = useState(false)
   const [planActivo, setPlanActivo] = useState(false)
   const [planUsuario, setPlanUsuario] = useState<PlanMembresia | null>(null)
   const [visitasDisponiblesMes, setVisitasDisponiblesMes] = useState(0)
@@ -234,11 +257,12 @@ export default function ExplorarPage() {
 
       if (!activo) return
 
+      setAutenticado(estadoPlan.authenticated)
       setPlanActivo(estadoPlan.plan_activo)
       setPlanUsuario(estadoPlan.plan)
-      setVisitasDisponiblesMes(estadoPlan.visitas_disponibles || estadoPlan.limite_visitas_mensuales)
-      setMaxVisitasPorLugar(estadoPlan.max_visitas_por_lugar)
-      setVisitasRestantesMes(estadoPlan.visitas_restantes_mes)
+      setVisitasDisponiblesMes(estadoPlan.creditos_disponibles)
+      setMaxVisitasPorLugar(estadoPlan.max_creditos_por_lugar)
+      setVisitasRestantesMes(estadoPlan.creditos_restantes_ciclo)
       setNegocios(negociosCargados)
       setErrorCargaNegocios(ultimoErrorNegocios)
       setReintentandoNegocios(false)
@@ -369,6 +393,7 @@ export default function ExplorarPage() {
   }, [cargarHorarios, servicioSeleccionadoPorNegocioId])
 
   const planEfectivo = planActivo ? (planUsuario ?? 'basico') : null
+  const requiereMembresia = !autenticado || !planEfectivo
   const ciudadesDisponibles = useMemo(() => {
     const ciudadesUnicas = Array.from(new Set(negocios.map((negocio) => negocio.ciudad)))
     return ciudadesUnicas.sort((a, b) =>
@@ -394,22 +419,18 @@ export default function ExplorarPage() {
     return resultado
   }, [negocios, filtroCiudad, filtroCategoria])
   const regresarOInicio = useCallback(() => {
-    if (window.history.length > 1) {
-      router.back()
-      return
-    }
     router.push('/dashboard')
   }, [router])
 
   return (
-    <div className="min-h-screen bg-[#F7F7F7] pb-20">
+    <div className={`min-h-screen bg-[#F7F7F7] ${requiereMembresia ? 'pb-36' : 'pb-20'}`}>
       <div className="bg-white px-4 py-6 shadow-sm">
         <button
           type="button"
           onClick={regresarOInicio}
           className="mb-3 inline-flex items-center rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold uppercase tracking-wider text-[#555] hover:border-[#0A0A0A] hover:text-[#0A0A0A]"
         >
-          ← Regresar / Inicio
+          ← Inicio
         </button>
         <h1 className="text-2xl font-black tracking-tight text-[#0A0A0A]">Explorar</h1>
         <p className="mt-1 text-sm text-[#888]">
@@ -418,13 +439,43 @@ export default function ExplorarPage() {
         <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-[#6B4FE8]">
           {planEfectivo ? `Plan ${PLAN_LABELS[planEfectivo]}` : 'Sin membresía activa'}
         </p>
+        {!autenticado && (
+          <div className="mt-3 rounded-2xl bg-[#E8FF47] p-4 text-[#0A0A0A]">
+            <h2 className="text-lg font-black">Activa tu membresía MUVET</h2>
+            <p className="mt-1 text-sm">
+              Accede a gimnasios, estudios, spas y más con un solo plan mensual.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push('/planes')}
+              className="mt-3 rounded-full bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-wider text-[#E8FF47] transition-colors hover:bg-[#222]"
+            >
+              Ver planes
+            </button>
+          </div>
+        )}
+        {autenticado && !planEfectivo && (
+          <div className="mt-3 rounded-2xl bg-[#E8FF47] p-4 text-[#0A0A0A]">
+            <h2 className="text-lg font-black">Tu plan está inactivo</h2>
+            <p className="mt-1 text-sm">
+              Reactívalo para reservar en los lugares de MUVET.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push('/planes')}
+              className="mt-3 rounded-full bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-wider text-[#E8FF47] transition-colors hover:bg-[#222]"
+            >
+              Reactivar plan
+            </button>
+          </div>
+        )}
         {planEfectivo && (
           <div className="mt-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
             <p className="text-sm font-bold text-[#0A0A0A]">
-              Visitas disponibles este mes: {visitasRestantesMes} de {visitasDisponiblesMes}
+              Créditos disponibles este ciclo: {visitasRestantesMes} de {visitasDisponiblesMes}
             </p>
             <p className="mt-1 text-xs text-[#666]">
-              Máximo {maxVisitasPorLugar} visitas por lugar con tu plan.
+              Máximo {maxVisitasPorLugar} créditos por lugar con tu plan.
             </p>
           </div>
         )}
@@ -514,7 +565,8 @@ export default function ExplorarPage() {
             {negociosFiltrados.map((negocio) => {
               const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
               const planRequerido = planRequeridoNegocio(negocio)
-              const puedeReservar = planEfectivo
+              const bloqueadoPorMembresia = !planEfectivo
+              const puedeReservar = !bloqueadoPorMembresia && planEfectivo
                 ? puedeReservarConPlan(planEfectivo, planRequerido)
                 : false
               const instagramHandle = normalizarHandleSocial(negocio.instagram_handle)
@@ -534,14 +586,40 @@ export default function ExplorarPage() {
                 ? serviciosWellnessReservables(negocio)
                 : []
               const servicioSeleccionadoId = servicioSeleccionadoPorNegocioId[negocio.id] ?? ''
-              const textoBadgeWellness = 'Beneficio Plus y Total'
-              const claseBadgeWellness = 'bg-[#6B4FE8]/10 text-[#6B4FE8]'
+              const badgeNivel = bloqueadoPorMembresia
+                ? {
+                  texto: '🔒 Requiere membresía',
+                  clase: 'bg-[#E5E5E5] text-[#666]',
+                }
+                : planRequerido === 'plus'
+                  ? {
+                    texto: puedeReservar ? 'Beneficio Plus' : '🔒 Requiere Plus',
+                    clase: puedeReservar ? 'bg-[#E8FF47] text-[#0A0A0A]' : 'bg-[#E5E5E5] text-[#666]',
+                  }
+                  : planRequerido === 'total'
+                    ? {
+                      texto: puedeReservar ? 'Beneficio Total' : '🔒 Requiere Total',
+                      clase: puedeReservar ? 'bg-[#6B4FE8] text-white' : 'bg-[#E5E5E5] text-[#666]',
+                    }
+                    : null
               const urlVerMasRestaurante = instagramHandle
                 ? `https://instagram.com/${instagramHandle}`
                 : enlaceMapaNegocio(negocio)
 
               return (
-                <div key={negocio.id} className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+                <div
+                  key={negocio.id}
+                  className={`rounded-xl border border-[#E5E5E5] bg-white p-4 ${bloqueadoPorMembresia ? 'opacity-70' : ''}`}
+                  onClick={bloqueadoPorMembresia ? () => router.push('/planes') : undefined}
+                  onKeyDown={bloqueadoPorMembresia ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      router.push('/planes')
+                    }
+                  } : undefined}
+                  role={bloqueadoPorMembresia ? 'button' : undefined}
+                  tabIndex={bloqueadoPorMembresia ? 0 : undefined}
+                >
                   <div className="relative mb-3 overflow-hidden rounded-lg border border-[#E5E5E5]">
                     {negocio.imagen_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -555,9 +633,11 @@ export default function ExplorarPage() {
                         {iniciales}
                       </div>
                     )}
-                    <span className="absolute right-2 top-2 shrink-0 rounded-full bg-[#6B4FE8]/10 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#6B4FE8]">
-                      {esRestaurante ? 'Llegar directo — Plan Total' : PLAN_LABELS[planRequerido]}
-                    </span>
+                    {badgeNivel && (
+                      <span className={`absolute right-2 top-2 shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${badgeNivel.clase}`}>
+                        {badgeNivel.texto}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-base font-black text-[#0A0A0A]">{negocio.nombre}</h2>
@@ -636,8 +716,12 @@ export default function ExplorarPage() {
                         <p className="text-[11px] font-black uppercase tracking-widest text-[#555]">
                           Servicios incluidos
                         </p>
-                        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${claseBadgeWellness}`}>
-                          {textoBadgeWellness}
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]'}`}>
+                          {bloqueadoPorMembresia
+                            ? '🔒 Requiere membresía'
+                            : puedeReservar
+                            ? (planRequerido === 'total' ? 'Beneficio Total' : planRequerido === 'plus' ? 'Beneficio Plus' : 'Disponible en Básico')
+                            : (planRequerido === 'total' ? 'Requiere Total' : planRequerido === 'plus' ? 'Requiere Plus' : 'Disponible en Básico')}
                         </span>
                       </div>
                       {serviciosWellness.length === 0 ? (
@@ -660,27 +744,53 @@ export default function ExplorarPage() {
                   )}
 
                   {esRestaurante ? (
-                    <a
-                      href={urlVerMasRestaurante}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#0A0A0A] px-3 py-2 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-[#E8FF47]"
-                    >
-                      Ver más
-                    </a>
+                    puedeReservar ? (
+                      <a
+                        href={urlVerMasRestaurante}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(event) => event.stopPropagation()}
+                        className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#0A0A0A] px-3 py-2 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-[#E8FF47]"
+                      >
+                        Ver más
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          router.push('/planes')
+                        }}
+                        className="mt-4 w-full rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-3 py-2 text-sm font-bold text-[#888]"
+                      >
+                        {bloqueadoPorMembresia ? '🔒 Activar plan' : planRequerido === 'plus' ? 'Requiere Plus' : 'Requiere Total'}
+                      </button>
+                    )
                   ) : (
                     <button
                       type="button"
-                      onClick={() => abrirOCerrarMenuReservas(negocio, menuReservasAbierto)}
-                      disabled={!puedeReservar}
+                      onClick={() => {
+                        if (bloqueadoPorMembresia) {
+                          router.push('/planes')
+                          return
+                        }
+                        abrirOCerrarMenuReservas(negocio, menuReservasAbierto)
+                      }}
+                      disabled={!puedeReservar && !bloqueadoPorMembresia}
                       className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
                         puedeReservar
                           ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
-                          : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                          : bloqueadoPorMembresia
+                            ? 'border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                            : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
                       }`}
                     >
                       {!puedeReservar
-                        ? 'Requiere membresía'
+                        ? bloqueadoPorMembresia
+                          ? '🔒 Activar plan'
+                          : planRequerido === 'plus'
+                          ? 'Requiere Plus'
+                          : 'Requiere Total'
                         : menuReservasAbierto
                           ? esWellness
                             ? 'Ocultar disponibilidad'
@@ -689,6 +799,24 @@ export default function ExplorarPage() {
                             ? 'Reservar servicio'
                             : 'Reservar clase'}
                     </button>
+                  )}
+                  {!puedeReservar && (
+                    <div className="mt-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-center">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-[#666]">
+                        {bloqueadoPorMembresia
+                          ? 'Activa tu membresía'
+                          : planRequerido === 'plus'
+                            ? 'Desbloquea Beneficio Plus'
+                            : 'Desbloquea Beneficio Total'}
+                      </p>
+                      <a
+                        href="/planes"
+                        onClick={(event) => event.stopPropagation()}
+                        className="mt-1 inline-flex rounded-full bg-[#6B4FE8] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-[#5b40cd]"
+                      >
+                        Mejorar plan
+                      </a>
+                    </div>
                   )}
 
                   {!esRestaurante && puedeReservar && menuReservasAbierto && (
@@ -815,6 +943,17 @@ export default function ExplorarPage() {
           </div>
         )}
       </div>
+      {requiereMembresia && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t-2 border-[#E8FF47] bg-[#0A0A0A] p-4">
+          <button
+            type="button"
+            onClick={() => router.push('/planes')}
+            className="w-full rounded-full bg-[#E8FF47] py-3 text-base font-black text-[#0A0A0A] transition-colors hover:bg-[#d8ef3f]"
+          >
+            🔒 Activar mi plan
+          </button>
+        </div>
+      )}
     </div>
   )
 }
