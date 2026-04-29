@@ -7,6 +7,7 @@ import {
   PLAN_MAX_VISITAS_POR_LUGAR,
   PLAN_VISITAS_MENSUALES,
   normalizarPlan,
+  puedeReservarConPlan,
 } from '@/lib/planes'
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 function diaSemanaDesdeFecha(fecha: string): DiaSemana | null {
@@ -236,9 +237,13 @@ export async function POST(request: NextRequest) {
 
   const { data: negocioContexto, error: negocioContextoError } = await db
     .from('negocios')
-    .select('nombre, categoria')
+    .select('nombre, categoria, nivel')
     .eq('id', horario.negocio_id)
-    .maybeSingle<{ nombre: string; categoria: string }>()
+    .maybeSingle<{
+      nombre: string
+      categoria: string
+      nivel?: 'basico' | 'plus' | 'total' | null
+    }>()
 
   if (negocioContextoError || !negocioContexto) {
     return NextResponse.json({ error: 'No se pudo validar el negocio de la reservación' }, { status: 400 })
@@ -320,6 +325,15 @@ export async function POST(request: NextRequest) {
   }
 
   const planUsuario = normalizarPlan(perfilUsuario.plan ?? null) ?? 'basico'
+  const nivelNegocio = negocioContexto.nivel === 'plus' || negocioContexto.nivel === 'total'
+    ? negocioContexto.nivel
+    : 'basico'
+  if (!puedeReservarConPlan(planUsuario, nivelNegocio)) {
+    return NextResponse.json(
+      { error: nivelNegocio === 'plus' ? 'Este lugar requiere plan Plus' : 'Este lugar requiere plan Total' },
+      { status: 403 }
+    )
+  }
   const ciclo = resolverVentanaCiclo({
     fechaInicioCiclo: perfilUsuario.fecha_inicio_ciclo,
     fechaFinPlan: perfilUsuario.fecha_fin_plan,

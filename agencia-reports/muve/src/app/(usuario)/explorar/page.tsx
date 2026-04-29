@@ -375,24 +375,15 @@ export default function ExplorarPage() {
   }, [cargarHorarios, servicioSeleccionadoPorNegocioId])
 
   const planEfectivo = planActivo ? (planUsuario ?? 'basico') : null
-  const puedeVerNegocio = useCallback((negocio: Negocio) => {
-    if (!planActivo || !planUsuario) return true
-    const requerido = planRequeridoNegocio(negocio)
-    return puedeReservarConPlan(planUsuario, requerido)
-  }, [planActivo, planUsuario])
   const ciudadesDisponibles = useMemo(() => {
-    const ciudadesUnicas = Array.from(new Set(
-      negocios
-        .filter((negocio) => puedeVerNegocio(negocio))
-        .map((negocio) => negocio.ciudad)
-    ))
+    const ciudadesUnicas = Array.from(new Set(negocios.map((negocio) => negocio.ciudad)))
     return ciudadesUnicas.sort((a, b) =>
       CIUDAD_LABELS[a].localeCompare(CIUDAD_LABELS[b], 'es')
     )
-  }, [negocios, puedeVerNegocio])
+  }, [negocios])
 
   const negociosFiltrados = useMemo(() => {
-    let resultado = negocios.filter((negocio) => puedeVerNegocio(negocio))
+    let resultado = negocios
 
     if (filtroCiudad !== 'todas') {
       resultado = resultado.filter((negocio) => negocio.ciudad === filtroCiudad)
@@ -407,7 +398,7 @@ export default function ExplorarPage() {
     }
 
     return resultado
-  }, [negocios, filtroCiudad, filtroCategoria, puedeVerNegocio])
+  }, [negocios, filtroCiudad, filtroCategoria])
   const regresarOInicio = useCallback(() => {
     router.push('/dashboard')
   }, [router])
@@ -715,6 +706,19 @@ export default function ExplorarPage() {
                             ? 'Reservar servicio'
                             : 'Reservar clase'}
                     </button>
+                  )}
+                  {!esRestaurante && !puedeReservar && (
+                    <div className="mt-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-center">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-[#666]">
+                        {planRequerido === 'plus' ? 'Desbloquea Beneficio Plus' : 'Desbloquea Beneficio Total'}
+                      </p>
+                      <a
+                        href="/planes"
+                        className="mt-1 inline-flex rounded-full bg-[#6B4FE8] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-[#5b40cd]"
+                      >
+                        Mejorar plan
+                      </a>
+                    </div>
                   )}
 
                   {!esRestaurante && puedeReservar && menuReservasAbierto && (
