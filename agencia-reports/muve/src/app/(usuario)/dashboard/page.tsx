@@ -11,7 +11,7 @@ import RoleRedirectEffect from './RoleRedirectEffect'
 import { CIUDAD_LABELS } from '@/types'
 import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
-import { PLAN_VISITAS_MENSUALES, normalizarPlan, planDesdePriceId } from '@/lib/planes'
+import { CREDITOS_POR_PLAN, normalizarPlan, planDesdePriceId } from '@/lib/planes'
 import { stripe } from '@/lib/stripe'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -204,7 +204,7 @@ export default async function DashboardPage({
   const mostrarBannerActivacion = planActivoFlag === false && !hasActiveMembership
 
   const planActivoLabel = planUsuario ? PLAN_BADGE_LABEL[planUsuario] : null
-  const visitasIncluidasPlan = planUsuario ? PLAN_VISITAS_MENSUALES[planUsuario] : 0
+  const visitasIncluidasPlan = planUsuario ? CREDITOS_POR_PLAN[planUsuario] : 0
   const creditosExtra = Math.max(Math.trunc(perfil?.creditos_extra ?? 0), 0)
 
   let usadasCiclo = 0

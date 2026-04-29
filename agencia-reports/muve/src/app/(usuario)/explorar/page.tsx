@@ -15,6 +15,8 @@ import {
   type ServicioNegocio,
 } from '@/types'
 import {
+  CREDITOS_POR_PLAN,
+  MAX_VISITAS_POR_LUGAR,
   PLAN_LABELS,
   normalizarCategoriaNegocio,
   normalizarPlan,
@@ -80,25 +82,34 @@ async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
     }
 
     const data = await res.json()
+    const plan = normalizarPlan(data.plan)
+    const planActivo = Boolean(data.plan_activo) || Boolean(plan)
+    const creditosExtra = Number.isFinite(data.creditos_extra) ? Number(data.creditos_extra) : 0
+    const creditosTotalesPlan = plan ? CREDITOS_POR_PLAN[plan] : 0
+    const maxPorLugarPlan = plan ? MAX_VISITAS_POR_LUGAR[plan] : 0
+    const creditosUsados = Number.isFinite(data.creditos_usados_ciclo ?? data.creditos_usados ?? data.visitas_usadas_mes)
+      ? Number(data.creditos_usados_ciclo ?? data.creditos_usados ?? data.visitas_usadas_mes)
+      : 0
+    const creditosDisponibles = Number.isFinite(data.creditos_disponibles ?? data.visitas_disponibles)
+      ? Number(data.creditos_disponibles ?? data.visitas_disponibles)
+      : (creditosTotalesPlan + creditosExtra)
+    const creditosRestantes = Number.isFinite(data.creditos_restantes_ciclo ?? data.visitas_restantes_mes)
+      ? Number(data.creditos_restantes_ciclo ?? data.visitas_restantes_mes)
+      : Math.max(creditosDisponibles - creditosUsados, 0)
+    const limiteCreditosCiclo = Number.isFinite(data.limite_creditos_ciclo ?? data.limite_visitas_mensuales)
+      ? Number(data.limite_creditos_ciclo ?? data.limite_visitas_mensuales)
+      : creditosTotalesPlan
     return {
-      plan_activo: Boolean(data.plan_activo),
-      plan: normalizarPlan(data.plan),
-      creditos_extra: Number.isFinite(data.creditos_extra) ? Number(data.creditos_extra) : 0,
-      creditos_disponibles: Number.isFinite(data.creditos_disponibles ?? data.visitas_disponibles)
-        ? Number(data.creditos_disponibles ?? data.visitas_disponibles)
-        : 0,
-      limite_creditos_ciclo: Number.isFinite(data.limite_creditos_ciclo ?? data.limite_visitas_mensuales)
-        ? Number(data.limite_creditos_ciclo ?? data.limite_visitas_mensuales)
-        : 0,
+      plan_activo: planActivo,
+      plan,
+      creditos_extra: creditosExtra,
+      creditos_disponibles: creditosDisponibles,
+      limite_creditos_ciclo: limiteCreditosCiclo,
       max_creditos_por_lugar: Number.isFinite(data.max_creditos_por_lugar ?? data.max_visitas_por_lugar)
         ? Number(data.max_creditos_por_lugar ?? data.max_visitas_por_lugar)
-        : 0,
-      creditos_usados_ciclo: Number.isFinite(data.creditos_usados_ciclo ?? data.visitas_usadas_mes)
-        ? Number(data.creditos_usados_ciclo ?? data.visitas_usadas_mes)
-        : 0,
-      creditos_restantes_ciclo: Number.isFinite(data.creditos_restantes_ciclo ?? data.visitas_restantes_mes)
-        ? Number(data.creditos_restantes_ciclo ?? data.visitas_restantes_mes)
-        : 0,
+        : maxPorLugarPlan,
+      creditos_usados_ciclo: creditosUsados,
+      creditos_restantes_ciclo: creditosRestantes,
     }
   } catch {
     return {
@@ -242,7 +253,7 @@ export default function ExplorarPage() {
 
       setPlanActivo(estadoPlan.plan_activo)
       setPlanUsuario(estadoPlan.plan)
-      setVisitasDisponiblesMes(estadoPlan.creditos_disponibles || estadoPlan.limite_creditos_ciclo)
+      setVisitasDisponiblesMes(estadoPlan.creditos_disponibles)
       setMaxVisitasPorLugar(estadoPlan.max_creditos_por_lugar)
       setVisitasRestantesMes(estadoPlan.creditos_restantes_ciclo)
       setNegocios(negociosCargados)
@@ -428,6 +439,19 @@ export default function ExplorarPage() {
             <p className="mt-1 text-xs text-[#666]">
               Máximo {maxVisitasPorLugar} créditos por lugar con tu plan.
             </p>
+          </div>
+        )}
+        {!planEfectivo && (
+          <div className="mt-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+            <p className="text-sm font-bold text-[#0A0A0A]">
+              Activa un plan para empezar
+            </p>
+            <a
+              href="/planes"
+              className="mt-2 inline-flex rounded-full bg-[#6B4FE8] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-[#5b40cd]"
+            >
+              Ver planes
+            </a>
           </div>
         )}
 
