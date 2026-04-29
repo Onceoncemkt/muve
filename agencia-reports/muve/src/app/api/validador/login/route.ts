@@ -36,7 +36,9 @@ export async function POST(req: NextRequest) {
   }
   const candidatos = validadores.filter((v) => (
     typeof v.negocio_id === 'string'
-    && negocioAccessCode(v.negocio_id) === codigoNormalizado
+    && negocioAccessCode(
+      String(Array.isArray(v.negocios) ? v.negocios[0]?.nombre ?? '' : v.negocios?.nombre ?? '')
+    ) === codigoNormalizado
     && normalizarNombre(v.nombre) === nombreNormalizado
     && (
       (Array.isArray(v.negocios) ? v.negocios[0]?.activo : v.negocios?.activo) === true

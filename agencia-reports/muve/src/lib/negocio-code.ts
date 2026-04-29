@@ -1,4 +1,8 @@
-export function negocioAccessCode(negocioId: string) {
-  const limpio = negocioId.replace(/-/g, '').toUpperCase()
-  return `NEG-${limpio.slice(0, 6)}`
+export function negocioAccessCode(nombreNegocio: string) {
+  return nombreNegocio
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
 }

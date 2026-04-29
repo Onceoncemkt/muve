@@ -226,7 +226,7 @@ export default function ValidarPage() {
           <form onSubmit={loginValidador} className="space-y-3 rounded-xl border border-[#E5E5E5] bg-white p-5">
             <input
               type="text"
-              placeholder="Código del negocio (ej. NEG-ABC123)"
+              placeholder="Código del negocio (nombre del negocio)"
               value={codigoNegocio}
               onChange={(event) => setCodigoNegocio(event.target.value.toUpperCase())}
               className="w-full rounded-lg border border-[#E5E5E5] px-4 py-4 text-base outline-none focus:border-[#6B4FE8]"

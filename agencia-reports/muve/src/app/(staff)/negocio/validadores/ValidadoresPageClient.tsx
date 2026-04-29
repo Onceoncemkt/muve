@@ -42,6 +42,7 @@ export default function ValidadoresPageClient() {
       const data = await res.json().catch(() => ({})) as {
         validadores?: ValidadorRow[]
         codigo_negocio?: string
+        negocio_nombre?: string | null
         negocio_id?: string
         error?: string
       }
@@ -53,15 +54,15 @@ export default function ValidadoresPageClient() {
       setValidadores(data.validadores ?? [])
       if (data.codigo_negocio) {
         setCodigoNegocio(data.codigo_negocio)
-      } else if (typeof data.negocio_id === 'string' && data.negocio_id) {
-        setCodigoNegocio(negocioAccessCode(data.negocio_id))
+      } else if (typeof data.negocio_nombre === 'string' && data.negocio_nombre) {
+        setCodigoNegocio(negocioAccessCode(data.negocio_nombre))
       } else {
         const resNegocios = await fetch('/api/negocio/negocios', { cache: 'no-store' })
         const dataNegocios = await resNegocios.json().catch(() => ({})) as {
-          negocios?: Array<{ id?: string }>
+          negocios?: Array<{ id?: string; nombre?: string }>
         }
-        const negocioId = dataNegocios.negocios?.[0]?.id
-        setCodigoNegocio(typeof negocioId === 'string' ? negocioAccessCode(negocioId) : '')
+        const negocioNombre = dataNegocios.negocios?.[0]?.nombre
+        setCodigoNegocio(typeof negocioNombre === 'string' ? negocioAccessCode(negocioNombre) : '')
       }
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar validadores' })

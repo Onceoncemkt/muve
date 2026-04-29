@@ -77,9 +77,17 @@ export async function GET() {
     .eq('negocio_id', userData.negocio_id)
     .order('created_at', { ascending: false })
 
+  const { data: negocio } = await supabase
+    .from('negocios')
+    .select('id, nombre')
+    .eq('id', userData.negocio_id)
+    .single<{ id: string; nombre: string }>()
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({
     validadores: data,
-    codigo_negocio: negocioAccessCode(userData.negocio_id),
+    codigo_negocio: negocio?.nombre ? negocioAccessCode(negocio.nombre) : '',
+    negocio_nombre: negocio?.nombre ?? null,
+    negocio_id: userData.negocio_id,
   })
 }
