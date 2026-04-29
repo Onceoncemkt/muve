@@ -49,13 +49,64 @@ export const CATEGORIAS_VISIBLES_POR_PLAN: Record<PlanMembresia, Categoria[]> = 
   plus: ['clases', 'gimnasio', 'estetica'],
   total: ['clases', 'gimnasio', 'estetica', 'restaurante'],
 }
-export const PLAN_POR_PRICE_ID: Record<string, PlanMembresia> = {
-  price_1TQbbSRo19oeOodTVcnXQ6oh: 'basico',
-  price_1TQbbSRo19oeOodTQkrWChOF: 'plus',
-  price_1TQbbPRo19oeOodTjiy16knM: 'total',
-  price_1TQbbSRo19oeOodTCxciBYe5: 'basico',
-  price_1TQbbORo19oeOodTCmHnUhn9: 'plus',
-  price_1TQbbORo19oeOodTLBaSGk8d: 'total',
+export type RegionPrecios = 'centro' | 'bc'
+export type StripePriceIdsPorRegion = Record<RegionPrecios, Record<PlanMembresia, string>>
+
+const STRIPE_PRICE_ENV_POR_REGION: Record<RegionPrecios, Record<PlanMembresia, string>> = {
+  centro: {
+    basico: 'STRIPE_PRICE_ID_BASICO',
+    plus: 'STRIPE_PRICE_ID_PLUS',
+    total: 'STRIPE_PRICE_ID_TOTAL',
+  },
+  bc: {
+    basico: 'STRIPE_PRICE_ID_BASICO_BC',
+    plus: 'STRIPE_PRICE_ID_PLUS_BC',
+    total: 'STRIPE_PRICE_ID_TOTAL_BC',
+  },
+}
+
+function obtenerStripePriceIdsParcialesDesdeEnv() {
+  const resultado: Record<RegionPrecios, Partial<Record<PlanMembresia, string>>> = {
+    centro: {},
+    bc: {},
+  }
+
+  for (const [region, envPorPlan] of Object.entries(STRIPE_PRICE_ENV_POR_REGION) as Array<[RegionPrecios, Record<PlanMembresia, string>]>) {
+    for (const [plan, envKey] of Object.entries(envPorPlan) as Array<[PlanMembresia, string]>) {
+      const value = process.env[envKey]?.trim()
+      if (value) resultado[region][plan] = value
+    }
+  }
+
+  return resultado
+}
+
+export function obtenerStripePriceIdsPorRegion(): StripePriceIdsPorRegion {
+  const priceIdsParciales = obtenerStripePriceIdsParcialesDesdeEnv()
+  const faltantes: string[] = []
+
+  for (const [region, envPorPlan] of Object.entries(STRIPE_PRICE_ENV_POR_REGION) as Array<[RegionPrecios, Record<PlanMembresia, string>]>) {
+    for (const [plan, envKey] of Object.entries(envPorPlan) as Array<[PlanMembresia, string]>) {
+      if (!priceIdsParciales[region][plan]) faltantes.push(envKey)
+    }
+  }
+
+  if (faltantes.length > 0) {
+    throw new Error(`Faltan variables de entorno de Stripe Price IDs: ${faltantes.join(', ')}`)
+  }
+
+  return {
+    centro: {
+      basico: priceIdsParciales.centro.basico as string,
+      plus: priceIdsParciales.centro.plus as string,
+      total: priceIdsParciales.centro.total as string,
+    },
+    bc: {
+      basico: priceIdsParciales.bc.basico as string,
+      plus: priceIdsParciales.bc.plus as string,
+      total: priceIdsParciales.bc.total as string,
+    },
+  }
 }
 
 export function normalizarPlan(plan: unknown): PlanMembresia | null {
@@ -69,7 +120,25 @@ export function normalizarPlan(plan: unknown): PlanMembresia | null {
 }
 export function planDesdePriceId(priceId: string | null | undefined): PlanMembresia | null {
   if (!priceId) return null
-  return PLAN_POR_PRICE_ID[priceId] ?? null
+  const priceIdsParciales = obtenerStripePriceIdsParcialesDesdeEnv()
+  const priceIdsConfiguradosPorPlan: Record<PlanMembresia, Array<string | undefined>> = {
+    basico: [
+      priceIdsParciales.centro.basico,
+      priceIdsParciales.bc.basico,
+    ],
+    plus: [
+      priceIdsParciales.centro.plus,
+      priceIdsParciales.bc.plus,
+    ],
+    total: [
+      priceIdsParciales.centro.total,
+      priceIdsParciales.bc.total,
+    ],
+  }
+  for (const [plan, priceIds] of Object.entries(priceIdsConfiguradosPorPlan) as Array<[PlanMembresia, Array<string | undefined>]>) {
+    if (priceIds.includes(priceId)) return plan
+  }
+  return null
 }
 export function puedeReservarConPlan(planUsuario: PlanMembresia, planRequerido: PlanMembresia) {
   return PLAN_NIVELES[planUsuario] >= PLAN_NIVELES[planRequerido]

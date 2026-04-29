@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import PlanesPrecios from '@/components/PlanesPrecios'
+import { obtenerStripePriceIdsPorRegion } from '@/lib/planes'
 import { createClient } from '@/lib/supabase/server'
 import type { Ciudad } from '@/types'
 export default async function PlanesPage({
@@ -25,18 +26,7 @@ export default async function PlanesPage({
   }
 
   const usuarioAutenticado = Boolean(user)
-  const priceIds = {
-    centro: {
-      basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_1TQbbSRo19oeOodTVcnXQ6oh',
-      plus: process.env.STRIPE_PRICE_ID_PLUS ?? 'price_1TQbbSRo19oeOodTQkrWChOF',
-      total: process.env.STRIPE_PRICE_ID_TOTAL ?? 'price_1TQbbPRo19oeOodTjiy16knM',
-    },
-    bc: {
-      basico: process.env.STRIPE_PRICE_ID_BASICO_BC ?? 'price_1TQbbSRo19oeOodTCxciBYe5',
-      plus: process.env.STRIPE_PRICE_ID_PLUS_BC ?? 'price_1TQbbORo19oeOodTCmHnUhn9',
-      total: process.env.STRIPE_PRICE_ID_TOTAL_BC ?? 'price_1TQbbORo19oeOodTLBaSGk8d',
-    },
-  }
+  const priceIds = obtenerStripePriceIdsPorRegion()
 
   return (
     <div className="min-h-screen bg-[#F7F7F7]">

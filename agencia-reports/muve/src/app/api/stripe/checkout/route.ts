@@ -2,20 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
-import { planDesdePriceId } from '@/lib/planes'
-import type { PlanMembresia } from '@/types'
-
-const PRICE_IDS_CENTRO: Record<PlanMembresia, string> = {
-  basico: process.env.STRIPE_PRICE_ID_BASICO ?? 'price_1TQbbSRo19oeOodTVcnXQ6oh',
-  plus: process.env.STRIPE_PRICE_ID_PLUS ?? 'price_1TQbbSRo19oeOodTQkrWChOF',
-  total: process.env.STRIPE_PRICE_ID_TOTAL ?? 'price_1TQbbPRo19oeOodTjiy16knM',
-}
-
-const PRICE_IDS_BC: Record<PlanMembresia, string> = {
-  basico: process.env.STRIPE_PRICE_ID_BASICO_BC ?? 'price_1TQbbSRo19oeOodTCxciBYe5',
-  plus: process.env.STRIPE_PRICE_ID_PLUS_BC ?? 'price_1TQbbORo19oeOodTCmHnUhn9',
-  total: process.env.STRIPE_PRICE_ID_TOTAL_BC ?? 'price_1TQbbORo19oeOodTLBaSGk8d',
-}
+import { normalizarPlan, obtenerStripePriceIdsPorRegion, planDesdePriceId } from '@/lib/planes'
+const { centro: PRICE_IDS_CENTRO, bc: PRICE_IDS_BC } = obtenerStripePriceIdsPorRegion()
 
 type PerfilCheckout = {
   nombre: string | null
@@ -90,10 +78,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   }
 
-  const body = await request.json().catch(() => ({}))
-  const priceIdSolicitado: string = body.priceId ?? ''
+  const body: Record<string, unknown> = await request.json().catch(() => ({}))
+  const priceIdSolicitado = typeof body.priceId === 'string' ? body.priceId : ''
   const codigoDescuento = normalizarCodigoDescuento(body.codigo_descuento)
   const planSolicitado = planDesdePriceId(priceIdSolicitado)
+    ?? normalizarPlan(body.planId ?? body.plan ?? body.plan_id)
 
   if (!planSolicitado) {
     return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })

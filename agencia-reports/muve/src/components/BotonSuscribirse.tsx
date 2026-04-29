@@ -2,13 +2,25 @@
 
 import { useState } from 'react'
 
-export default function BotonSuscribirse({ className }: { className?: string }) {
+type PlanId = 'basico' | 'plus' | 'total'
+
+export default function BotonSuscribirse({
+  className,
+  planId = 'basico',
+}: {
+  className?: string
+  planId?: PlanId
+}) {
   const [cargando, setCargando] = useState(false)
 
   async function iniciarCheckout() {
     setCargando(true)
     try {
-      const res = await fetch('/api/stripe/checkout', { method: 'POST' })
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId, plan: planId }),
+      })
       if (res.status === 401) {
         window.location.href = '/registro?redirect=checkout'
         return

@@ -116,6 +116,8 @@ function BotonPlan({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           priceId,
+          planId,
+          plan: planId,
           codigo_descuento: normalizarCodigoDescuento(codigoDescuento) || undefined,
         }),
       })
