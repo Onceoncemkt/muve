@@ -237,12 +237,13 @@ export async function POST(request: NextRequest) {
 
   const { data: negocioContexto, error: negocioContextoError } = await db
     .from('negocios')
-    .select('nombre, categoria, nivel')
+    .select('nombre, categoria, nivel, plan_requerido')
     .eq('id', horario.negocio_id)
     .maybeSingle<{
       nombre: string
       categoria: string
       nivel?: 'basico' | 'plus' | 'total' | null
+      plan_requerido?: 'basico' | 'plus' | 'total' | null
     }>()
 
   if (negocioContextoError || !negocioContexto) {
@@ -327,6 +328,8 @@ export async function POST(request: NextRequest) {
   const planUsuario = normalizarPlan(perfilUsuario.plan ?? null) ?? 'basico'
   const nivelNegocio = negocioContexto.nivel === 'plus' || negocioContexto.nivel === 'total'
     ? negocioContexto.nivel
+    : negocioContexto.plan_requerido === 'plus' || negocioContexto.plan_requerido === 'total'
+      ? negocioContexto.plan_requerido
     : 'basico'
   if (!puedeReservarConPlan(planUsuario, nivelNegocio)) {
     return NextResponse.json(

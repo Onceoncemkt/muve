@@ -651,8 +651,8 @@ export default function ExplorarPage() {
                         </p>
                         <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${puedeReservar ? 'bg-[#6B4FE8]/10 text-[#6B4FE8]' : 'bg-[#E5E5E5] text-[#666]'}`}>
                           {puedeReservar
-                            ? (planRequerido === 'total' ? 'Beneficio Total' : 'Beneficio Plus')
-                            : (planRequerido === 'total' ? 'Requiere Total' : 'Requiere Plus')}
+                            ? (planRequerido === 'total' ? 'Beneficio Total' : planRequerido === 'plus' ? 'Beneficio Plus' : 'Disponible en Básico')
+                            : (planRequerido === 'total' ? 'Requiere Total' : planRequerido === 'plus' ? 'Requiere Plus' : 'Disponible en Básico')}
                         </span>
                       </div>
                       {serviciosWellness.length === 0 ? (

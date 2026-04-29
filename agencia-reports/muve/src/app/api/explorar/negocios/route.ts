@@ -114,6 +114,11 @@ export async function GET() {
 
   const negociosConServicios = negocios.map((negocio) => {
     const categoriaNormalizada = normalizarCategoriaNegocio(negocio.categoria)
+    const nivelNormalizado = negocio.nivel === 'plus' || negocio.nivel === 'total'
+      ? negocio.nivel
+      : negocio.plan_requerido === 'plus' || negocio.plan_requerido === 'total'
+        ? negocio.plan_requerido
+        : 'basico'
     const serviciosTabla = serviciosPorNegocio.get(negocio.id) ?? []
     const serviciosDisponibles = serviciosTabla.length > 0
       ? serviciosTabla
@@ -122,7 +127,7 @@ export async function GET() {
     return {
       ...negocio,
       categoria: categoriaNormalizada ?? negocio.categoria,
-      nivel: negocio.nivel === 'plus' || negocio.nivel === 'total' ? negocio.nivel : 'basico',
+      nivel: nivelNormalizado,
       monto_maximo_visita: typeof negocio.monto_maximo_visita === 'number'
         ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)
         : 0,

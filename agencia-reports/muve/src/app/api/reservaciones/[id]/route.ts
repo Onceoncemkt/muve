@@ -66,9 +66,13 @@ export async function PATCH(
     if (negocioId) {
       const { data: negocio } = await db
         .from('negocios')
-        .select('nombre, nivel')
+        .select('nombre, nivel, plan_requerido')
         .eq('id', negocioId)
-        .maybeSingle<{ nombre: string; nivel?: 'basico' | 'plus' | 'total' | null }>()
+        .maybeSingle<{
+          nombre: string
+          nivel?: 'basico' | 'plus' | 'total' | null
+          plan_requerido?: 'basico' | 'plus' | 'total' | null
+        }>()
       negocioNombre = negocio?.nombre ?? 'negocio'
 
       const { data: perfilUsuario, error: perfilUsuarioError } = await db
@@ -96,6 +100,8 @@ export async function PATCH(
       const planUsuario = normalizarPlan(perfilUsuario.plan ?? null) ?? 'basico'
       const nivelNegocio = negocio?.nivel === 'plus' || negocio?.nivel === 'total'
         ? negocio.nivel
+        : negocio?.plan_requerido === 'plus' || negocio?.plan_requerido === 'total'
+          ? negocio.plan_requerido
         : 'basico'
       if (!puedeReservarConPlan(planUsuario, nivelNegocio)) {
         return NextResponse.json(
