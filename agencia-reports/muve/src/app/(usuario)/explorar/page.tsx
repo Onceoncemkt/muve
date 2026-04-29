@@ -685,12 +685,13 @@ export default function ExplorarPage() {
                         Ver más
                       </a>
                     ) : (
-                      <a
-                        href="/planes"
-                        className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#6B4FE8] bg-[#6B4FE8] px-3 py-2 text-sm font-black text-white transition-colors hover:bg-[#5b40cd]"
+                      <button
+                        type="button"
+                        disabled
+                        className="mt-4 w-full cursor-not-allowed rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-3 py-2 text-sm font-bold text-[#888]"
                       >
-                        🔒 Mejorar mi plan
-                      </a>
+                        {planRequerido === 'plus' ? 'Requiere Plus' : 'Requiere Total'}
+                      </button>
                     )
                   ) : (
                     <button
@@ -716,7 +717,7 @@ export default function ExplorarPage() {
                             : 'Reservar clase'}
                     </button>
                   )}
-                  {!esRestaurante && !puedeReservar && (
+                  {!puedeReservar && (
                     <div className="mt-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-center">
                       <p className="text-[11px] font-bold uppercase tracking-widest text-[#666]">
                         {planRequerido === 'plus' ? 'Desbloquea Beneficio Plus' : 'Desbloquea Beneficio Total'}
