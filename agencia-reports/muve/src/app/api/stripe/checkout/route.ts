@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
-import { normalizarPlan, obtenerStripePriceIdsPorRegion, planDesdePriceId } from '@/lib/planes'
+import { normalizarPlan, obtenerStripePriceIdsPorRegion } from '@/lib/planes'
 const { centro: PRICE_IDS_CENTRO, bc: PRICE_IDS_BC } = obtenerStripePriceIdsPorRegion()
 
 type PerfilCheckout = {
@@ -23,6 +23,12 @@ type DescuentoDisponibleRow = {
   id: string
   codigo: string
   porcentaje: number | null
+}
+const PLANES_VALIDOS = ['basico', 'plus', 'total'] as const
+type PlanValido = (typeof PLANES_VALIDOS)[number]
+
+function esPlanValido(plan: unknown): plan is PlanValido {
+  return typeof plan === 'string' && PLANES_VALIDOS.includes(plan as PlanValido)
 }
 
 function esCiudadBC(ciudad: string | null | undefined) {
@@ -79,13 +85,15 @@ export async function POST(request: NextRequest) {
   }
 
   const body: Record<string, unknown> = await request.json().catch(() => ({}))
-  const priceIdSolicitado = typeof body.priceId === 'string' ? body.priceId : ''
   const codigoDescuento = normalizarCodigoDescuento(body.codigo_descuento)
-  const planSolicitado = planDesdePriceId(priceIdSolicitado)
-    ?? normalizarPlan(body.planId ?? body.plan ?? body.plan_id)
+  const planNormalizado = normalizarPlan(body.planId ?? body.plan ?? body.plan_id)
+  const planSolicitado = esPlanValido(planNormalizado) ? planNormalizado : null
 
   if (!planSolicitado) {
-    return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Plan inválido. Usa planId basico, plus o total.' },
+      { status: 400 }
+    )
   }
 
   const { data: perfil } = await supabase
@@ -98,11 +106,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ya tienes una membresía activa' }, { status: 400 })
   }
 
-  const priceIdsCiudad = esCiudadBC(perfil?.ciudad) ? PRICE_IDS_BC : PRICE_IDS_CENTRO
-  const priceIdFinal = priceIdsCiudad[planSolicitado]
-  if (!priceIdFinal) {
-    return NextResponse.json({ error: 'Configuración de precios incompleta' }, { status: 500 })
+  const zona: 'centro' | 'bc' = esCiudadBC(perfil?.ciudad) ? 'bc' : 'centro'
+  const priceIdsCiudad = zona === 'bc' ? PRICE_IDS_BC : PRICE_IDS_CENTRO
+  let priceIdResuelto = priceIdsCiudad[planSolicitado]
+
+  if (zona === 'bc' && planSolicitado === 'total') {
+    const priceIdTotalBc = process.env.STRIPE_PRICE_ID_TOTAL_BC?.trim()
+    if (!priceIdTotalBc) {
+      return NextResponse.json(
+        {
+          error: 'No se pudo resolver el Price ID para plan=total zona=bc. Verifica que las variables de entorno estén configuradas.',
+        },
+        { status: 500 }
+      )
+    }
+    priceIdResuelto = priceIdTotalBc
   }
+
+  if (!priceIdResuelto) {
+    return NextResponse.json(
+      {
+        error: `No se pudo resolver el Price ID para plan=${planSolicitado} zona=${zona}. Verifica que las variables de entorno estén configuradas.`,
+      },
+      { status: 500 }
+    )
+  }
+  console.log('[checkout]', { planId: planSolicitado, ciudad: perfil?.ciudad ?? null, zona, priceIdResuelto })
   let descuentoAplicado: DescuentoDisponible | null = null
   if (codigoDescuento) {
     const db = createServiceClient()
@@ -180,7 +209,7 @@ export async function POST(request: NextRequest) {
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
-    line_items: [{ price: priceIdFinal, quantity: 1 }],
+    line_items: [{ price: priceIdResuelto, quantity: 1 }],
     success_url: `${origin}/dashboard?membresia=activada`,
     cancel_url: `${origin}/`,
     discounts: descuentoAplicado ? [{ coupon: descuentoAplicado.codigo }] : undefined,
