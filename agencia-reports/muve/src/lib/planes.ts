@@ -51,18 +51,27 @@ export const CATEGORIAS_VISIBLES_POR_PLAN: Record<PlanMembresia, Categoria[]> = 
 }
 export type RegionPrecios = 'centro' | 'bc'
 export type StripePriceIdsPorRegion = Record<RegionPrecios, Record<PlanMembresia, string>>
+type StripePriceEnvKeysPorRegion = Record<RegionPrecios, Record<PlanMembresia, string[]>>
 
-const STRIPE_PRICE_ENV_POR_REGION: Record<RegionPrecios, Record<PlanMembresia, string>> = {
+const STRIPE_PRICE_ENV_POR_REGION: StripePriceEnvKeysPorRegion = {
   centro: {
-    basico: 'STRIPE_PRICE_ID_BASICO',
-    plus: 'STRIPE_PRICE_ID_PLUS',
-    total: 'STRIPE_PRICE_ID_TOTAL',
+    basico: ['STRIPE_PRICE_ID_BASICO', 'STRIPE_PRICE_ID_MUVET_BASICO'],
+    plus: ['STRIPE_PRICE_ID_PLUS', 'STRIPE_PRICE_ID_MUVET_PLUS'],
+    total: ['STRIPE_PRICE_ID_TOTAL', 'STRIPE_PRICE_ID_MUVET_TOTAL'],
   },
   bc: {
-    basico: 'STRIPE_PRICE_ID_BASICO_BC',
-    plus: 'STRIPE_PRICE_ID_PLUS_BC',
-    total: 'STRIPE_PRICE_ID_TOTAL_BC',
+    basico: ['STRIPE_PRICE_ID_BASICO_BC', 'STRIPE_PRICE_ID_MUVET_TJ_BASICO'],
+    plus: ['STRIPE_PRICE_ID_PLUS_BC', 'STRIPE_PRICE_ID_MUVET_TJ_PLUS', 'STRIPE_PRICE_ID_MUVET_TJ_PLUS_'],
+    total: ['STRIPE_PRICE_ID_TOTAL_BC', 'STRIPE_PRICE_ID_MUVET_TJ_TOTAL'],
   },
+}
+
+function obtenerEnvStripePriceId(envKeys: string[]) {
+  for (const envKey of envKeys) {
+    const value = process.env[envKey]?.trim()
+    if (value) return value
+  }
+  return null
 }
 
 function obtenerStripePriceIdsParcialesDesdeEnv() {
@@ -71,9 +80,9 @@ function obtenerStripePriceIdsParcialesDesdeEnv() {
     bc: {},
   }
 
-  for (const [region, envPorPlan] of Object.entries(STRIPE_PRICE_ENV_POR_REGION) as Array<[RegionPrecios, Record<PlanMembresia, string>]>) {
-    for (const [plan, envKey] of Object.entries(envPorPlan) as Array<[PlanMembresia, string]>) {
-      const value = process.env[envKey]?.trim()
+  for (const [region, envPorPlan] of Object.entries(STRIPE_PRICE_ENV_POR_REGION) as Array<[RegionPrecios, Record<PlanMembresia, string[]>]>) {
+    for (const [plan, envKeys] of Object.entries(envPorPlan) as Array<[PlanMembresia, string[]]>) {
+      const value = obtenerEnvStripePriceId(envKeys)
       if (value) resultado[region][plan] = value
     }
   }
@@ -84,10 +93,9 @@ function obtenerStripePriceIdsParcialesDesdeEnv() {
 export function obtenerStripePriceIdsPorRegion(): StripePriceIdsPorRegion {
   const priceIdsParciales = obtenerStripePriceIdsParcialesDesdeEnv()
   const faltantes: string[] = []
-
-  for (const [region, envPorPlan] of Object.entries(STRIPE_PRICE_ENV_POR_REGION) as Array<[RegionPrecios, Record<PlanMembresia, string>]>) {
-    for (const [plan, envKey] of Object.entries(envPorPlan) as Array<[PlanMembresia, string]>) {
-      if (!priceIdsParciales[region][plan]) faltantes.push(envKey)
+  for (const [region, envPorPlan] of Object.entries(STRIPE_PRICE_ENV_POR_REGION) as Array<[RegionPrecios, Record<PlanMembresia, string[]>]>) {
+    for (const [plan, envKeys] of Object.entries(envPorPlan) as Array<[PlanMembresia, string[]]>) {
+      if (!priceIdsParciales[region][plan]) faltantes.push(envKeys[0])
     }
   }
 

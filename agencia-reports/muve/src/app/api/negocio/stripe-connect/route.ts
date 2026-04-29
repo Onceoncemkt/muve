@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import Stripe from 'stripe'
+import { stripe } from '@/lib/stripe'
 import type { Rol } from '@/types'
 
 type PerfilAcceso = {
@@ -72,13 +72,6 @@ async function obtenerPerfilAcceso(userId: string): Promise<PerfilAcceso | null>
 }
 
 export async function GET(request: NextRequest) {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    return NextResponse.json({ error: 'Stripe no configurado' }, { status: 500 })
-  }
-
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2023-10-16' as never,
-  })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
