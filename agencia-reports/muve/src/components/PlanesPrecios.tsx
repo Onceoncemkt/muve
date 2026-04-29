@@ -16,13 +16,13 @@ type PriceIdsPorRegion = Record<RegionPrecios, PriceIds>
 const PRECIOS_POR_REGION: Record<RegionPrecios, Record<PlanId, number>> = {
   centro: {
     basico: 649,
-    plus: 1299,
-    total: 1999,
+    plus: 1249,
+    total: 2199,
   },
   bc: {
-    basico: 699,
-    plus: 1399,
-    total: 2299,
+    basico: 1380,
+    plus: 2720,
+    total: 4499,
   },
 }
 
@@ -33,9 +33,9 @@ const PRECIOS_ANTERIORES_POR_REGION: Record<RegionPrecios, Partial<Record<PlanId
     total: 2600,
   },
   bc: {
-    basico: 900,
-    plus: 1800,
-    total: 3000,
+    basico: 1800,
+    plus: 3500,
+    total: 5500,
   },
 }
 
@@ -51,10 +51,10 @@ const PLANES = [
     id: 'basico' as const,
     nombre: 'BÁSICO',
     visitas: 8,
-    maxPorLugar: 4,
+    maxPorLugar: 3,
     features: [
       '8 créditos al ciclo',
-      'máx 4 por lugar',
+      'máx 3 por lugar',
       'Gimnasios y clases',
       'Las 4 ciudades',
     ],
