@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
+import { negocioAccessCode } from '@/lib/negocio-code'
 
 type ValidadorRow = {
   id: string
@@ -26,6 +27,7 @@ function formatFecha(fecha: string | null) {
 
 export default function ValidadoresPageClient() {
   const [validadores, setValidadores] = useState<ValidadorRow[]>([])
+  const [codigoNegocio, setCodigoNegocio] = useState('')
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [nombreNuevo, setNombreNuevo] = useState('')
@@ -37,13 +39,30 @@ export default function ValidadoresPageClient() {
     setCargando(true)
     try {
       const res = await fetch('/api/negocio/validadores', { cache: 'no-store' })
-      const data = await res.json().catch(() => ({})) as { validadores?: ValidadorRow[]; error?: string }
+      const data = await res.json().catch(() => ({})) as {
+        validadores?: ValidadorRow[]
+        codigo_negocio?: string
+        negocio_id?: string
+        error?: string
+      }
       if (!res.ok) {
         setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudieron cargar validadores' })
         setValidadores([])
         return
       }
       setValidadores(data.validadores ?? [])
+      if (data.codigo_negocio) {
+        setCodigoNegocio(data.codigo_negocio)
+      } else if (typeof data.negocio_id === 'string' && data.negocio_id) {
+        setCodigoNegocio(negocioAccessCode(data.negocio_id))
+      } else {
+        const resNegocios = await fetch('/api/negocio/negocios', { cache: 'no-store' })
+        const dataNegocios = await resNegocios.json().catch(() => ({})) as {
+          negocios?: Array<{ id?: string }>
+        }
+        const negocioId = dataNegocios.negocios?.[0]?.id
+        setCodigoNegocio(typeof negocioId === 'string' ? negocioAccessCode(negocioId) : '')
+      }
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar validadores' })
       setValidadores([])
@@ -138,6 +157,16 @@ export default function ValidadoresPageClient() {
     }
   }
 
+  async function copiarCodigoNegocio() {
+    if (!codigoNegocio) return
+    try {
+      await navigator.clipboard.writeText(codigoNegocio)
+      setMensaje({ tipo: 'ok', texto: 'Código de negocio copiado' })
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'No se pudo copiar el código de negocio' })
+    }
+  }
+
   const totalActivos = useMemo(
     () => validadores.filter((v) => v.activo).length,
     [validadores]
@@ -193,6 +222,22 @@ export default function ValidadoresPageClient() {
             }`}
           >
             {mensaje.texto}
+          </div>
+        )}
+
+        {codigoNegocio && (
+          <div className="rounded-xl border border-[#E8FF47]/40 bg-[#E8FF47]/15 p-4">
+            <p className="text-[11px] font-black uppercase tracking-widest text-[#0A0A0A]">
+              Código de negocio para acceso en /validar
+            </p>
+            <p className="mt-2 text-3xl font-black tracking-[0.12em] text-[#0A0A0A]">{codigoNegocio}</p>
+            <button
+              type="button"
+              onClick={copiarCodigoNegocio}
+              className="mt-3 rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222]"
+            >
+              Copiar código
+            </button>
           </div>
         )}
 

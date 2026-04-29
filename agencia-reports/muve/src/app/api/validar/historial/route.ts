@@ -11,21 +11,26 @@ export async function GET() {
   inicioHoy.setHours(0, 0, 0, 0)
 
   const { data, error } = await supabase
-    .from('check_ins')
-    .select('id, created_at, exitoso, users(nombre, plan), validadores(nombre)')
+    .from('visitas')
+    .select('id, fecha, validado_por, users(nombre, plan)')
     .eq('negocio_id', session.negocio_id)
-    .gte('created_at', inicioHoy.toISOString())
-    .order('created_at', { ascending: false })
+    .gte('fecha', inicioHoy.toISOString())
+    .order('fecha', { ascending: false })
     .limit(10)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const { count } = await supabase
-    .from('check_ins')
+    .from('visitas')
     .select('*', { count: 'exact', head: true })
     .eq('negocio_id', session.negocio_id)
-    .eq('exitoso', true)
-    .gte('created_at', inicioHoy.toISOString())
+    .gte('fecha', inicioHoy.toISOString())
 
-  return NextResponse.json({ historial: data, total_dia: count || 0 })
+  const historial = (data ?? []).map((item) => ({
+    ...item,
+    created_at: item.fecha,
+    exitoso: true,
+  }))
+
+  return NextResponse.json({ historial, total_dia: count || 0 })
 }

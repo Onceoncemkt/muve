@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const RUTAS_PROTEGIDAS = ['/dashboard', '/historial', '/validar', '/negocio', '/admin']
+const RUTAS_PROTEGIDAS = ['/dashboard', '/historial', '/negocio', '/admin']
 const RUTAS_AUTH = ['/login', '/registro']
 
 function startsWithRoute(pathname: string, route: string): boolean {

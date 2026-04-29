@@ -555,19 +555,6 @@ export async function POST(request: NextRequest) {
   if (visitaError) {
     return NextResponse.json({ error: 'Error al registrar crédito' }, { status: 500 })
   }
-  const payloadCheckin = {
-    user_id: usuarioId,
-    negocio_id: negocioIdObjetivo,
-    exitoso: true,
-    validado_por: validadorId,
-  }
-  const { error: checkinError } = await db
-    .from('check_ins')
-    .insert(payloadCheckin)
-
-  if (checkinError) {
-    console.warn('[POST /api/validar] No se pudo registrar check_in', checkinError)
-  }
 
   if (reservacionACompletarId) {
     const updateConNegocio = await db

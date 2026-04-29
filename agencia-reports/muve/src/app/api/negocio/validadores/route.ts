@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { createClient } from '@/lib/supabase/server'
+import { negocioAccessCode } from '@/lib/negocio-code'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -77,5 +78,8 @@ export async function GET() {
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ validadores: data })
+  return NextResponse.json({
+    validadores: data,
+    codigo_negocio: negocioAccessCode(userData.negocio_id),
+  })
 }

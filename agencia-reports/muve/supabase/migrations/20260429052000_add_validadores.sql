@@ -1,7 +1,7 @@
 -- IMPORTANTE: María debe ejecutar esta migración manualmente
 -- en Supabase Dashboard → SQL Editor antes de probar el código
 
-CREATE TABLE validadores (
+CREATE TABLE IF NOT EXISTS validadores (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   negocio_id UUID NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
   nombre TEXT NOT NULL,
@@ -12,10 +12,65 @@ CREATE TABLE validadores (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_validadores_negocio ON validadores(negocio_id);
-CREATE INDEX idx_validadores_activo ON validadores(activo);
+CREATE INDEX IF NOT EXISTS idx_validadores_negocio ON validadores(negocio_id);
+CREATE INDEX IF NOT EXISTS idx_validadores_activo ON validadores(activo);
+CREATE INDEX IF NOT EXISTS idx_visitas_validado_por ON visitas(validado_por);
 
-ALTER TABLE check_ins
-ADD COLUMN validado_por UUID REFERENCES validadores(id);
+ALTER TABLE validadores ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX idx_check_ins_validado_por ON check_ins(validado_por);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'validadores'
+      AND policyname = 'staff y admin leen validadores'
+  ) THEN
+    CREATE POLICY "staff y admin leen validadores" ON validadores
+      FOR SELECT USING (
+        EXISTS (
+          SELECT 1
+          FROM users u
+          WHERE u.id = auth.uid()
+            AND (
+              u.rol = 'admin'
+              OR (u.rol = 'staff' AND u.negocio_id = validadores.negocio_id)
+            )
+        )
+      );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'validadores'
+      AND policyname = 'staff y admin gestionan validadores'
+  ) THEN
+    CREATE POLICY "staff y admin gestionan validadores" ON validadores
+      FOR ALL USING (
+        EXISTS (
+          SELECT 1
+          FROM users u
+          WHERE u.id = auth.uid()
+            AND (
+              u.rol = 'admin'
+              OR (u.rol = 'staff' AND u.negocio_id = validadores.negocio_id)
+            )
+        )
+      )
+      WITH CHECK (
+        EXISTS (
+          SELECT 1
+          FROM users u
+          WHERE u.id = auth.uid()
+            AND (
+              u.rol = 'admin'
+              OR (u.rol = 'staff' AND u.negocio_id = validadores.negocio_id)
+            )
+        )
+      );
+  END IF;
+END
+$$;

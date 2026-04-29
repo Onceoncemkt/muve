@@ -30,7 +30,9 @@ type UsuarioBusqueda = {
 type HistorialItem = {
   id: string
   created_at: string
+  fecha?: string
   exitoso: boolean
+  validado_por?: string | null
   users?: { nombre?: string; plan?: string } | { nombre?: string; plan?: string }[] | null
   validadores?: { nombre?: string } | { nombre?: string }[] | null
 }
@@ -49,7 +51,7 @@ function formatHora(fechaIso: string) {
 export default function ValidarPage() {
   const [sesion, setSesion] = useState<ValidadorSession | null>(null)
   const [cargandoSesion, setCargandoSesion] = useState(true)
-  const [emailNegocio, setEmailNegocio] = useState('')
+  const [codigoNegocio, setCodigoNegocio] = useState('')
   const [nombreValidador, setNombreValidador] = useState('')
   const [pin, setPin] = useState('')
   const [enviandoLogin, setEnviandoLogin] = useState(false)
@@ -110,7 +112,7 @@ export default function ValidarPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email_negocio: emailNegocio.trim(),
+          codigo_negocio: codigoNegocio.trim().toUpperCase(),
           pin: pin.trim(),
           nombre_validador: nombreValidador.trim(),
         }),
@@ -223,10 +225,10 @@ export default function ValidarPage() {
 
           <form onSubmit={loginValidador} className="space-y-3 rounded-xl border border-[#E5E5E5] bg-white p-5">
             <input
-              type="email"
-              placeholder="Email del negocio"
-              value={emailNegocio}
-              onChange={(event) => setEmailNegocio(event.target.value)}
+              type="text"
+              placeholder="Código del negocio (ej. NEG-ABC123)"
+              value={codigoNegocio}
+              onChange={(event) => setCodigoNegocio(event.target.value.toUpperCase())}
               className="w-full rounded-lg border border-[#E5E5E5] px-4 py-4 text-base outline-none focus:border-[#6B4FE8]"
               required
             />
@@ -349,15 +351,16 @@ export default function ValidarPage() {
               {historial.map((item) => {
                 const usuario = obtenerRelacion(item.users)
                 const validador = obtenerRelacion(item.validadores)
+                const timestamp = item.created_at ?? item.fecha ?? ''
                 return (
                   <li key={item.id} className="flex items-center justify-between rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2">
                     <div>
                       <p className="text-sm font-bold text-[#0A0A0A]">{usuario?.nombre ?? 'Usuario'}</p>
                       <p className="text-xs text-[#666]">
-                        {validador?.nombre ?? sesion.nombre} · {item.exitoso ? 'Éxito' : 'Fallido'}
+                        {validador?.nombre ?? item.validado_por ?? sesion.nombre} · {item.exitoso ? 'Éxito' : 'Fallido'}
                       </p>
                     </div>
-                    <span className="text-xs font-semibold text-[#6B4FE8]">{formatHora(item.created_at)}</span>
+                    <span className="text-xs font-semibold text-[#6B4FE8]">{formatHora(timestamp)}</span>
                   </li>
                 )
               })}

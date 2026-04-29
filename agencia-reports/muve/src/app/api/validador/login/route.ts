@@ -2,53 +2,59 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { negocioAccessCode } from '@/lib/negocio-code'
 
 function normalizarNombre(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
 }
 
 export async function POST(req: NextRequest) {
-  const { email_negocio, pin, nombre_validador } = await req.json().catch(() => ({}))
+  const { codigo_negocio, pin, nombre_validador } = await req.json().catch(() => ({}))
 
-  if (!email_negocio || !pin || !nombre_validador) {
+  if (!codigo_negocio || !pin || !nombre_validador) {
     return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
   }
 
   const supabase = await createClient()
-
-  const { data: staffUser } = await supabase
-    .from('users')
-    .select('negocio_id')
-    .eq('email', email_negocio)
-    .eq('rol', 'staff')
-    .single<{ negocio_id: string | null }>()
-
-  if (!staffUser?.negocio_id) {
-    return NextResponse.json({ error: 'Negocio no encontrado o inactivo' }, { status: 404 })
-  }
-
-  const { data: negocio } = await supabase
-    .from('negocios')
-    .select('id, nombre, activo')
-    .eq('id', staffUser.negocio_id)
-    .single<{ id: string; nombre: string; activo: boolean }>()
-
-  if (!negocio?.activo) {
-    return NextResponse.json({ error: 'Negocio no encontrado o inactivo' }, { status: 404 })
-  }
+  const codigoNormalizado = String(codigo_negocio).trim().toUpperCase()
+  const nombreNormalizado = normalizarNombre(String(nombre_validador))
 
   const { data: validadores } = await supabase
     .from('validadores')
-    .select('id, nombre, pin_hash')
-    .eq('negocio_id', staffUser.negocio_id)
+    .select('id, nombre, pin_hash, negocio_id, negocios(nombre, activo)')
     .eq('activo', true)
+    .returns<Array<{
+      id: string
+      nombre: string
+      pin_hash: string
+      negocio_id: string
+      negocios: { nombre?: string; activo?: boolean } | { nombre?: string; activo?: boolean }[] | null
+    }>>()
 
   if (!validadores?.length) {
     return NextResponse.json({ error: 'Sin validadores configurados' }, { status: 404 })
   }
+  const candidatos = validadores.filter((v) => (
+    typeof v.negocio_id === 'string'
+    && negocioAccessCode(v.negocio_id) === codigoNormalizado
+    && normalizarNombre(v.nombre) === nombreNormalizado
+    && (
+      (Array.isArray(v.negocios) ? v.negocios[0]?.activo : v.negocios?.activo) === true
+    )
+  ))
 
-  let validadorMatch: { id: string; nombre: string; pin_hash: string } | null = null
-  for (const v of validadores) {
+  if (candidatos.length === 0) {
+    return NextResponse.json({ error: 'Código o nombre inválidos' }, { status: 401 })
+  }
+
+  let validadorMatch: {
+    id: string
+    nombre: string
+    pin_hash: string
+    negocio_id: string
+    negocios: { nombre?: string; activo?: boolean } | { nombre?: string; activo?: boolean }[] | null
+  } | null = null
+  for (const v of candidatos) {
     if (await bcrypt.compare(String(pin), v.pin_hash)) {
       validadorMatch = v
       break
@@ -58,10 +64,7 @@ export async function POST(req: NextRequest) {
   if (!validadorMatch) {
     return NextResponse.json({ error: 'PIN incorrecto' }, { status: 401 })
   }
-
-  if (normalizarNombre(validadorMatch.nombre) !== normalizarNombre(String(nombre_validador))) {
-    return NextResponse.json({ error: 'Nombre no coincide con el PIN' }, { status: 401 })
-  }
+  const negocio = Array.isArray(validadorMatch.negocios) ? validadorMatch.negocios[0] : validadorMatch.negocios
 
   await supabase
     .from('validadores')
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
   cookieStore.set('muvet_validador', JSON.stringify({
     validador_id: validadorMatch.id,
-    negocio_id: staffUser.negocio_id,
+    negocio_id: validadorMatch.negocio_id,
     nombre: validadorMatch.nombre,
   }), {
     httpOnly: true,
@@ -83,6 +86,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     nombre: validadorMatch.nombre,
-    negocio_nombre: negocio.nombre,
+    negocio_nombre: negocio?.nombre ?? null,
   })
 }
