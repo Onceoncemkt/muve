@@ -202,6 +202,7 @@ export async function POST(request: NextRequest) {
   let negocio: {
     nombre: string
     categoria: string | null
+    nivel: 'basico' | 'plus' | 'total'
     ciudad: string | null
     zona: string | null
     monto_maximo_visita: number | null
@@ -209,11 +210,12 @@ export async function POST(request: NextRequest) {
   } | null = null
   const consultaNegocio = await db
     .from('negocios')
-    .select('nombre, categoria, ciudad, zona, monto_maximo_visita, requiere_reserva')
+    .select('nombre, categoria, nivel, ciudad, zona, monto_maximo_visita, requiere_reserva')
     .eq('id', negocioIdObjetivo)
     .maybeSingle<{
       nombre: string
       categoria: string | null
+      nivel?: 'basico' | 'plus' | 'total' | null
       ciudad: string | null
       zona: string | null
       monto_maximo_visita: number | null
@@ -221,7 +223,12 @@ export async function POST(request: NextRequest) {
     }>()
 
   if (!consultaNegocio.error && consultaNegocio.data) {
-    negocio = consultaNegocio.data
+    negocio = {
+      ...consultaNegocio.data,
+      nivel: consultaNegocio.data.nivel === 'plus' || consultaNegocio.data.nivel === 'total'
+        ? consultaNegocio.data.nivel
+        : 'basico',
+    }
   } else if (
     faltaColumna(consultaNegocio.error, 'zona')
     || faltaColumna(consultaNegocio.error, 'ciudad')
@@ -247,6 +254,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle<{
         nombre: string
         categoria: string | null
+        nivel?: 'basico' | 'plus' | 'total' | null
         ciudad?: string | null
         zona?: string | null
         monto_maximo_visita?: number | null
@@ -258,6 +266,9 @@ export async function POST(request: NextRequest) {
         : null
       negocio = {
         ...fallbackNegocio.data,
+        nivel: fallbackNegocio.data.nivel === 'plus' || fallbackNegocio.data.nivel === 'total'
+          ? fallbackNegocio.data.nivel
+          : 'basico',
         ciudad: typeof fallbackNegocio.data.ciudad === 'string' ? fallbackNegocio.data.ciudad : null,
         zona: typeof fallbackNegocio.data.zona === 'string' ? fallbackNegocio.data.zona : null,
         monto_maximo_visita: typeof fallbackNegocio.data.monto_maximo_visita === 'number'
@@ -272,6 +283,9 @@ export async function POST(request: NextRequest) {
 
   if (!negocio) {
     return NextResponse.json({ error: 'No se pudo validar el negocio' }, { status: 400 })
+  }
+  if (negocio.nivel !== 'plus' && negocio.nivel !== 'total') {
+    negocio.nivel = 'basico'
   }
 
   const categoriaNegocio = typeof negocio.categoria === 'string' ? negocio.categoria : null
@@ -290,9 +304,14 @@ export async function POST(request: NextRequest) {
       error: 'Límite de créditos en este lugar alcanzado',
     })
   }
+  const planTarifaMontoNegocio = (
+    categoriaNegocio === 'clases' && negocio.nivel === 'total'
+      ? 'total'
+      : planUsuario
+  )
   const montoNegocioMxn = calcularMontoNegocioPorVisita({
     categoria: categoriaNegocio,
-    planUsuario,
+    planUsuario: planTarifaMontoNegocio,
     zona: negocio.zona,
     ciudad: negocio.ciudad,
   })
