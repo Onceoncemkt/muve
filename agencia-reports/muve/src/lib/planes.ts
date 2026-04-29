@@ -73,6 +73,12 @@ function obtenerEnvStripePriceId(envKeys: string[]) {
   }
   return null
 }
+function obtenerEnvStripePriceIds(envKeys: string[]) {
+  const values = envKeys
+    .map((envKey) => process.env[envKey]?.trim())
+    .filter((value): value is string => Boolean(value))
+  return Array.from(new Set(values))
+}
 
 function obtenerStripePriceIdsParcialesDesdeEnv() {
   const resultado: Record<RegionPrecios, Partial<Record<PlanMembresia, string>>> = {
@@ -115,6 +121,10 @@ export function obtenerStripePriceIdsPorRegion(): StripePriceIdsPorRegion {
       total: priceIdsParciales.bc.total as string,
     },
   }
+}
+export function obtenerStripePriceIdsCandidatos(region: RegionPrecios, plan: PlanMembresia): string[] {
+  const envKeys = STRIPE_PRICE_ENV_POR_REGION[region][plan]
+  return obtenerEnvStripePriceIds(envKeys)
 }
 
 export function normalizarPlan(plan: unknown): PlanMembresia | null {

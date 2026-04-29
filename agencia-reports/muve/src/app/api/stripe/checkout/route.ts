@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
-import { normalizarPlan, obtenerStripePriceIdsPorRegion, planDesdePriceId } from '@/lib/planes'
+import { normalizarPlan, obtenerStripePriceIdsCandidatos, obtenerStripePriceIdsPorRegion, planDesdePriceId } from '@/lib/planes'
 
 type PerfilCheckout = {
   nombre: string | null
@@ -10,6 +10,18 @@ type PerfilCheckout = {
   stripe_customer_id: string | null
   plan_activo: boolean | null
   ciudad: string | null
+}
+function esErrorStripePriceNoExiste(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const code = (error as { code?: unknown }).code
+  const param = (error as { param?: unknown }).param
+  const message = (error as { message?: unknown }).message
+  const messageNormalizado = typeof message === 'string' ? message.toLowerCase() : ''
+  return (
+    code === 'resource_missing'
+    && param === 'line_items[0][price]'
+    && messageNormalizado.includes('no such price')
+  )
 }
 
 function esErrorStripeCustomerNoExiste(error: unknown) {
@@ -112,9 +124,11 @@ export async function POST(request: NextRequest) {
     }
 
     let priceIdsCiudad: Record<'basico' | 'plus' | 'total', string>
+    let regionActiva: 'centro' | 'bc' = 'centro'
     try {
       const { centro, bc } = obtenerStripePriceIdsPorRegion()
-      priceIdsCiudad = esCiudadBC(perfil?.ciudad) ? bc : centro
+      regionActiva = esCiudadBC(perfil?.ciudad) ? 'bc' : 'centro'
+      priceIdsCiudad = regionActiva === 'bc' ? bc : centro
     } catch (error) {
       return NextResponse.json(
         {
@@ -202,10 +216,10 @@ export async function POST(request: NextRequest) {
       metadata.codigo_descuento = descuentoAplicado.codigo
     }
 
-    const crearSessionCheckout = (customer: string) => stripe.checkout.sessions.create({
+    const crearSessionCheckout = (customer: string, priceId: string) => stripe.checkout.sessions.create({
       customer,
       mode: 'subscription',
-      line_items: [{ price: priceIdFinal, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${origin}/dashboard?membresia=activada`,
       cancel_url: `${origin}/`,
       discounts: descuentoAplicado ? [{ coupon: descuentoAplicado.codigo }] : undefined,
@@ -215,27 +229,57 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    const crearSessionConCustomerFallback = async (priceId: string) => {
+      try {
+        return await crearSessionCheckout(customerId, priceId)
+      } catch (error) {
+        if (!customerId || !esErrorStripeCustomerNoExiste(error)) {
+          throw error
+        }
+
+        const customerNuevo = await stripe.customers.create({
+          email: perfil?.email ?? user.email!,
+          name: perfil?.nombre ?? undefined,
+          metadata: { supabase_user_id: user.id },
+        })
+        customerId = customerNuevo.id
+
+        await supabase
+          .from('users')
+          .update({ stripe_customer_id: customerId })
+          .eq('id', user.id)
+
+        return crearSessionCheckout(customerId, priceId)
+      }
+    }
+
     let session
     try {
-      session = await crearSessionCheckout(customerId)
+      session = await crearSessionConCustomerFallback(priceIdFinal)
     } catch (error) {
-      if (!customerId || !esErrorStripeCustomerNoExiste(error)) {
+      if (!esErrorStripePriceNoExiste(error)) {
         throw error
       }
-
-      const customerNuevo = await stripe.customers.create({
-        email: perfil?.email ?? user.email!,
-        name: perfil?.nombre ?? undefined,
-        metadata: { supabase_user_id: user.id },
-      })
-      customerId = customerNuevo.id
-
-      await supabase
-        .from('users')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', user.id)
-
-      session = await crearSessionCheckout(customerId)
+      const candidatosAlternos = obtenerStripePriceIdsCandidatos(regionActiva, planSolicitado)
+        .filter((priceId) => priceId !== priceIdFinal)
+      let sessionAlterna = null
+      for (const priceIdAlterno of candidatosAlternos) {
+        try {
+          sessionAlterna = await crearSessionConCustomerFallback(priceIdAlterno)
+          break
+        } catch {
+          // Intentar siguiente candidato.
+        }
+      }
+      if (!sessionAlterna) {
+        return NextResponse.json(
+          {
+            error: `Price ID inválido o no disponible en Stripe para ${planSolicitado}/${regionActiva}. Revisa variables de entorno.`,
+          },
+          { status: 500 }
+        )
+      }
+      session = sessionAlterna
     }
 
     return NextResponse.json({
