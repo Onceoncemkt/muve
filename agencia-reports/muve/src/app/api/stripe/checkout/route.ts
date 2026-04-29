@@ -12,6 +12,19 @@ type PerfilCheckout = {
   ciudad: string | null
 }
 
+function esErrorStripeCustomerNoExiste(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const code = (error as { code?: unknown }).code
+  const param = (error as { param?: unknown }).param
+  const message = (error as { message?: unknown }).message
+  const messageNormalizado = typeof message === 'string' ? message.toLowerCase() : ''
+  return (
+    code === 'resource_missing'
+    && param === 'customer'
+    && messageNormalizado.includes('no such customer')
+  )
+}
+
 type DescuentoDisponible = {
   id: string
   codigo: string
@@ -189,8 +202,8 @@ export async function POST(request: NextRequest) {
       metadata.codigo_descuento = descuentoAplicado.codigo
     }
 
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
+    const crearSessionCheckout = (customer: string) => stripe.checkout.sessions.create({
+      customer,
       mode: 'subscription',
       line_items: [{ price: priceIdFinal, quantity: 1 }],
       success_url: `${origin}/dashboard?membresia=activada`,
@@ -201,6 +214,29 @@ export async function POST(request: NextRequest) {
         metadata,
       },
     })
+
+    let session
+    try {
+      session = await crearSessionCheckout(customerId)
+    } catch (error) {
+      if (!customerId || !esErrorStripeCustomerNoExiste(error)) {
+        throw error
+      }
+
+      const customerNuevo = await stripe.customers.create({
+        email: perfil?.email ?? user.email!,
+        name: perfil?.nombre ?? undefined,
+        metadata: { supabase_user_id: user.id },
+      })
+      customerId = customerNuevo.id
+
+      await supabase
+        .from('users')
+        .update({ stripe_customer_id: customerId })
+        .eq('id', user.id)
+
+      session = await crearSessionCheckout(customerId)
+    }
 
     return NextResponse.json({
       url: session.url,
