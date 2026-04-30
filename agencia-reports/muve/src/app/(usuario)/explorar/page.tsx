@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   CATEGORIA_LABELS,
   CIUDAD_LABELS,
@@ -164,10 +165,6 @@ function formatMoneyMxn(monto: number) {
   }).format(monto)
 }
 
-function enlaceMapaNegocio(negocio: Negocio) {
-  const query = encodeURIComponent(`${negocio.nombre} ${negocio.direccion}`)
-  return `https://www.google.com/maps/search/?api=1&query=${query}`
-}
 
 function serviciosWellnessVisibles(negocio: Negocio): ServicioNegocio[] {
   return Array.isArray(negocio.servicios_disponibles)
@@ -572,7 +569,7 @@ export default function ExplorarPage() {
               const instagramHandle = normalizarHandleSocial(negocio.instagram_handle)
               const tiktokHandle = normalizarHandleSocial(negocio.tiktok_handle)
               const esWellness = categoriaNegocio === 'estetica'
-              const esRestaurante = categoriaNegocio === 'restaurante'
+              const esCheckinDirecto = categoriaNegocio === 'gimnasio' || categoriaNegocio === 'restaurante'
               const iniciales = inicialesNegocio(negocio.nombre)
               const menuReservasAbierto = Boolean(menuReservasAbiertoPorNegocioId[negocio.id])
               const cargandoHorarios = Boolean(cargandoHorariosPorNegocioId[negocio.id])
@@ -602,9 +599,6 @@ export default function ExplorarPage() {
                       clase: puedeReservar ? 'bg-[#6B4FE8] text-white' : 'bg-[#E5E5E5] text-[#666]',
                     }
                     : null
-              const urlVerMasRestaurante = instagramHandle
-                ? `https://instagram.com/${instagramHandle}`
-                : enlaceMapaNegocio(negocio)
 
               return (
                 <div
@@ -642,73 +636,30 @@ export default function ExplorarPage() {
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-base font-black text-[#0A0A0A]">{negocio.nombre}</h2>
                   </div>
-                  {esRestaurante ? (
-                    <div className="mt-2 space-y-1 text-sm text-[#555]">
-                      {negocio.descripcion && (
-                        <p className="text-sm text-[#555]">{negocio.descripcion}</p>
-                      )}
+                  <div className="mt-2 space-y-1 text-sm text-[#555]">
+                    <p>
+                      <span className="font-semibold text-[#0A0A0A]">Categoría:</span> {categoriaNegocio ? CATEGORIA_LABELS[categoriaNegocio] : 'Sin categoría'}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {CIUDAD_LABELS[negocio.ciudad]}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#0A0A0A]">Dirección:</span> {negocio.direccion}
+                    </p>
+                    {negocio.descripcion && (
+                      <p className="line-clamp-3 text-sm text-[#555]">{negocio.descripcion}</p>
+                    )}
+                    {instagramHandle && (
                       <p>
-                        <span className="font-semibold text-[#0A0A0A]">Dirección:</span> {negocio.direccion}
+                        <span className="font-semibold text-[#0A0A0A]">Instagram:</span> @{instagramHandle}
                       </p>
+                    )}
+                    {tiktokHandle && (
                       <p>
-                        <span className="font-semibold text-[#0A0A0A]">Instagram:</span>{' '}
-                        {instagramHandle ? (
-                          <a
-                            href={`https://instagram.com/${instagramHandle}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
-                          >
-                            @{instagramHandle}
-                          </a>
-                        ) : (
-                          'No disponible'
-                        )}
+                        <span className="font-semibold text-[#0A0A0A]">TikTok:</span> @{tiktokHandle}
                       </p>
-                    </div>
-                  ) : (
-                    <div className="mt-2 space-y-1 text-sm text-[#555]">
-                      <p>
-                        <span className="font-semibold text-[#0A0A0A]">Categoría:</span> {categoriaNegocio ? CATEGORIA_LABELS[categoriaNegocio] : 'Sin categoría'}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {CIUDAD_LABELS[negocio.ciudad]}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[#0A0A0A]">Dirección:</span> {negocio.direccion}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[#0A0A0A]">Instagram:</span>{' '}
-                        {instagramHandle ? (
-                          <a
-                            href={`https://instagram.com/${instagramHandle}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
-                          >
-                            @{instagramHandle}
-                          </a>
-                        ) : (
-                          'No disponible'
-                        )}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[#0A0A0A]">TikTok:</span>{' '}
-                        {tiktokHandle ? (
-                          <a
-                            href={`https://tiktok.com/@${tiktokHandle}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-[#6B4FE8] underline-offset-2 hover:underline"
-                          >
-                            @{tiktokHandle}
-                          </a>
-                        ) : (
-                          'No disponible'
-                        )}
-                      </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {esWellness && (
                     <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
@@ -743,41 +694,26 @@ export default function ExplorarPage() {
                     </div>
                   )}
 
-                  {esRestaurante ? (
-                    puedeReservar ? (
-                      <a
-                        href={urlVerMasRestaurante}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(event) => event.stopPropagation()}
-                        className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#0A0A0A] px-3 py-2 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-[#E8FF47]"
-                      >
-                        Ver más
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          router.push('/planes')
-                        }}
-                        className="mt-4 w-full rounded-lg border border-[#E5E5E5] bg-[#F7F7F7] px-3 py-2 text-sm font-bold text-[#888]"
-                      >
-                        {bloqueadoPorMembresia ? '🔒 Activar plan' : planRequerido === 'plus' ? 'Requiere Plus' : 'Requiere Total'}
-                      </button>
-                    )
-                  ) : (
+                  <Link
+                    href={`/negocio/${negocio.id}`}
+                    onClick={(event) => event.stopPropagation()}
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#0A0A0A] px-3 py-2 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-[#E8FF47]"
+                  >
+                    Ver detalle
+                  </Link>
+                  {esCheckinDirecto ? (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation()
                         if (bloqueadoPorMembresia) {
                           router.push('/planes')
                           return
                         }
-                        abrirOCerrarMenuReservas(negocio, menuReservasAbierto)
+                        router.push('/dashboard')
                       }}
                       disabled={!puedeReservar && !bloqueadoPorMembresia}
-                      className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
+                      className={`mt-2 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
                         puedeReservar
                           ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
                           : bloqueadoPorMembresia
@@ -789,15 +725,38 @@ export default function ExplorarPage() {
                         ? bloqueadoPorMembresia
                           ? '🔒 Activar plan'
                           : planRequerido === 'plus'
-                          ? 'Requiere Plus'
-                          : 'Requiere Total'
+                            ? 'Requiere Plus'
+                            : 'Requiere Total'
+                        : 'Hacer check-in'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (bloqueadoPorMembresia) {
+                          router.push('/planes')
+                          return
+                        }
+                        abrirOCerrarMenuReservas(negocio, menuReservasAbierto)
+                      }}
+                      disabled={!puedeReservar && !bloqueadoPorMembresia}
+                      className={`mt-2 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
+                        puedeReservar
+                          ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
+                          : bloqueadoPorMembresia
+                            ? 'border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                            : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                      }`}
+                    >
+                      {!puedeReservar
+                        ? bloqueadoPorMembresia
+                          ? '🔒 Activar plan'
+                          : planRequerido === 'plus'
+                            ? 'Requiere Plus'
+                            : 'Requiere Total'
                         : menuReservasAbierto
-                          ? esWellness
-                            ? 'Ocultar disponibilidad'
-                            : 'Ocultar horarios'
-                          : esWellness
-                            ? 'Reservar servicio'
-                            : 'Reservar clase'}
+                          ? 'Ocultar disponibilidad'
+                          : 'Reservar'}
                     </button>
                   )}
                   {!puedeReservar && (
@@ -819,7 +778,7 @@ export default function ExplorarPage() {
                     </div>
                   )}
 
-                  {!esRestaurante && puedeReservar && menuReservasAbierto && (
+                  {!esCheckinDirecto && puedeReservar && menuReservasAbierto && (
                     <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-[#555]">
                         {esWellness

@@ -6,6 +6,14 @@ import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import type { DiaSemana, EstadoReserva, PlanMembresia } from '@/types'
 import { DIA_LABELS, formatHora } from '@/types'
 import { normalizarCategoriaNegocio } from '@/lib/planes'
+import {
+  DIAS_SEMANA_RESTAURANTE,
+  configuracionRestauranteInicial,
+  normalizarDiasActivosRestaurante,
+  parseConfiguracionRestaurante,
+  serializarConfiguracionRestaurante,
+  type ConfiguracionRestaurante,
+} from '@/lib/restaurante-config'
 
 type UsuarioReserva = { id: string; nombre: string; email: string }
 type HorarioReserva = {
@@ -111,67 +119,6 @@ interface DashboardPayload {
   pagos?: PagosPayload
   reservaciones?: ReservacionNegocio[]
   error?: string
-}
-
-type ConfiguracionRestaurante = {
-  servicio: string
-  dias_activos: DiaSemana[]
-}
-
-const DIAS_SEMANA: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
-const RESTAURANTE_CONFIG_PREFIX = '__MUVET_RESTAURANTE_CONFIG__'
-
-function normalizarDiasActivosRestaurante(value: unknown): DiaSemana[] {
-  if (!Array.isArray(value)) return [...DIAS_SEMANA]
-  const resultado = value.filter((dia): dia is DiaSemana => (
-    typeof dia === 'string' && DIAS_SEMANA.includes(dia as DiaSemana)
-  ))
-  return resultado.length > 0 ? Array.from(new Set(resultado)) : [...DIAS_SEMANA]
-}
-
-function configuracionRestauranteInicial(): ConfiguracionRestaurante {
-  return {
-    servicio: '',
-    dias_activos: [...DIAS_SEMANA],
-  }
-}
-
-function parseConfiguracionRestaurante(raw: string | null | undefined): ConfiguracionRestaurante {
-  if (typeof raw !== 'string' || !raw.trim()) return configuracionRestauranteInicial()
-  const limpio = raw.trim()
-  const prefijo = `${RESTAURANTE_CONFIG_PREFIX}:`
-  if (!limpio.startsWith(prefijo)) {
-    return {
-      servicio: limpio,
-      dias_activos: [...DIAS_SEMANA],
-    }
-  }
-
-  const payload = limpio.slice(prefijo.length).trim()
-  if (!payload) return configuracionRestauranteInicial()
-
-  try {
-    const parsed = JSON.parse(payload) as {
-      servicio?: unknown
-      dias_activos?: unknown
-    }
-    return {
-      servicio: typeof parsed.servicio === 'string' ? parsed.servicio.trim() : '',
-      dias_activos: normalizarDiasActivosRestaurante(parsed.dias_activos),
-    }
-  } catch {
-    return {
-      servicio: payload,
-      dias_activos: [...DIAS_SEMANA],
-    }
-  }
-}
-
-function serializarConfiguracionRestaurante(config: ConfiguracionRestaurante) {
-  return `${RESTAURANTE_CONFIG_PREFIX}:${JSON.stringify({
-    servicio: config.servicio.trim(),
-    dias_activos: normalizarDiasActivosRestaurante(config.dias_activos),
-  })}`
 }
 
 function hoyLocalISO() {
@@ -497,6 +444,7 @@ export default function NegocioDashboardPage() {
     const serviciosIncluidosSerializado = serializarConfiguracionRestaurante({
       servicio,
       dias_activos: diasActivos,
+      fecha_oferta: configuracionRestaurante.fecha_oferta,
     })
 
     setGuardandoConfiguracionRestaurante(true)
@@ -530,6 +478,7 @@ export default function NegocioDashboardPage() {
       setConfiguracionRestaurante({
         servicio,
         dias_activos: diasActivos,
+        fecha_oferta: configuracionRestaurante.fecha_oferta,
       })
       setMontoMaximoRestauranteDraft(String(montoMaximo))
       setMensaje({ tipo: 'ok', texto: 'Configuración de restaurante guardada correctamente' })
@@ -774,7 +723,7 @@ export default function NegocioDashboardPage() {
                   <div>
                     <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[#555]">Días activos</p>
                     <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                      {DIAS_SEMANA.map((dia) => {
+                      {DIAS_SEMANA_RESTAURANTE.map((dia) => {
                         const activo = configuracionRestaurante.dias_activos.includes(dia)
                         return (
                           <button

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import type { Categoria, Ciudad, NivelNegocio, Rol, ZonaNegocio } from '@/types'
+import {
+  configuracionRestauranteInicial,
+  serializarConfiguracionRestaurante,
+} from '@/lib/restaurante-config'
 
 const CIUDADES_VALIDAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 const CATEGORIAS_VALIDAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
@@ -14,6 +18,7 @@ const COLUMNAS_OPCIONALES_NEGOCIO = [
   'capacidad_default',
   'instagram_handle',
   'imagen_url',
+  'servicios_incluidos',
 ] as const
 const BUCKET_NEGOCIOS = 'negocios'
 
@@ -32,6 +37,12 @@ function resolverNextPath(value: FormDataEntryValue | null) {
 
 function texto(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function esFechaISO(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00`)
+  return !Number.isNaN(parsed.getTime())
 }
 
 function redireccionConEstado(
@@ -154,7 +165,10 @@ export async function POST(
   const descripcionRaw = texto(formData.get('descripcion'))
   const instagramRaw = texto(formData.get('instagram_handle'))
   const requiereReservaRaw = texto(formData.get('requiere_reserva')).toLowerCase()
+  const horariosHabilitadosRaw = texto(formData.get('horarios_habilitados')).toLowerCase()
   const capacidadDefaultRaw = texto(formData.get('capacidad_default'))
+  const ofertaMuvetRaw = texto(formData.get('oferta_muvet'))
+  const fechaOfertaMuvetRaw = texto(formData.get('fecha_oferta_muvet'))
   const fotoNegocio = obtenerArchivoImagen(formData.get('foto_negocio'))
 
   const categoria = CATEGORIAS_VALIDAS.includes(categoriaRaw as Categoria)
@@ -181,13 +195,29 @@ export async function POST(
 
   const instagramHandle = instagramRaw ? instagramRaw.replace(/^@+/, '') : null
   const descripcion = descripcionRaw || null
-  const requiereReserva = ['true', 'on', '1', 'si', 'sí'].includes(requiereReservaRaw)
+  const requiereReserva = categoria === 'restaurante'
+    ? ['true', 'on', '1', 'si', 'sí'].includes(horariosHabilitadosRaw)
+    : ['true', 'on', '1', 'si', 'sí'].includes(requiereReservaRaw)
   const capacidadDefaultParsed = Number.parseInt(capacidadDefaultRaw, 10)
-  const capacidadDefault = requiereReserva
+  const capacidadDefault = categoria === 'restaurante'
+    ? null
+    : requiereReserva
     ? (Number.isFinite(capacidadDefaultParsed) && capacidadDefaultParsed > 0 ? capacidadDefaultParsed : null)
     : null
+  const fechaOfertaMuvet = fechaOfertaMuvetRaw
+    ? (esFechaISO(fechaOfertaMuvetRaw) ? fechaOfertaMuvetRaw : null)
+    : null
 
-  if (requiereReserva && !capacidadDefault) {
+  if (fechaOfertaMuvetRaw && !fechaOfertaMuvet) {
+    return redireccionConEstado(
+      request,
+      nextPath,
+      'error',
+      'La fecha de oferta MUVET no es válida.'
+    )
+  }
+
+  if (categoria !== 'restaurante' && requiereReserva && !capacidadDefault) {
     return redireccionConEstado(
       request,
       nextPath,
@@ -242,6 +272,13 @@ export async function POST(
     instagram_handle: instagramHandle,
     requiere_reserva: requiereReserva,
     capacidad_default: capacidadDefault,
+  }
+  if (categoria === 'restaurante') {
+    payload.servicios_incluidos = serializarConfiguracionRestaurante({
+      ...configuracionRestauranteInicial(),
+      servicio: ofertaMuvetRaw,
+      fecha_oferta: fechaOfertaMuvet,
+    })
   }
   if (imagenUrl) {
     payload.imagen_url = imagenUrl

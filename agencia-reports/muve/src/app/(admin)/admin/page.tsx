@@ -12,6 +12,7 @@ import AdminInvitarUsuarioModal from '@/components/admin/AdminInvitarUsuarioModa
 import AdminInvitarNegocioForm from '@/components/admin/AdminInvitarNegocioForm'
 import type { Ciudad, Categoria, NivelNegocio, Rol, ZonaNegocio } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
+import { parseConfiguracionRestaurante } from '@/lib/restaurante-config'
 
 type UsuarioAdmin = {
   id: string
@@ -39,6 +40,7 @@ type NegocioAdmin = {
   requiere_reserva: boolean
   capacidad_default: number | null
   stripe_account_id: string | null
+  servicios_incluidos: string | null
   activo: boolean
 }
 
@@ -75,6 +77,7 @@ function faltaColumnaRequiereReserva(error: { message?: string } | null | undefi
       || message.includes('stripe_account_id')
       || message.includes('zona')
       || message.includes('nivel')
+      || message.includes('servicios_incluidos')
     )
 }
 
@@ -188,7 +191,7 @@ export default async function AdminPage({
 
   const consultaNegocios = await db
     .from('negocios')
-    .select('id, nombre, ciudad, zona, nivel, categoria, direccion, descripcion, imagen_url, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
+    .select('id, nombre, ciudad, zona, nivel, categoria, direccion, descripcion, imagen_url, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, servicios_incluidos, activo')
     .order('ciudad')
     .order('nombre')
 
@@ -196,7 +199,7 @@ export default async function AdminPage({
   if (!consultaNegocios.error) {
     negociosAfiliados = (consultaNegocios.data ?? []) as NegocioAdmin[]
   } else if (faltaColumnaRequiereReserva(consultaNegocios.error)) {
-    type NegocioAdminLegacy = Omit<NegocioAdmin, 'zona' | 'nivel' | 'imagen_url' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default' | 'stripe_account_id'>
+    type NegocioAdminLegacy = Omit<NegocioAdmin, 'zona' | 'nivel' | 'imagen_url' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default' | 'stripe_account_id' | 'servicios_incluidos'>
     const fallback = await db
       .from('negocios')
       .select('id, nombre, ciudad, categoria, direccion, descripcion, activo')
@@ -213,6 +216,7 @@ export default async function AdminPage({
         requiere_reserva: true,
         capacidad_default: 10,
         stripe_account_id: null,
+        servicios_incluidos: null,
       }))
     }
   }
@@ -460,6 +464,8 @@ export default async function AdminPage({
                   <tbody>
                     {negociosAfiliados.map(negocio => {
                       const staffAsignado = staffPorNegocio.get(negocio.id) ?? []
+                      const esRestaurante = negocio.categoria === 'restaurante'
+                      const configuracionRestaurante = parseConfiguracionRestaurante(negocio.servicios_incluidos)
 
                       return (
                         <tr key={negocio.id} className="border-b border-white/10 align-top text-sm text-white/85">
@@ -662,34 +668,81 @@ export default async function AdminPage({
                                           className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-[11px] text-white file:mr-3 file:rounded-md file:border-0 file:bg-[#6B4FE8] file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:tracking-wide file:text-white hover:file:bg-[#5b40cd]"
                                         />
                                       </div>
-                                      <div className="sm:col-span-2">
-                                        <input
-                                          id={`requiere-reserva-${negocio.id}`}
-                                          type="checkbox"
-                                          name="requiere_reserva"
-                                          value="true"
-                                          defaultChecked={negocio.requiere_reserva}
-                                          className="peer h-4 w-4 accent-[#6B4FE8]"
-                                        />
-                                        <label
-                                          htmlFor={`requiere-reserva-${negocio.id}`}
-                                          className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
-                                        >
-                                          Requiere reserva
-                                        </label>
-                                        <div className="mt-2 hidden peer-checked:block">
-                                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                            Capacidad por clase
-                                          </label>
-                                          <input
-                                            type="number"
-                                            name="capacidad_default"
-                                            min={1}
-                                            defaultValue={negocio.capacidad_default ?? 10}
-                                            className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                          />
+                                      {esRestaurante ? (
+                                        <div className="sm:col-span-2 space-y-2 rounded-md border border-white/10 bg-[#111] p-2.5">
+                                          <div>
+                                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                              Oferta MUVET
+                                            </label>
+                                            <input
+                                              type="text"
+                                              name="oferta_muvet"
+                                              defaultValue={configuracionRestaurante.servicio}
+                                              placeholder="Promo MUVET: 1 plato + bebida"
+                                              className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                              Fecha de oferta
+                                            </label>
+                                            <input
+                                              type="date"
+                                              name="fecha_oferta_muvet"
+                                              defaultValue={configuracionRestaurante.fecha_oferta ?? ''}
+                                              className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                            />
+                                          </div>
+                                          <div>
+                                            <input
+                                              id={`horarios-habilitados-${negocio.id}`}
+                                              type="checkbox"
+                                              name="horarios_habilitados"
+                                              value="true"
+                                              defaultChecked={negocio.requiere_reserva}
+                                              className="h-4 w-4 accent-[#6B4FE8]"
+                                            />
+                                            <label
+                                              htmlFor={`horarios-habilitados-${negocio.id}`}
+                                              className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
+                                            >
+                                              Horarios habilitados
+                                            </label>
+                                            <p className="mt-1 text-[10px] text-white/50">
+                                              Si está desactivado, el usuario verá “Llega cuando quieras en horario de servicio”.
+                                            </p>
+                                          </div>
                                         </div>
-                                      </div>
+                                      ) : (
+                                        <div className="sm:col-span-2">
+                                          <input
+                                            id={`requiere-reserva-${negocio.id}`}
+                                            type="checkbox"
+                                            name="requiere_reserva"
+                                            value="true"
+                                            defaultChecked={negocio.requiere_reserva}
+                                            className="peer h-4 w-4 accent-[#6B4FE8]"
+                                          />
+                                          <label
+                                            htmlFor={`requiere-reserva-${negocio.id}`}
+                                            className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
+                                          >
+                                            Requiere reserva
+                                          </label>
+                                          <div className="mt-2 hidden peer-checked:block">
+                                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                              Capacidad por clase
+                                            </label>
+                                            <input
+                                              type="number"
+                                              name="capacidad_default"
+                                              min={1}
+                                              defaultValue={negocio.capacidad_default ?? 10}
+                                              className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
                                       <div className="sm:col-span-2 flex justify-end">
                                         <button
                                           type="submit"
