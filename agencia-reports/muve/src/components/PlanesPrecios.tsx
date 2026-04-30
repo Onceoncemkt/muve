@@ -125,8 +125,22 @@ function BotonPlan({
         window.location.href = `/registro?plan=${planId}`
         return
       }
-      const data = await res.json()
-      if (data.error) { alert(data.error); return }
+      let data: { error?: string; url?: string } | null = null
+      try {
+        data = await res.json()
+      } catch {
+        // Ignorar: se maneja con fallback abajo.
+      }
+
+      if (!res.ok) {
+        alert(data?.error ?? 'No se pudo iniciar el checkout. Intenta de nuevo.')
+        return
+      }
+      if (data?.error) { alert(data.error); return }
+      if (!data?.url) {
+        alert('No se recibió URL de checkout. Intenta de nuevo.')
+        return
+      }
       window.location.href = data.url
     } catch {
       alert('Error de conexión. Intenta de nuevo.')
