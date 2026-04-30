@@ -65,6 +65,7 @@ const FILTROS_CATEGORIA: Array<{ value: FiltroCategoria; label: string }> = [
 ]
 const MAX_INTENTOS_CARGA_NEGOCIOS = 3
 const RETRASO_BASE_REINTENTO_MS = 700
+const RESTAURANTE_CONFIG_PREFIX = '__MUVET_RESTAURANTE_CONFIG__:'
 
 async function obtenerEstadoPlanUsuario(): Promise<EstadoPlanUsuario> {
   try {
@@ -154,6 +155,30 @@ function obtenerOfertaVisible(ofertaDescripcion: string | null | undefined): str
   if (caracteres.length <= 60) return descripcionLimpia
   return `${caracteres.slice(0, 60).join('')}...`
 }
+function obtenerBeneficioRestaurante(negocio: Negocio): string | null {
+  if (typeof negocio.oferta_descripcion === 'string' && negocio.oferta_descripcion.trim()) {
+    return negocio.oferta_descripcion.trim()
+  }
+  if (typeof negocio.servicios_incluidos !== 'string') return null
+
+  const serviciosIncluidos = negocio.servicios_incluidos.trim()
+  if (!serviciosIncluidos) return null
+  if (!serviciosIncluidos.startsWith(RESTAURANTE_CONFIG_PREFIX)) return serviciosIncluidos
+
+  const payload = serviciosIncluidos.slice(RESTAURANTE_CONFIG_PREFIX.length).trim()
+  if (!payload) return null
+
+  try {
+    const parsed = JSON.parse(payload) as { servicio?: unknown }
+    if (typeof parsed.servicio === 'string' && parsed.servicio.trim()) {
+      return parsed.servicio.trim()
+    }
+  } catch {
+    return payload
+  }
+
+  return payload
+}
 
 function inicialesNegocio(nombre: string) {
   return nombre
@@ -172,10 +197,6 @@ function formatMoneyMxn(monto: number) {
   }).format(monto)
 }
 
-function enlaceMapaNegocio(negocio: Negocio) {
-  const query = encodeURIComponent(`${negocio.nombre} ${negocio.direccion}`)
-  return `https://www.google.com/maps/search/?api=1&query=${query}`
-}
 
 function serviciosWellnessVisibles(negocio: Negocio): ServicioNegocio[] {
   return Array.isArray(negocio.servicios_disponibles)
@@ -582,7 +603,7 @@ export default function ExplorarPage() {
               const esWellness = categoriaNegocio === 'estetica'
               const esRestaurante = categoriaNegocio === 'restaurante'
               const ofertaRestauranteVisible = esRestaurante
-                ? obtenerOfertaVisible(negocio.oferta_descripcion)
+                ? obtenerOfertaVisible(obtenerBeneficioRestaurante(negocio))
                 : null
               const iniciales = inicialesNegocio(negocio.nombre)
               const menuReservasAbierto = Boolean(menuReservasAbiertoPorNegocioId[negocio.id])
@@ -613,9 +634,6 @@ export default function ExplorarPage() {
                       clase: puedeReservar ? 'bg-[#6B4FE8] text-white' : 'bg-[#E5E5E5] text-[#666]',
                     }
                     : null
-              const urlVerMasRestaurante = instagramHandle
-                ? `https://instagram.com/${instagramHandle}`
-                : enlaceMapaNegocio(negocio)
 
               return (
                 <div
@@ -652,12 +670,25 @@ export default function ExplorarPage() {
                   </div>
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-base font-black text-[#0A0A0A]">{negocio.nombre}</h2>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        router.push(`/negocio/${negocio.id}`)
+                      }}
+                      className="rounded-full border border-[#E5E5E5] px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#555] hover:border-[#0A0A0A] hover:text-[#0A0A0A]"
+                    >
+                      Ver detalle
+                    </button>
                   </div>
                   {esRestaurante ? (
                     <div className="mt-2 space-y-1 text-sm text-[#555]">
                       {negocio.descripcion && (
                         <p className="text-sm text-[#555]">{negocio.descripcion}</p>
                       )}
+                      <p>
+                        <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {CIUDAD_LABELS[negocio.ciudad]}
+                      </p>
                       <p>
                         <span className="font-semibold text-[#0A0A0A]">Dirección:</span> {negocio.direccion}
                       </p>
@@ -764,15 +795,16 @@ export default function ExplorarPage() {
 
                   {esRestaurante ? (
                     puedeReservar ? (
-                      <a
-                        href={urlVerMasRestaurante}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(event) => event.stopPropagation()}
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          router.push(`/negocio/${negocio.id}`)
+                        }}
                         className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-[#0A0A0A] px-3 py-2 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-[#E8FF47]"
                       >
                         Ver más
-                      </a>
+                      </button>
                     ) : (
                       <button
                         type="button"
