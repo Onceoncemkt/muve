@@ -49,7 +49,7 @@ const PLANES = [
     features: [
       '8 créditos al ciclo',
       'máx 3 por lugar',
-      'Gimnasios y clases',
+      'Gimnasios, clases y restaurantes',
       'Las 4 ciudades',
     ],
     recomendado: false,
