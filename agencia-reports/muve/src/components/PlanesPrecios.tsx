@@ -62,7 +62,7 @@ const PLANES = [
     features: [
       '16 créditos al ciclo',
       'máx 6 por lugar',
-      'Gimnasios, clases, estéticas y wellness',
+      'Gimnasios, clases, estéticas y restaurantes',
       'Las 4 ciudades',
     ],
     recomendado: true,
@@ -75,7 +75,7 @@ const PLANES = [
     features: [
       '25 créditos al ciclo',
       'máx 10 por lugar',
-      'Gimnasios, clases, estéticas, restaurantes',
+      'Gimnasios, clases, estéticas, restaurantes y wellness',
       'Las 4 ciudades',
     ],
     recomendado: false,
