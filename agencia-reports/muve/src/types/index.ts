@@ -49,6 +49,7 @@ export interface Negocio {
   zona?: ZonaNegocio | null
   direccion: string
   descripcion: string | null
+  oferta_descripcion?: string | null
   imagen_url: string | null
   instagram_handle?: string | null
   tiktok_handle?: string | null

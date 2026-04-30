@@ -146,6 +146,14 @@ function normalizarHandleSocial(handle: string | null | undefined): string | nul
   const limpio = handle.trim().replace(/^@+/, '')
   return limpio.length > 0 ? limpio : null
 }
+function obtenerOfertaVisible(ofertaDescripcion: string | null | undefined): string | null {
+  if (typeof ofertaDescripcion !== 'string') return null
+  const descripcionLimpia = ofertaDescripcion.trim()
+  if (!descripcionLimpia) return null
+  const caracteres = Array.from(descripcionLimpia)
+  if (caracteres.length <= 60) return descripcionLimpia
+  return `${caracteres.slice(0, 60).join('')}...`
+}
 
 function inicialesNegocio(nombre: string) {
   return nombre
@@ -573,6 +581,9 @@ export default function ExplorarPage() {
               const tiktokHandle = normalizarHandleSocial(negocio.tiktok_handle)
               const esWellness = categoriaNegocio === 'estetica'
               const esRestaurante = categoriaNegocio === 'restaurante'
+              const ofertaRestauranteVisible = esRestaurante
+                ? obtenerOfertaVisible(negocio.oferta_descripcion)
+                : null
               const iniciales = inicialesNegocio(negocio.nombre)
               const menuReservasAbierto = Boolean(menuReservasAbiertoPorNegocioId[negocio.id])
               const cargandoHorarios = Boolean(cargandoHorariosPorNegocioId[negocio.id])
@@ -707,6 +718,14 @@ export default function ExplorarPage() {
                           'No disponible'
                         )}
                       </p>
+                    </div>
+                  )}
+                  {esRestaurante && ofertaRestauranteVisible && (
+                    <div className="mt-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-[#555]">
+                        Oferta MUVET
+                      </p>
+                      <p className="mt-1 text-sm text-[#444]">{ofertaRestauranteVisible}</p>
                     </div>
                   )}
 
