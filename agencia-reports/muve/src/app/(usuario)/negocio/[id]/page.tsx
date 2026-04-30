@@ -143,6 +143,7 @@ export default async function NegocioDetallePage({
     : 0
   const mostrarBeneficios = Boolean(textoBeneficio) || montoMaximoVisita > 0 || serviciosDisponibles.length > 0
   const accionPrincipalLabel = negocio.requiere_reserva === false ? 'Hacer check-in' : 'Reservar'
+  const accionPrincipalRuta = negocio.requiere_reserva === false ? '/dashboard' : '/explorar'
   const accionPrincipalAyuda = negocio.requiere_reserva === false
     ? 'Presenta tu pase MUVET en sucursal.'
     : 'Reserva desde explorar en el horario disponible.'
@@ -281,7 +282,7 @@ export default async function NegocioDetallePage({
         )}
 
         <Link
-          href="/explorar"
+          href={accionPrincipalRuta}
           className="inline-flex w-full items-center justify-center rounded-xl bg-[#0A0A0A] px-4 py-3 text-sm font-black text-[#E8FF47] transition-colors hover:bg-[#222]"
         >
           {accionPrincipalLabel}
