@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { getEmailFrom } from '@/lib/email'
 import { enviarPushAUsuarios } from '@/lib/push/server'
 
 export const runtime = 'nodejs'
@@ -110,8 +111,8 @@ async function enviarEmailCumpleanos({
   dashboardUrl: string
 }) {
   const resendApiKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? process.env.EMAIL_FROM
-  if (!resendApiKey || !fromEmail) return false
+  const fromEmail = getEmailFrom()
+  if (!resendApiKey) return false
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',

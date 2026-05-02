@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
 import { enviarPushAUsuarios } from '@/lib/push/server'
+import { getEmailFrom } from '@/lib/email'
 import { normalizarPlan, obtenerStripePriceIdsPorRegion } from '@/lib/planes'
 
 export const runtime = 'nodejs'
@@ -117,8 +118,8 @@ async function enviarEmailRecordatorio({
   checkoutUrl: string
 }) {
   const resendApiKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? process.env.EMAIL_FROM
-  if (!resendApiKey || !fromEmail) return false
+  const fromEmail = getEmailFrom()
+  if (!resendApiKey) return false
 
   const subject = diasRestantes === 3
     ? 'Tu membresía MUVET vence en 3 días'

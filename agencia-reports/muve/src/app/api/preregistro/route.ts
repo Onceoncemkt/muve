@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createServiceClient } from '@/lib/supabase/service'
+import { getEmailFrom } from '@/lib/email'
 
 const CIUDADES_VALIDAS = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
     if (resendApiKey) {
       const resend = new Resend(resendApiKey)
       await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+        from: getEmailFrom(),
         to: emailNormalizado,
         subject: '¡Reservaste 20% durante 3 meses en MUVET! 🎉',
         html: `

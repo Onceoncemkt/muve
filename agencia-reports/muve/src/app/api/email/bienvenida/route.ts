@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getEmailFrom } from '@/lib/email'
 
 type BienvenidaPayload = {
   email?: string
@@ -49,11 +50,11 @@ function plantillaBienvenida(nombre: string, faqUrl: string) {
 
 export async function POST(request: NextRequest) {
   const resendApiKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? process.env.EMAIL_FROM
+  const fromEmail = getEmailFrom()
 
-  if (!resendApiKey || !fromEmail) {
+  if (!resendApiKey) {
     return NextResponse.json(
-      { error: 'Falta configurar RESEND_API_KEY y/o EMAIL_FROM en el servidor' },
+      { error: 'Falta configurar RESEND_API_KEY en el servidor' },
       { status: 503 }
     )
   }

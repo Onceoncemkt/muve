@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { getEmailFrom } from '@/lib/email'
 import {
   normalizarPlan,
   resolverZonaNegocio,
@@ -279,7 +280,7 @@ export async function GET(request: NextRequest) {
 
   const adminEmail = process.env.EMAIL_ADMIN?.trim() || 'hola@muvet.mx'
   const resendApiKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? process.env.EMAIL_FROM
+  const fromEmail = getEmailFrom()
 
   const ciudadesOrdenadas = Array.from(bloquesPorCiudad.keys()).sort((a, b) => a.localeCompare(b, 'es'))
   const contenidoCiudades = ciudadesOrdenadas.map((ciudad) => `
@@ -312,7 +313,7 @@ export async function GET(request: NextRequest) {
     </div>
   `
 
-  if (resendApiKey && fromEmail) {
+  if (resendApiKey) {
     try {
       await fetch('https://api.resend.com/emails', {
         method: 'POST',

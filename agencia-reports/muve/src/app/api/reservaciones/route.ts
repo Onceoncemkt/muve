@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { formatHora, type DiaSemana } from '@/types'
+import { getEmailFrom } from '@/lib/email'
 import { enviarPushAUsuarios, obtenerStaffIdsPorNegocio } from '@/lib/push/server'
 import {
   PLAN_MAX_VISITAS_POR_LUGAR,
@@ -111,8 +112,8 @@ async function enviarEmailConfirmacionReserva({
   if (!email) return
 
   const resendApiKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? process.env.EMAIL_FROM
-  if (!resendApiKey || !fromEmail) return
+  const fromEmail = getEmailFrom()
+  if (!resendApiKey) return
 
   try {
     const response = await fetch('https://api.resend.com/emails', {

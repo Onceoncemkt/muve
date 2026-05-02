@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { Resend } from 'resend'
 import type { Ciudad, Rol } from '@/types'
+import { getEmailFrom } from '@/lib/email'
 
 const CIUDADES_VALIDAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
 
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     const resend = new Resend(resendApiKey)
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+    const fromEmail = getEmailFrom()
     const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://muvet.mx').replace(/\/+$/, '')
     const ciudadCapitalizada = ciudad.charAt(0).toUpperCase() + ciudad.slice(1).toLowerCase()
 
