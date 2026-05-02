@@ -25,6 +25,7 @@ type PerfilDashboard = {
   creditos_extra?: number | null
   fecha_inicio_ciclo?: string | null
   fecha_fin_plan?: string | null
+  reservas_suspendidas_hasta?: string | null
 }
 type PerfilStripeSuscripcion = {
   stripe_subscription_id: string | null
@@ -112,7 +113,7 @@ export default async function DashboardPage({
 
   const consultaPerfil = await supabase
     .from('users')
-    .select('nombre, ciudad, plan_activo, plan, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo')
+    .select('nombre, ciudad, plan_activo, plan, rol, creditos_extra, fecha_fin_plan, fecha_inicio_ciclo, reservas_suspendidas_hasta')
     .eq('id', user.id)
     .single<PerfilDashboard>()
   let perfil = consultaPerfil.data ?? null
@@ -120,7 +121,7 @@ export default async function DashboardPage({
   if (!perfil) {
     const fallbackConCiclo = await supabase
       .from('users')
-      .select('nombre, ciudad, plan_activo, plan, rol, fecha_fin_plan, fecha_inicio_ciclo')
+      .select('nombre, ciudad, plan_activo, plan, rol, fecha_fin_plan, fecha_inicio_ciclo, reservas_suspendidas_hasta')
       .eq('id', user.id)
       .single<Omit<PerfilDashboard, 'creditos_extra'>>()
 
@@ -145,6 +146,7 @@ export default async function DashboardPage({
         creditos_extra: null,
         fecha_inicio_ciclo: null,
         fecha_fin_plan: null,
+        reservas_suspendidas_hasta: null,
       }
     }
   }
@@ -165,6 +167,11 @@ export default async function DashboardPage({
   const inicialesUsuario = inicialesDesdeNombre(nombre)
   const params = await searchParams
   const recienActivada = params.membresia === 'activada'
+  const reservasSuspendidasHasta = parseFechaSegura(perfil?.reservas_suspendidas_hasta)
+  const ahoraSuspensionMs = Number(new Date())
+  const reservasSuspendidas = Boolean(
+    reservasSuspendidasHasta && reservasSuspendidasHasta.getTime() > ahoraSuspensionMs
+  )
 
   let planUsuario = normalizarPlan(perfil?.plan ?? null)
   const planActivoFlag = parseBooleanSegura(perfil?.plan_activo)
@@ -295,6 +302,17 @@ export default async function DashboardPage({
               Ver planes
             </Link>
           </div>
+        </div>
+      )}
+      {reservasSuspendidas && reservasSuspendidasHasta && (
+        <div className="bg-[#FEE2E2] px-4 py-3">
+          <p className="text-center text-sm font-semibold text-[#991B1B]">
+            Tu acceso a reservas está suspendido hasta {reservasSuspendidasHasta.toLocaleDateString('es-MX', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            })} por 3 no-shows acumulados.
+          </p>
         </div>
       )}
 
@@ -478,6 +496,12 @@ export default async function DashboardPage({
           </Link>
         </div>
       )}
+      <footer className="mt-6 px-4 pb-6 text-center text-xs text-[#888]">
+        ¿Dudas? Consulta{' '}
+        <Link href="/faq" className="font-semibold text-[#6B4FE8] hover:text-[#5a3fd6]">
+          Preguntas frecuentes
+        </Link>
+      </footer>
     </div>
   )
 }

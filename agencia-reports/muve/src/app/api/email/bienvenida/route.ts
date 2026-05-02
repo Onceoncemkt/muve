@@ -22,8 +22,9 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#39;')
 }
 
-function plantillaBienvenida(nombre: string) {
+function plantillaBienvenida(nombre: string, faqUrl: string) {
   const nombreSeguro = escapeHtml(nombre)
+  const faqUrlSeguro = escapeHtml(faqUrl)
   return `
     <div style="font-family: Inter, Arial, sans-serif; background: #0A0A0A; color: #ffffff; padding: 24px;">
       <div style="max-width: 520px; margin: 0 auto; border: 1px solid #1f1f1f; border-radius: 12px; padding: 24px;">
@@ -34,6 +35,12 @@ function plantillaBienvenida(nombre: string) {
         </p>
         <p style="font-size: 15px; line-height: 1.6; color: #d1d5db; margin: 0;">
           Si este registro no fue realizado por ti, ignora este correo.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; color: #d1d5db; margin: 16px 0 0;">
+          Consulta nuestras preguntas frecuentes aquí:
+          <a href="${faqUrlSeguro}" style="color: #E8FF47; text-decoration: none; font-weight: 700;">
+            FAQ MUVET
+          </a>
         </p>
       </div>
     </div>
@@ -52,6 +59,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null) as BienvenidaPayload | null
+  const origin = new URL(request.url).origin
   const email = normalizarTexto(body?.email).toLowerCase()
   const nombre = normalizarTexto(body?.nombre) || 'bienvenido'
 
@@ -69,7 +77,7 @@ export async function POST(request: NextRequest) {
       from: fromEmail,
       to: [email],
       subject: '¡Bienvenido a MUVET!',
-      html: plantillaBienvenida(nombre),
+      html: plantillaBienvenida(nombre, `${origin}/faq`),
     }),
   })
 

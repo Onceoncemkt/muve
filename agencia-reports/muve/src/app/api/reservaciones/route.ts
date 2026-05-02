@@ -291,7 +291,7 @@ export async function POST(request: NextRequest) {
 
   const { data: perfilUsuario, error: perfilUsuarioError } = await db
     .from('users')
-    .select('plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
+    .select('plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, reservas_suspendidas_hasta')
     .eq('id', user.id)
     .maybeSingle<{
       plan_activo: boolean
@@ -299,6 +299,7 @@ export async function POST(request: NextRequest) {
       fecha_inicio_ciclo: string | null
       fecha_fin_plan: string | null
       creditos_extra: number | null
+      reservas_suspendidas_hasta: string | null
     }>()
 
   if (faltaColumna(perfilUsuarioError, 'fecha_inicio_ciclo')) {
@@ -320,6 +321,17 @@ export async function POST(request: NextRequest) {
 
   if (!perfilUsuario?.plan_activo || !normalizarPlan(perfilUsuario.plan ?? null)) {
     return NextResponse.json({ error: 'Necesitas un plan activo para reservar.' }, { status: 403 })
+  }
+  if (perfilUsuario.reservas_suspendidas_hasta) {
+    const fechaSuspension = new Date(perfilUsuario.reservas_suspendidas_hasta)
+    if (!Number.isNaN(fechaSuspension.getTime()) && fechaSuspension.getTime() > Date.now()) {
+      return NextResponse.json(
+        {
+          error: `Tu acceso a reservas está suspendido hasta ${fechaSuspension.toLocaleString('es-MX')}.`,
+        },
+        { status: 403 }
+      )
+    }
   }
 
   if (planExpirado(perfilUsuario.fecha_fin_plan)) {

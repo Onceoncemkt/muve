@@ -7,7 +7,8 @@ export type NivelNegocio = 'basico' | 'plus' | 'total'
 export type GeneroPerfil = 'masculino' | 'femenino' | 'prefiero_no_decir'
 export type ObjetivoFitness = 'perder_peso' | 'ganar_musculo' | 'bienestar' | 'flexibilidad' | 'energia' | 'social'
 export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
-export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada'
+export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada' | 'no_show'
+export type EstadoVisita = 'asistio' | 'no_show' | 'cancelado'
 export interface ServicioNegocio {
   id: string
   negocio_id: string
@@ -36,6 +37,7 @@ export interface User {
   wallet_google_agregado?: boolean | null
   fecha_inicio_ciclo?: string | null
   fecha_fin_plan?: string | null
+  reservas_suspendidas_hasta?: string | null
   rol: Rol
   negocio_id?: string | null
   fecha_registro: string
@@ -98,6 +100,7 @@ export interface Visita {
   fecha: string
   validado_por: string | null
   plan_usuario?: PlanMembresia | null
+  estado?: EstadoVisita
   negocios?: Negocio
 }
 

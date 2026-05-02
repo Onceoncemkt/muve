@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/cumpleanos",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/marcar-noshow",
+      "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/recordatorio-clase",
+      "schedule": "0 * * * *"
     }
   ]
 }
