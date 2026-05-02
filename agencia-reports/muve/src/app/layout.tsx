@@ -5,8 +5,16 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 
 export const metadata: Metadata = {
-  title: 'MUVET — Membresía de bienestar',
-  description: 'Un pase. Todo el bienestar. Gimnasios, clases, estéticas y restaurantes saludables en tu ciudad.',
+  title: 'MUVET — Wellness Club',
+  description: 'Wellness Club',
+  openGraph: {
+    title: 'MUVET — Wellness Club',
+    description: 'Wellness Club',
+  },
+  twitter: {
+    title: 'MUVET — Wellness Club',
+    description: 'Wellness Club',
+  },
   manifest: '/manifest.json',
   themeColor: '#5B3FFF',
   icons: {
