@@ -372,6 +372,13 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   }
+  const fechaHoraInicio = new Date(`${fecha}T${horario.hora_inicio}`)
+  if (!Number.isNaN(fechaHoraInicio.getTime()) && Date.now() >= fechaHoraInicio.getTime()) {
+    return NextResponse.json(
+      { error: 'Ya no puedes reservar esta clase. Las reservaciones cierran en punto de la hora de inicio.' },
+      { status: 400 }
+    )
+  }
 
   const { data: negocioContexto, error: negocioContextoError } = await db
     .from('negocios')

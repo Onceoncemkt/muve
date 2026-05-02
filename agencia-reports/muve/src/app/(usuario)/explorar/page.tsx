@@ -142,6 +142,23 @@ function formatearFechaISO(fecha: Date): string {
   const dia = String(fecha.getDate()).padStart(2, '0')
   return `${anio}-${mes}-${dia}`
 }
+
+function estadoHorarioHoy(diaSemana: DiaSemana, horaInicio: string, horaFin: string) {
+  const fechaObjetivo = proximaFecha(diaSemana)
+  const ahora = new Date()
+
+  const esHoy = fechaObjetivo.toDateString() === ahora.toDateString()
+  if (!esHoy) return { bloqueado: false, etiqueta: null as string | null }
+
+  const inicio = new Date(`${formatearFechaISO(fechaObjetivo)}T${horaInicio}`)
+  const fin = new Date(`${formatearFechaISO(fechaObjetivo)}T${horaFin}`)
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+    return { bloqueado: false, etiqueta: null as string | null }
+  }
+  if (ahora.getTime() >= fin.getTime()) return { bloqueado: true, etiqueta: 'Finalizado' }
+  if (ahora.getTime() >= inicio.getTime()) return { bloqueado: true, etiqueta: 'En curso' }
+  return { bloqueado: false, etiqueta: null as string | null }
+}
 function normalizarHandleSocial(handle: string | null | undefined): string | null {
   if (!handle) return null
   const limpio = handle.trim().replace(/^@+/, '')
@@ -368,6 +385,17 @@ export default function ExplorarPage() {
   const reservarHorario = useCallback(async (negocio: Negocio, horario: HorarioExplorar) => {
     const negocioId = negocio.id
     const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
+    const estadoHorario = estadoHorarioHoy(horario.dia_semana, horario.hora_inicio, horario.hora_fin)
+    if (estadoHorario.bloqueado) {
+      setMensajeReservaPorNegocioId((prev) => ({
+        ...prev,
+        [negocioId]: {
+          tipo: 'error',
+          texto: 'Ya no puedes reservar esta clase. Las reservaciones cierran en punto de la hora de inicio.',
+        },
+      }))
+      return
+    }
     const fecha = formatearFechaISO(proximaFecha(horario.dia_semana))
     const payload: { horario_id: string; fecha: string; servicio_id?: string } = {
       horario_id: horario.id,
@@ -935,6 +963,7 @@ export default function ExplorarPage() {
                           {horarios.map((horario) => {
                             const reservando = reservandoHorarioId === horario.id
                             const proxima = proximaFecha(horario.dia_semana)
+                            const estadoHorario = estadoHorarioHoy(horario.dia_semana, horario.hora_inicio, horario.hora_fin)
                             const fechaProxima = proxima.toLocaleDateString('es-MX', {
                               day: '2-digit',
                               month: 'short',
@@ -943,7 +972,7 @@ export default function ExplorarPage() {
                               ? Math.max(horario.spots_disponibles, 0)
                               : null
                             const requiereServicioWellness = esWellness
-                            const puedeReservarHorario = !requiereServicioWellness || Boolean(servicioSeleccionadoId)
+                            const puedeReservarHorario = (!requiereServicioWellness || Boolean(servicioSeleccionadoId)) && !estadoHorario.bloqueado
 
                             return (
                               <button
@@ -960,6 +989,11 @@ export default function ExplorarPage() {
                                   <span className="text-xs text-[#666]">
                                     Próxima fecha: {fechaProxima}
                                   </span>
+                                  {estadoHorario.bloqueado && (
+                                    <span className="mt-1 inline-flex w-fit rounded-full bg-[#E5E5E5] px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#666]">
+                                      Ya inició
+                                    </span>
+                                  )}
                                   {!esWellness && horario.nombre_coach && (
                                     <span className="text-xs text-[#666]">
                                       Coach: {horario.nombre_coach}
@@ -977,6 +1011,8 @@ export default function ExplorarPage() {
                                 <span className="ml-3 shrink-0 text-xs font-bold text-[#6B4FE8]">
                                   {reservando
                                     ? 'Reservando...'
+                                    : estadoHorario.bloqueado
+                                      ? 'Ya inició'
                                     : !puedeReservarHorario
                                       ? 'Selecciona servicio'
                                       : 'Reservar'}

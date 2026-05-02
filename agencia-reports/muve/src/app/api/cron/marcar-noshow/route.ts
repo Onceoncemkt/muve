@@ -1,241 +1,199 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { resolverVentanaCiclo } from '@/lib/ciclos'
-import { normalizarPlan } from '@/lib/planes'
 import { enviarPushAUsuarios } from '@/lib/push/server'
 
-export const runtime = 'nodejs'
-export const dynamic = 'force-dynamic'
+const MAX_NO_SHOWS = 3
+const SUSPENSION_DAYS = 7
 
-type ReservacionPendiente = {
-  id: string
-  user_id: string
-  fecha: string
-  horario_id: string
-  horarios: {
-    hora_inicio: string
-    negocio_id: string
-  } | null
-}
-
-type VisitaRow = {
+type ReservaNoShow = {
   id: string
   user_id: string
   negocio_id: string
   fecha: string
-  estado: string | null
+  horario_id: string
+  horarios: {
+    hora_inicio: string
+    hora_fin: string
+  }[] | null
+  negocios: {
+    nombre: string
+  }[] | null
 }
 
-type UsuarioCiclo = {
-  id: string
-  plan: string | null
-  fecha_inicio_ciclo: string | null
-  fecha_fin_plan: string | null
-  reservas_suspendidas_hasta: string | null
-}
-
-function esRequestAutorizado(request: NextRequest) {
-  const esCronVercel = request.headers.get('x-vercel-cron') === '1'
-  if (esCronVercel) return true
-
-  const secretoCron = process.env.CRON_SECRET?.trim()
-  if (!secretoCron) {
-    return process.env.NODE_ENV === 'development'
-  }
-
-  const authorization = request.headers.get('authorization')
-  return authorization === `Bearer ${secretoCron}`
-}
-
-function toDateTime(fecha: string, hora: string) {
-  const parsed = new Date(`${fecha}T${hora}`)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed
-}
-
-function fechaYmd(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
-export async function GET(request: NextRequest) {
-  if (!esRequestAutorizado(request)) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  }
-
-  const db = createServiceClient()
-  const ahora = new Date()
-  const hoy = fechaYmd(ahora)
-
-  const { data: reservaciones, error: reservacionesError } = await db
-    .from('reservaciones')
-    .select('id, user_id, fecha, horario_id, horarios(hora_inicio, negocio_id)')
-    .eq('estado', 'confirmada')
-    .lte('fecha', hoy)
-    .returns<ReservacionPendiente[]>()
-
-  if (reservacionesError) {
-    return NextResponse.json(
-      { error: reservacionesError.message ?? 'No se pudieron cargar reservaciones pendientes' },
-      { status: 500 }
-    )
-  }
-
-  const candidatas = (reservaciones ?? []).filter((reservacion) => {
-    const hora = reservacion.horarios?.hora_inicio
-    if (!hora) return false
-    const fechaHora = toDateTime(reservacion.fecha, hora)
-    if (!fechaHora) return false
-    return fechaHora.getTime() < ahora.getTime()
-  })
-
-  if (candidatas.length === 0) {
-    return NextResponse.json({
-      ok: true,
-      reservaciones_no_show: 0,
-      visitas_no_show: 0,
-      usuarios_suspendidos: 0,
-    })
-  }
-
-  const idsNoShow = candidatas.map((r) => r.id)
-  const { error: noShowError } = await db
-    .from('reservaciones')
-    .update({ estado: 'no_show' })
-    .in('id', idsNoShow)
-
-  if (noShowError) {
-    return NextResponse.json(
-      { error: noShowError.message ?? 'No se pudieron marcar reservaciones no_show' },
-      { status: 500 }
-    )
-  }
-
-  const usuarioIds = [...new Set(candidatas.map((r) => r.user_id))]
-  const negocioIds = [...new Set(candidatas.map((r) => r.horarios?.negocio_id).filter(Boolean) as string[])]
-  const fechaMin = candidatas.reduce((min, r) => (r.fecha < min ? r.fecha : min), candidatas[0].fecha)
-  const fechaMax = candidatas.reduce((max, r) => (r.fecha > max ? r.fecha : max), candidatas[0].fecha)
-
-  const inicioRango = `${fechaMin}T00:00:00.000Z`
-  const finRango = `${fechaMax}T23:59:59.999Z`
-
-  const { data: visitasExistentes } = await db
-    .from('visitas')
-    .select('id, user_id, negocio_id, fecha, estado')
-    .in('user_id', usuarioIds)
-    .in('negocio_id', negocioIds)
-    .gte('fecha', inicioRango)
-    .lte('fecha', finRango)
-    .returns<VisitaRow[]>()
-
-  const visitasPorLlave = new Map<string, VisitaRow>()
-  for (const visita of visitasExistentes ?? []) {
-    const llave = `${visita.user_id}|${visita.negocio_id}|${fechaYmd(new Date(visita.fecha))}`
-    if (!visitasPorLlave.has(llave)) {
-      visitasPorLlave.set(llave, visita)
+export async function GET(req: Request) {
+  try {
+    const supabaseAdmin = createServiceClient()
+    const authHeader = req.headers.get('authorization')
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
-  }
 
-  const { data: usuarios } = await db
-    .from('users')
-    .select('id, plan, fecha_inicio_ciclo, fecha_fin_plan, reservas_suspendidas_hasta')
-    .in('id', usuarioIds)
-    .returns<UsuarioCiclo[]>()
+    const ahora = new Date()
+    const hoyISO = ahora.toISOString().split('T')[0]
+    const horaActual = ahora.toTimeString().slice(0, 5)
 
-  const usuarioPorId = new Map((usuarios ?? []).map((u) => [u.id, u]))
-
-  const nuevasVisitas: Array<{
-    user_id: string
-    negocio_id: string
-    fecha: string
-    validado_por: string
-    plan_usuario: string | null
-    estado: 'no_show'
-  }> = []
-
-  for (const reservacion of candidatas) {
-    const negocioId = reservacion.horarios?.negocio_id
-    const hora = reservacion.horarios?.hora_inicio
-    if (!negocioId || !hora) continue
-
-    const fechaHora = toDateTime(reservacion.fecha, hora)
-    if (!fechaHora) continue
-    const llave = `${reservacion.user_id}|${negocioId}|${reservacion.fecha}`
-    const visitaExistente = visitasPorLlave.get(llave)
-    if (visitaExistente && visitaExistente.estado !== 'cancelado') continue
-
-    const perfil = usuarioPorId.get(reservacion.user_id)
-    nuevasVisitas.push({
-      user_id: reservacion.user_id,
-      negocio_id: negocioId,
-      fecha: fechaHora.toISOString(),
-      validado_por: 'Sistema no-show',
-      plan_usuario: normalizarPlan(perfil?.plan ?? null),
-      estado: 'no_show',
-    })
-  }
-
-  if (nuevasVisitas.length > 0) {
-    const { error: insertVisitasError } = await db
-      .from('visitas')
-      .insert(nuevasVisitas)
-    if (insertVisitasError) {
-      return NextResponse.json(
-        { error: insertVisitasError.message ?? 'No se pudieron registrar visitas no_show' },
-        { status: 500 }
-      )
-    }
-  }
-
-  let usuariosSuspendidos = 0
-  for (const userId of usuarioIds) {
-    const perfil = usuarioPorId.get(userId)
-    if (!perfil) continue
-
-    const ciclo = resolverVentanaCiclo({
-      fechaInicioCiclo: perfil.fecha_inicio_ciclo,
-      fechaFinPlan: perfil.fecha_fin_plan,
-      referencia: ahora,
-    })
-
-    const { count } = await db
+    const { data: reservaciones, error: errorReservaciones } = await supabaseAdmin
       .from('reservaciones')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('estado', 'no_show')
-      .gte('fecha', fechaYmd(ciclo.inicio))
-      .lte('fecha', fechaYmd(ciclo.fin))
+      .select(`
+        id,
+        user_id,
+        negocio_id,
+        fecha,
+        horario_id,
+        horarios!inner (
+          hora_inicio,
+          hora_fin
+        ),
+        negocios!inner (
+          nombre
+        )
+      `)
+      .eq('estado', 'confirmada')
+      .or(`fecha.lt.${hoyISO},and(fecha.eq.${hoyISO},horarios.hora_inicio.lte.${horaActual})`)
 
-    const noShowsCiclo = count ?? 0
-    const suspensionActual = perfil.reservas_suspendidas_hasta
-      ? new Date(perfil.reservas_suspendidas_hasta)
-      : null
-    const suspensionVigente = suspensionActual && !Number.isNaN(suspensionActual.getTime())
-      ? suspensionActual.getTime() > ahora.getTime()
-      : false
+    if (errorReservaciones) {
+      throw errorReservaciones
+    }
 
-    if (noShowsCiclo >= 3 && !suspensionVigente) {
-      const reservasSuspendidasHasta = new Date(ahora)
-      reservasSuspendidasHasta.setDate(reservasSuspendidasHasta.getDate() + 7)
-      const { error: suspensionError } = await db
-        .from('users')
-        .update({ reservas_suspendidas_hasta: reservasSuspendidasHasta.toISOString() })
-        .eq('id', userId)
+    const reservacionesPasadas = ((reservaciones ?? []) as ReservaNoShow[]).filter(reserva => {
+      const horario = Array.isArray(reserva.horarios) ? reserva.horarios[0] : null
+      if (!horario?.hora_inicio) return false
+      const inicio = new Date(`${reserva.fecha}T${horario.hora_inicio}:00`)
+      return inicio <= ahora
+    })
 
-      if (!suspensionError) {
-        usuariosSuspendidos += 1
-        await enviarPushAUsuarios([userId], {
-          title: 'MUVET',
-          body: 'Has acumulado 3 no-shows. Tu acceso a reservas está suspendido por 7 días.',
-          url: '/dashboard',
+    let procesadas = 0
+    let suspendidos = 0
+
+    const cicloInicio = new Date(ahora)
+    cicloInicio.setDate(cicloInicio.getDate() - 30)
+    const cicloInicioISO = cicloInicio.toISOString().split('T')[0]
+
+    for (const reservacion of reservacionesPasadas) {
+      const { data: visitaCheckin, error: errorVisitaCheckin } = await supabaseAdmin
+        .from('visitas')
+        .select('id')
+        .eq('user_id', reservacion.user_id)
+        .eq('negocio_id', reservacion.negocio_id)
+        .eq('fecha_visita', reservacion.fecha)
+        .eq('tipo_visita', 'checkin')
+        .limit(1)
+
+      if (errorVisitaCheckin) {
+        console.error('Error verificando checkin', reservacion.id, errorVisitaCheckin)
+        continue
+      }
+
+      if ((visitaCheckin ?? []).length > 0) {
+        continue
+      }
+
+      const { data: reservaActualizada, error: errorUpdate } = await supabaseAdmin
+        .from('reservaciones')
+        .update({
+          estado: 'no_show',
+          updated_at: new Date().toISOString()
         })
+        .eq('id', reservacion.id)
+        .eq('estado', 'confirmada')
+        .select('id')
+        .single()
+
+      if (errorUpdate || !reservaActualizada) {
+        if (errorUpdate) {
+          console.error('Error marcando no_show', reservacion.id, errorUpdate)
+        }
+        continue
+      }
+
+      procesadas++
+
+      const { data: visitaNoShow, error: errorVisitaNoShow } = await supabaseAdmin
+        .from('visitas')
+        .select('id')
+        .eq('reservacion_id', reservacion.id)
+        .eq('tipo_visita', 'no_show')
+        .limit(1)
+
+      if (errorVisitaNoShow) {
+        console.error('Error verificando no_show en visitas', reservacion.id, errorVisitaNoShow)
+        continue
+      }
+
+      if ((visitaNoShow ?? []).length === 0) {
+        const { error: errorInsertVisita } = await supabaseAdmin
+          .from('visitas')
+          .insert({
+            user_id: reservacion.user_id,
+            negocio_id: reservacion.negocio_id,
+            reservacion_id: reservacion.id,
+            fecha_visita: reservacion.fecha,
+            tipo_visita: 'no_show',
+            creditos_descontados: 1
+          })
+
+        if (errorInsertVisita) {
+          console.error('Error insertando visita no_show', reservacion.id, errorInsertVisita)
+        }
+      }
+
+      const { data: noShowsCiclo, error: errorNoShowsCiclo } = await supabaseAdmin
+        .from('reservaciones')
+        .select('id')
+        .eq('user_id', reservacion.user_id)
+        .eq('estado', 'no_show')
+        .gte('fecha', cicloInicioISO)
+        .lte('fecha', hoyISO)
+
+      if (errorNoShowsCiclo) {
+        console.error('Error contando no_shows del ciclo', reservacion.id, errorNoShowsCiclo)
+      }
+
+      const totalNoShowsCiclo = noShowsCiclo?.length ?? 0
+      const negocio = Array.isArray(reservacion.negocios) ? reservacion.negocios[0] : null
+      const nombreNegocio = negocio?.nombre ?? 'el negocio'
+
+      await enviarPushAUsuarios([reservacion.user_id], {
+        title: 'No-show registrado',
+        body: `No hiciste check-in en ${nombreNegocio}. Acumulas ${totalNoShowsCiclo} no-show(s) en tu ciclo actual.`,
+        url: '/historial'
+      })
+
+      if (totalNoShowsCiclo >= MAX_NO_SHOWS) {
+        const fechaFinSuspension = new Date()
+        fechaFinSuspension.setDate(fechaFinSuspension.getDate() + SUSPENSION_DAYS)
+
+        const { error: errorSuspension } = await supabaseAdmin
+          .from('users')
+          .update({
+            reservas_suspendidas_hasta: fechaFinSuspension.toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', reservacion.user_id)
+
+        if (errorSuspension) {
+          console.error('Error suspendiendo usuario', reservacion.user_id, errorSuspension)
+        } else {
+          suspendidos++
+          await enviarPushAUsuarios([reservacion.user_id], {
+            title: 'Cuenta suspendida temporalmente',
+            body: `Tu cuenta fue suspendida por ${SUSPENSION_DAYS} días al acumular ${MAX_NO_SHOWS} no-shows.`,
+            url: '/dashboard'
+          })
+        }
       }
     }
-  }
 
-  return NextResponse.json({
-    ok: true,
-    reservaciones_no_show: idsNoShow.length,
-    visitas_no_show: nuevasVisitas.length,
-    usuarios_suspendidos: usuariosSuspendidos,
-  })
+    return NextResponse.json({
+      success: true,
+      message: `${procesadas} reservaciones marcadas como no-show`,
+      suspendidos
+    })
+  } catch (error) {
+    console.error('Error en cron marcar-noshow:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
 }
