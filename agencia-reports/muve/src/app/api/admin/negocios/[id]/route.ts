@@ -13,6 +13,8 @@ const COLUMNAS_OPCIONALES_NEGOCIO = [
   'requiere_reserva',
   'capacidad_default',
   'instagram_handle',
+  'logo_url',
+  'mostrar_en_landing',
   'imagen_url',
 ] as const
 const BUCKET_NEGOCIOS = 'negocios'
@@ -153,6 +155,8 @@ export async function POST(
   const direccion = texto(formData.get('direccion'))
   const descripcionRaw = texto(formData.get('descripcion'))
   const instagramRaw = texto(formData.get('instagram_handle'))
+  const logoUrlRaw = texto(formData.get('logo_url'))
+  const mostrarEnLandingRaw = texto(formData.get('mostrar_en_landing')).toLowerCase()
   const requiereReservaRaw = texto(formData.get('requiere_reserva')).toLowerCase()
   const capacidadDefaultRaw = texto(formData.get('capacidad_default'))
   const fotoNegocio = obtenerArchivoImagen(formData.get('foto_negocio'))
@@ -180,6 +184,8 @@ export async function POST(
   }
 
   const instagramHandle = instagramRaw ? instagramRaw.replace(/^@+/, '') : null
+  const logoUrl = logoUrlRaw || null
+  const mostrarEnLanding = ['true', 'on', '1', 'si', 'sí'].includes(mostrarEnLandingRaw)
   const descripcion = descripcionRaw || null
   const requiereReserva = ['true', 'on', '1', 'si', 'sí'].includes(requiereReservaRaw)
   const capacidadDefaultParsed = Number.parseInt(capacidadDefaultRaw, 10)
@@ -240,6 +246,8 @@ export async function POST(
     direccion,
     descripcion,
     instagram_handle: instagramHandle,
+    logo_url: logoUrl,
+    mostrar_en_landing: mostrarEnLanding,
     requiere_reserva: requiereReserva,
     capacidad_default: capacidadDefault,
   }

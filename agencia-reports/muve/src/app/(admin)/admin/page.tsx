@@ -38,6 +38,8 @@ type NegocioAdmin = {
   direccion: string
   descripcion: string | null
   imagen_url: string | null
+  logo_url: string | null
+  mostrar_en_landing: boolean
   instagram_handle: string | null
   requiere_reserva: boolean
   capacidad_default: number | null
@@ -87,6 +89,8 @@ function faltaColumnaRequiereReserva(error: { message?: string } | null | undefi
       || message.includes('capacidad_default')
       || message.includes('instagram_handle')
       || message.includes('imagen_url')
+      || message.includes('logo_url')
+      || message.includes('mostrar_en_landing')
       || message.includes('stripe_account_id')
       || message.includes('zona')
       || message.includes('nivel')
@@ -207,7 +211,7 @@ export default async function AdminPage({
 
   const consultaNegocios = await db
     .from('negocios')
-    .select('id, nombre, ciudad, zona, nivel, categoria, direccion, descripcion, imagen_url, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
+    .select('id, nombre, ciudad, zona, nivel, categoria, direccion, descripcion, imagen_url, logo_url, mostrar_en_landing, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
     .order('ciudad')
     .order('nombre')
 
@@ -215,7 +219,7 @@ export default async function AdminPage({
   if (!consultaNegocios.error) {
     negociosAfiliados = (consultaNegocios.data ?? []) as NegocioAdmin[]
   } else if (faltaColumnaRequiereReserva(consultaNegocios.error)) {
-    type NegocioAdminLegacy = Omit<NegocioAdmin, 'zona' | 'nivel' | 'imagen_url' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default' | 'stripe_account_id'>
+    type NegocioAdminLegacy = Omit<NegocioAdmin, 'zona' | 'nivel' | 'imagen_url' | 'logo_url' | 'mostrar_en_landing' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default' | 'stripe_account_id'>
     const fallback = await db
       .from('negocios')
       .select('id, nombre, ciudad, categoria, direccion, descripcion, activo')
@@ -228,6 +232,8 @@ export default async function AdminPage({
         zona: 'zona1',
         nivel: 'basico',
         imagen_url: null,
+        logo_url: null,
+        mostrar_en_landing: false,
         instagram_handle: null,
         requiere_reserva: true,
         capacidad_default: 10,
@@ -321,6 +327,12 @@ export default async function AdminPage({
               >
                 Negocios
               </a>
+              <Link
+                href="/admin/preregistros"
+                className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+              >
+                Pre-registros
+              </Link>
               <Link
                 href="/admin"
                 className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
@@ -639,6 +651,21 @@ export default async function AdminPage({
                                       </div>
                                       <div>
                                         <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                          URL del logo
+                                        </label>
+                                        <input
+                                          type="url"
+                                          name="logo_url"
+                                          defaultValue={negocio.logo_url ?? ''}
+                                          placeholder="https://..."
+                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                        />
+                                        <p className="mt-1 text-[10px] text-white/45">
+                                          URL pública del logo para la landing.
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
                                           Categoría
                                         </label>
                                         <select
@@ -763,6 +790,25 @@ export default async function AdminPage({
                                       </div>
                                       <div className="sm:col-span-2">
                                         <input
+                                          id={`mostrar-landing-${negocio.id}`}
+                                          type="checkbox"
+                                          name="mostrar_en_landing"
+                                          value="true"
+                                          defaultChecked={negocio.mostrar_en_landing}
+                                          className="h-4 w-4 accent-[#6B4FE8]"
+                                        />
+                                        <label
+                                          htmlFor={`mostrar-landing-${negocio.id}`}
+                                          className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
+                                        >
+                                          Mostrar en landing de pre-registro
+                                        </label>
+                                        <p className="mt-1 text-[10px] text-white/45">
+                                          Activa esto para que el logo aparezca en /preregistro.
+                                        </p>
+                                      </div>
+                                      <div className="sm:col-span-2">
+                                        <input
                                           id={`requiere-reserva-${negocio.id}`}
                                           type="checkbox"
                                           name="requiere_reserva"
@@ -854,6 +900,20 @@ export default async function AdminPage({
                       required
                       className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
                     />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                      URL del logo
+                    </label>
+                    <input
+                      type="url"
+                      name="logo_url"
+                      placeholder="https://..."
+                      className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                    />
+                    <p className="mt-1 text-[10px] text-white/45">
+                      URL pública del logo (subir a Supabase Storage primero).
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -976,6 +1036,24 @@ export default async function AdminPage({
                     />
                   </div>
 
+                  <div>
+                    <input
+                      id="nuevo-mostrar-landing"
+                      type="checkbox"
+                      name="mostrar_en_landing"
+                      value="true"
+                      className="h-4 w-4 accent-[#6B4FE8]"
+                    />
+                    <label
+                      htmlFor="nuevo-mostrar-landing"
+                      className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-3 py-1.5 text-sm text-white/80"
+                    >
+                      Mostrar en landing de pre-registro
+                    </label>
+                    <p className="mt-1 text-[10px] text-white/45">
+                      Activa esto para que el logo aparezca en /preregistro.
+                    </p>
+                  </div>
                   <div>
                     <input
                       id="nuevo-requiere-reserva"

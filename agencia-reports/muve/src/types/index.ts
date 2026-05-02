@@ -9,6 +9,7 @@ export type ObjetivoFitness = 'perder_peso' | 'ganar_musculo' | 'bienestar' | 'f
 export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
 export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada' | 'no_show'
 export type EstadoVisita = 'asistio' | 'no_show' | 'cancelado'
+export type EstadoPreregistro = 'pendiente' | 'convertido' | 'cancelado'
 export interface ServicioNegocio {
   id: string
   negocio_id: string
@@ -16,6 +17,20 @@ export interface ServicioNegocio {
   precio_normal_mxn: number
   descripcion: string | null
   activo: boolean
+}
+
+export type Preregistro = {
+  id: string
+  email: string
+  ciudad: string
+  nombre: string | null
+  codigo_descuento: string
+  estado: EstadoPreregistro
+  user_id: string | null
+  story_url: string | null
+  created_at: string
+  notificado_lanzamiento_at: string | null
+  convertido_at: string | null
 }
 
 export interface User {
@@ -55,6 +70,8 @@ export interface Negocio {
   imagen_url: string | null
   instagram_handle?: string | null
   tiktok_handle?: string | null
+  logo_url?: string | null
+  mostrar_en_landing?: boolean
   telefono_contacto?: string | null
   email_contacto?: string | null
   horario_atencion?: string | null
