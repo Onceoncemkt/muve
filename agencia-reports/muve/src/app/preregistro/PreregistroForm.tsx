@@ -110,7 +110,7 @@ export default function PreregistroForm() {
           disabled={enviando}
           className="w-full rounded-lg bg-[#0A0A0A] px-4 py-3 text-sm font-black uppercase tracking-wider text-[#E8FF47] transition-colors hover:bg-[#202020] disabled:opacity-60"
         >
-          {enviando ? 'Apartando...' : 'Apartar mi 20% de descuento'}
+          {enviando ? 'Apartando...' : 'Apartar mi 20% durante 3 meses'}
         </button>
         <p className="text-xs text-[#666]">{helperText}</p>
       </div>

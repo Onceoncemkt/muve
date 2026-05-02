@@ -63,7 +63,7 @@ export default async function PreregistroPage() {
         <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-6">
             <div className="rounded-2xl bg-[#E8FF47] px-5 py-4 text-[#0A0A0A]">
-              <p className="text-2xl font-black tracking-tight">🎁 20% OFF tu primer mes</p>
+              <p className="text-2xl font-black tracking-tight">🎁 20% OFF durante 3 meses</p>
               <p className="mt-1 text-sm font-semibold">
                 Reserva tu descuento antes del lanzamiento y entra primero al club.
               </p>
