@@ -23,6 +23,88 @@ const CIUDADES = [
   { nombre: 'Tijuana',    negocios: 8 },
 ]
 
+const FAQ_BLOCKS = [
+  {
+    titulo: 'PARA USUARIOS',
+    items: [
+      {
+        q: '¿Qué es MUVET?',
+        a: 'MUVET es una membresía que te da acceso a gimnasios, clases, wellness y más desde una sola app.',
+      },
+      {
+        q: '¿Cómo funciona?',
+        a: 'Eliges plan, reservas en la app y usas tus créditos por ciclo para acceder a los negocios disponibles.',
+      },
+      {
+        q: '¿Qué incluye cada plan?',
+        a: 'Cada plan incluye una cantidad de créditos por ciclo y acceso a diferentes categorías de negocios.',
+      },
+      {
+        q: '¿Los créditos se acumulan al siguiente mes?',
+        a: 'No. Los créditos son por ciclo de compra y no se acumulan.',
+      },
+      {
+        q: '¿Qué pasa si no asisto a una clase reservada?',
+        a: 'Se descuenta el crédito. Con 3 no-shows en el mes se suspenden las reservas por 7 días.',
+      },
+      {
+        q: '¿Puedo cancelar mi reservación?',
+        a: 'Sí, con al menos 3 horas de anticipación para recuperar tu crédito.',
+      },
+      {
+        q: '¿Cuándo se cobra mi membresía?',
+        a: 'El mismo día de cada mes a partir de tu fecha de registro.',
+      },
+      {
+        q: '¿Puedo cancelar mi membresía?',
+        a: 'Sí, en cualquier momento desde tu perfil sin penalización.',
+      },
+    ],
+  },
+  {
+    titulo: 'PARA NEGOCIOS',
+    items: [
+      {
+        q: '¿Cómo se une mi negocio a MUVET?',
+        a: 'Completa tu solicitud con MUVET y el equipo te guía en el proceso de activación y publicación.',
+      },
+      {
+        q: '¿Cuánto recibo por cada visita MUVET?',
+        a: 'El monto depende de la categoría y reglas activas de MUVET para tu tipo de negocio.',
+      },
+      {
+        q: '¿Cuándo y cómo me pagan?',
+        a: 'Cada lunes automáticamente a tu cuenta bancaria vía Stripe.',
+      },
+      {
+        q: '¿Necesito instalar algo?',
+        a: 'Solo acceder a tu panel en muvet.mx desde cualquier dispositivo.',
+      },
+    ],
+  },
+  {
+    titulo: 'PLANES Y PRECIOS',
+    items: [
+      {
+        q: '¿Cuál plan me conviene?',
+        a: 'Depende de tu frecuencia de uso y de los tipos de negocios que quieres visitar durante el ciclo.',
+      },
+      {
+        q: '¿Los precios de lanzamiento son permanentes?',
+        a: 'No, son por tiempo limitado.',
+      },
+      {
+        q: '¿Puedo cambiar de plan?',
+        a: 'Sí, puedes cambiar de plan según las opciones disponibles en tu cuenta.',
+      },
+      {
+        q: '¿Hay prueba gratis?',
+        a: 'Depende de promociones vigentes. Si hay prueba activa, se mostrará directamente en el flujo de alta.',
+      },
+    ],
+  },
+]
+
 export default async function LandingPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -157,6 +239,40 @@ export default async function LandingPage() {
                 <p className="mt-1 text-sm font-semibold text-[#E8FF47]">
                   {c.negocios} negocios
                 </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ─────────────────────────────────────────────── */}
+      <section id="faq" className="bg-[#0A0A0A] border-t border-white/10 px-6 py-20">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="mb-10 text-center text-3xl font-black tracking-tight text-white">
+            Preguntas frecuentes
+          </h2>
+          <div className="space-y-6">
+            {FAQ_BLOCKS.map((bloque) => (
+              <div key={bloque.titulo} className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-6">
+                <h3 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-[#E8FF47]">
+                  {bloque.titulo}
+                </h3>
+                <div className="space-y-2">
+                  {bloque.items.map((item) => (
+                    <details
+                      key={item.q}
+                      className="group rounded-xl border border-white/10 bg-[#0A0A0A] px-4 py-3 open:border-[#E8FF47]/40"
+                    >
+                      <summary className="cursor-pointer list-none pr-8 text-sm font-bold text-white marker:content-['']">
+                        {item.q}
+                        <span className="float-right text-[#E8FF47] transition-transform group-open:rotate-45">+</span>
+                      </summary>
+                      <p className="mt-3 text-sm leading-relaxed text-white/70">
+                        {item.a}
+                      </p>
+                    </details>
+                  ))}
+                </div>
               </div>
             ))}
           </div>

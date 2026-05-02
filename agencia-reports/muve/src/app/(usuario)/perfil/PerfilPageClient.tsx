@@ -302,7 +302,7 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
           Administra tus datos personales y preferencias fitness.
         </p>
         <Link
-          href="/faq"
+          href="/#faq"
           className="mt-3 inline-flex items-center rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold uppercase tracking-wider text-[#555] hover:border-[#6B4FE8] hover:text-[#6B4FE8]"
         >
           Ver FAQ

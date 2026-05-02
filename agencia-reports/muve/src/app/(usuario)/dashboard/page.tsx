@@ -497,9 +497,9 @@ export default async function DashboardPage({
         </div>
       )}
       <footer className="mt-6 px-4 pb-6 text-center text-xs text-[#888]">
-        ¿Dudas? Consulta{' '}
-        <Link href="/faq" className="font-semibold text-[#6B4FE8] hover:text-[#5a3fd6]">
-          Preguntas frecuentes
+        ¿Dudas?{' '}
+        <Link href="/#faq" className="font-semibold text-[#6B4FE8] hover:text-[#5a3fd6]">
+          Ver FAQ completo
         </Link>
       </footer>
     </div>

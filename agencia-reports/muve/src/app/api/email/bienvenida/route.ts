@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       from: fromEmail,
       to: [email],
       subject: '¡Bienvenido a MUVET!',
-      html: plantillaBienvenida(nombre, `${origin}/faq`),
+      html: plantillaBienvenida(nombre, `${origin}/#faq`),
     }),
   })
 
