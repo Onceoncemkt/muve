@@ -33,6 +33,7 @@ export default function AdminPreregistrosClient() {
   const [stats, setStats] = useState<StatsPayload>({ total: 0, porCiudad: [], porEstado: [] })
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [enviando, setEnviando] = useState<string | null>(null)
 
   const [ciudad, setCiudad] = useState<'todas' | Ciudad>('todas')
   const [estado, setEstado] = useState<'todos' | EstadoPreregistro>('todos')
@@ -76,9 +77,78 @@ export default function AdminPreregistrosClient() {
   }, [queryString])
 
   const csvHref = `/api/admin/preregistros?${queryString ? `${queryString}&` : ''}format=csv`
+  async function notificarLanzamiento(ciudadDestino: Ciudad) {
+    const ciudadNombre = CIUDAD_LABELS[ciudadDestino]
+    if (!confirm(
+      `¿Enviar email a TODOS los pre-registros de ${ciudadNombre}?\n\n`
+      + '⚠️ Esto NO se puede deshacer.\n'
+      + 'Solo se envía a los que aún no han sido notificados.'
+    )) {
+      return
+    }
+
+    setEnviando(ciudadDestino)
+    try {
+      const res = await fetch('/api/admin/preregistros/notificar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ciudad: ciudadDestino }),
+      })
+
+      const data = await res.json().catch(() => ({})) as {
+        error?: string
+        enviados?: number
+        errores?: number
+        mensaje?: string
+      }
+
+      if (!res.ok) {
+        alert(`❌ Error: ${data.error || 'desconocido'}`)
+        return
+      }
+
+      if (!data.enviados) {
+        alert(`ℹ️ ${data.mensaje || 'No hay pre-registros pendientes en esta ciudad'}`)
+      } else {
+        alert(
+          `✅ ¡Listo!\n\n`
+          + `Enviados: ${data.enviados}\n`
+          + `Errores: ${data.errores || 0}\n\n`
+          + 'Los códigos expiran en 7 días.'
+        )
+      }
+
+      window.location.reload()
+    } catch {
+      alert('❌ Error al enviar notificaciones')
+    } finally {
+      setEnviando(null)
+    }
+  }
 
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border border-[#E8FF47] bg-[#FFF8DC] p-4 text-[#0A0A0A]">
+        <h3 className="text-base font-semibold">🚀 Notificar lanzamiento por ciudad</h3>
+        <p className="mt-2 text-[13px] text-[#666]">
+          Envía email masivo a todos los pre-registros pendientes.
+          Cada uno recibe su código con validez de 7 días.
+        </p>
+        <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
+          {(['tulancingo', 'pachuca', 'ensenada', 'tijuana'] as Ciudad[]).map((ciudadDestino) => (
+            <button
+              key={ciudadDestino}
+              onClick={() => notificarLanzamiento(ciudadDestino)}
+              disabled={enviando === ciudadDestino}
+              className="rounded-md bg-[#0A0A0A] px-4 py-3 text-sm font-semibold text-[#E8FF47] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {enviando === ciudadDestino
+                ? 'Enviando...'
+                : `📧 ${CIUDAD_LABELS[ciudadDestino]}`}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid gap-3 md:grid-cols-3">
         <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
           <p className="text-xs font-black uppercase tracking-widest text-[#E8FF47]">Total preregistros</p>

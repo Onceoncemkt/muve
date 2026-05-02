@@ -49,6 +49,12 @@ type DescuentoDisponibleRow = {
   porcentaje: number | null
 }
 
+type PreregistroCodigoRow = {
+  id: string
+  codigo_descuento: string
+  codigo_expira_at: string | null
+}
+
 function esCiudadBC(ciudad: string | null | undefined) {
   return ciudad === 'tijuana'
 }
@@ -62,6 +68,11 @@ function normalizarCodigoDescuento(value: unknown) {
 function faltaRelacion(error: { message?: string } | null | undefined, relacion: string) {
   const message = error?.message?.toLowerCase() ?? ''
   return message.includes(relacion.toLowerCase()) && message.includes('does not exist')
+}
+
+function columnaNoExiste(error: { message?: string } | null | undefined, columna: string) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes(columna.toLowerCase()) && message.includes('does not exist')
 }
 
 function esErrorCouponExistente(error: unknown) {
@@ -169,17 +180,59 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         )
       }
+      if (consultaDescuento.data) {
+        descuentoAplicado = {
+          id: consultaDescuento.data.id,
+          codigo: consultaDescuento.data.codigo,
+          porcentaje: typeof consultaDescuento.data.porcentaje === 'number'
+            ? Math.max(Math.trunc(consultaDescuento.data.porcentaje), 1)
+            : 10,
+        }
+      } else {
+        const consultaPreregistro = await db
+          .from('preregistros')
+          .select('id, codigo_descuento, codigo_expira_at')
+          .eq('codigo_descuento', codigoDescuento)
+          .maybeSingle<PreregistroCodigoRow>()
 
-      if (!consultaDescuento.data) {
-        return NextResponse.json({ error: 'Código de descuento inválido o expirado' }, { status: 400 })
-      }
+        if (columnaNoExiste(consultaPreregistro.error, 'codigo_expira_at')) {
+          return NextResponse.json(
+            { error: 'Falta ejecutar migración de preregistros: columna codigo_expira_at.' },
+            { status: 500 }
+          )
+        }
 
-      descuentoAplicado = {
-        id: consultaDescuento.data.id,
-        codigo: consultaDescuento.data.codigo,
-        porcentaje: typeof consultaDescuento.data.porcentaje === 'number'
-          ? Math.max(Math.trunc(consultaDescuento.data.porcentaje), 1)
-          : 10,
+        if (faltaRelacion(consultaPreregistro.error, 'preregistros')) {
+          return NextResponse.json(
+            { error: 'Falta la tabla preregistros. Ejecuta migraciones pendientes.' },
+            { status: 500 }
+          )
+        }
+
+        if (consultaPreregistro.error) {
+          return NextResponse.json(
+            { error: consultaPreregistro.error.message ?? 'No se pudo validar el código de preregistro' },
+            { status: 500 }
+          )
+        }
+
+        if (!consultaPreregistro.data) {
+          return NextResponse.json({ error: 'Código de descuento inválido o expirado' }, { status: 400 })
+        }
+
+        const ahora = new Date()
+        if (
+          consultaPreregistro.data.codigo_expira_at
+          && new Date(consultaPreregistro.data.codigo_expira_at) < ahora
+        ) {
+          return NextResponse.json({ error: 'Tu código de descuento ha expirado' }, { status: 400 })
+        }
+
+        descuentoAplicado = {
+          id: consultaPreregistro.data.id,
+          codigo: consultaPreregistro.data.codigo_descuento,
+          porcentaje: 20,
+        }
       }
 
       try {

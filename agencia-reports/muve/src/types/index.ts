@@ -30,6 +30,7 @@ export type Preregistro = {
   story_url: string | null
   created_at: string
   notificado_lanzamiento_at: string | null
+  codigo_expira_at: string | null
   convertido_at: string | null
 }
 
