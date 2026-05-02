@@ -35,6 +35,9 @@ export default function RegistroPage() {
   const [password, setPassword] = useState('')
   const [codigoDescuento, setCodigoDescuento] = useState(() => {
     if (typeof window === 'undefined') return ''
+    const params = new URLSearchParams(window.location.search)
+    const codigoDesdeQuery = normalizarCodigoDescuento(params.get('codigo'))
+    if (codigoDesdeQuery) return codigoDesdeQuery
     return normalizarCodigoDescuento(window.localStorage.getItem('muvet_codigo_descuento'))
   })
   const [ciudadSeleccionada, setCiudadSeleccionada] = useState<Ciudad>('tulancingo')
@@ -77,6 +80,9 @@ export default function RegistroPage() {
       const emailRegistro = data.user?.email ?? email
       if (emailRegistro) {
         await enviarEmailBienvenida({ email: emailRegistro, nombre })
+      }
+      if (typeof window !== 'undefined' && codigoDescuentoNormalizado) {
+        window.sessionStorage.setItem('muvet_codigo_descuento', codigoDescuentoNormalizado)
       }
 
       if (data.session) {
@@ -142,6 +148,42 @@ export default function RegistroPage() {
               Crea tu cuenta y accede a gimnasios, clases y más.
             </p>
           </div>
+          {codigoDescuento && (
+            <div style={{
+              background: '#E8FF47',
+              padding: '16px 20px',
+              borderRadius: 12,
+              marginBottom: 24,
+              textAlign: 'center',
+              border: '2px solid #0A0A0A',
+            }}>
+              <p style={{
+                margin: 0,
+                color: '#0A0A0A',
+                fontSize: 14,
+                fontWeight: 600,
+                letterSpacing: 0.5,
+              }}>
+                🎁 TU CÓDIGO MUVET20 ESTÁ LISTO
+              </p>
+              <p style={{
+                margin: '6px 0 0 0',
+                color: '#0A0A0A',
+                fontSize: 18,
+                fontWeight: 700,
+                letterSpacing: 2,
+              }}>
+                {codigoDescuento}
+              </p>
+              <p style={{
+                margin: '8px 0 0 0',
+                color: '#0A0A0A',
+                fontSize: 12,
+              }}>
+                Se aplicará automáticamente al pagar tu plan
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {error && (

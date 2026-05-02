@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     for (const pre of pendientes) {
       try {
-        const linkSignup = `${baseUrl}/signup?codigo=${encodeURIComponent(pre.codigo_descuento)}`
+        const linkRegistro = `${baseUrl}/registro?codigo=${encodeURIComponent(pre.codigo_descuento)}`
 
         await resend.emails.send({
           from: fromEmail,
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
             nombre: pre.nombre,
             codigo: pre.codigo_descuento,
             ciudad: ciudadCapitalizada,
-            linkSignup,
+            linkRegistro,
             expiraAt: expiraLegible,
           }),
         })
@@ -130,13 +130,13 @@ function emailLanzamientoTemplate({
   nombre,
   codigo,
   ciudad,
-  linkSignup,
+  linkRegistro,
   expiraAt,
 }: {
   nombre: string | null
   codigo: string
   ciudad: string
-  linkSignup: string
+  linkRegistro: string
   expiraAt: string
 }) {
   return `
@@ -212,7 +212,7 @@ function emailLanzamientoTemplate({
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td style="background-color: #0A0A0A !important; border-radius: 8px;">
-                          <a href="${linkSignup}" style="display: inline-block; color: #E8FF47 !important; padding: 16px 32px; text-decoration: none; font-size: 16px; font-weight: 700; letter-spacing: 0.5px;">
+                          <a href="${linkRegistro}" style="display: inline-block; color: #E8FF47 !important; padding: 16px 32px; text-decoration: none; font-size: 16px; font-weight: 700; letter-spacing: 0.5px;">
                             Crear mi cuenta y aplicar 20% →
                           </a>
                         </td>
