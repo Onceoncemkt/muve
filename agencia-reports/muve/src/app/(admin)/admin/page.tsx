@@ -8,6 +8,7 @@ import StaffNegocioAsignadoSelect from '@/components/admin/StaffNegocioAsignadoS
 import NegocioStaffAsignarSelect from '@/components/admin/NegocioStaffAsignarSelect'
 import AdminUsuarioRolControl from '@/components/admin/AdminUsuarioRolControl'
 import AdminUsuarioPlanToggle from '@/components/admin/AdminUsuarioPlanToggle'
+import AdminDarCreditosModal from '@/components/admin/AdminDarCreditosModal'
 import AdminInvitarUsuarioModal from '@/components/admin/AdminInvitarUsuarioModal'
 import AdminInvitarNegocioForm from '@/components/admin/AdminInvitarNegocioForm'
 import type { Ciudad, Categoria, NivelNegocio, Rol, ZonaNegocio } from '@/types'
@@ -21,6 +22,7 @@ type UsuarioAdmin = {
   rol: Rol
   edad: number | null
   plan_activo: boolean
+  creditos_extra: number | null
   negocio_id: string | null
   fecha_registro: string
 }
@@ -40,6 +42,18 @@ type NegocioAdmin = {
   capacidad_default: number | null
   stripe_account_id: string | null
   activo: boolean
+}
+type CreditoOtorgadoRow = {
+  id: string
+  user_id: string
+  cantidad: number
+  motivo: string
+  created_at: string
+  otorgado_por: string | null
+  users: {
+    nombre: string
+    email: string
+  } | null
 }
 
 const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
@@ -136,25 +150,26 @@ export default async function AdminPage({
 
   const consultasUsuarios = [
     {
-      select: 'id, nombre, email, ciudad, rol, edad, plan_activo, negocio_id, fecha_registro',
+      select: 'id, nombre, email, ciudad, rol, edad, plan_activo, creditos_extra, negocio_id, fecha_registro',
       incluyeNegocioId: true,
     },
     {
-      select: 'id, nombre, email, ciudad, rol, plan_activo, negocio_id, fecha_registro',
+      select: 'id, nombre, email, ciudad, rol, plan_activo, creditos_extra, negocio_id, fecha_registro',
       incluyeNegocioId: true,
     },
     {
-      select: 'id, nombre, email, ciudad, rol, edad, plan_activo, fecha_registro',
+      select: 'id, nombre, email, ciudad, rol, edad, plan_activo, creditos_extra, fecha_registro',
       incluyeNegocioId: false,
     },
     {
-      select: 'id, nombre, email, ciudad, rol, plan_activo, fecha_registro',
+      select: 'id, nombre, email, ciudad, rol, plan_activo, creditos_extra, fecha_registro',
       incluyeNegocioId: false,
     },
   ] as const
 
   type UsuarioFlexible = Omit<UsuarioAdmin, 'edad' | 'negocio_id'> & {
     edad?: unknown
+    creditos_extra?: unknown
     negocio_id?: unknown
   }
 
@@ -172,6 +187,9 @@ export default async function AdminPage({
       usuarios = ((resultado.data ?? []) as unknown as UsuarioFlexible[]).map(usuario => ({
         ...usuario,
         edad: normalizarEdad(usuario.edad),
+        creditos_extra: typeof usuario.creditos_extra === 'number'
+          ? Math.max(Math.trunc(usuario.creditos_extra), 0)
+          : 0,
         negocio_id: typeof usuario.negocio_id === 'string' ? usuario.negocio_id : null,
       }))
       break
@@ -236,6 +254,17 @@ export default async function AdminPage({
     edad: usuario.edad ?? edadPorUsuario.get(usuario.id) ?? null,
   }))
 
+  const consultaCreditosOtorgados = await db
+    .from('creditos_historial')
+    .select('id, user_id, cantidad, motivo, created_at, otorgado_por, users(nombre, email)')
+    .eq('otorgado_por', 'admin')
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  const creditosOtorgados = consultaCreditosOtorgados.error
+    ? []
+    : (consultaCreditosOtorgados.data ?? []) as unknown as CreditoOtorgadoRow[]
+
   const negociosPorId = new Map(negociosAfiliados.map(negocio => [negocio.id, negocio]))
   const negociosOpciones = negociosAfiliados.map(negocio => ({
     id: negocio.id,
@@ -277,7 +306,7 @@ export default async function AdminPage({
                 href="#usuarios"
                 className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
               >
-                Usuarios
+                Clientes
               </a>
               <a
                 href="#negocios"
@@ -315,7 +344,7 @@ export default async function AdminPage({
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-black uppercase tracking-[0.18em] text-[#E8FF47]">
-                Usuarios
+                Clientes
               </h2>
               <p className="mt-1 text-xs text-white/50">
                 Gestión completa de clientes, staff y admins.
@@ -336,6 +365,7 @@ export default async function AdminPage({
                   <th className="px-3 py-3">Rol</th>
                   <th className="px-3 py-3">Edad</th>
                   <th className="px-3 py-3">Plan activo</th>
+                  <th className="px-3 py-3">Créditos extra</th>
                   <th className="px-3 py-3">Negocio asignado</th>
                   <th className="px-3 py-3">Acciones</th>
                 </tr>
@@ -376,11 +406,15 @@ export default async function AdminPage({
                           {usuario.plan_activo ? 'Sí' : 'No'}
                         </span>
                       </td>
+                      <td className="px-3 py-3 text-[#E8FF47] font-bold">{usuario.creditos_extra ?? 0}</td>
                       <td className="px-3 py-3 text-white/75">{negocioAsignado}</td>
                       <td className="px-3 py-3">
                         <div className="min-w-[16rem] space-y-2">
                           <AdminUsuarioRolControl userId={usuario.id} rolActual={usuario.rol} />
                           <AdminUsuarioPlanToggle userId={usuario.id} planActivo={usuario.plan_activo} />
+                          {usuario.rol === 'usuario' && (
+                            <AdminDarCreditosModal userId={usuario.id} userNombre={usuario.nombre} />
+                          )}
                           {usuario.rol === 'staff' && usuariosConNegocioIdDisponible && (
                             <StaffNegocioAsignadoSelect
                               userId={usuario.id}
@@ -401,8 +435,64 @@ export default async function AdminPage({
                 })}
                 {usuariosEnriquecidos.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-sm text-white/50">
+                    <td colSpan={9} className="px-3 py-6 text-center text-sm text-white/50">
                       No hay usuarios registrados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="creditos-otorgados" className="scroll-mt-24">
+          <div className="mb-3">
+            <h2 className="text-sm font-black uppercase tracking-[0.18em] text-[#E8FF47]">
+              Historial de créditos otorgados
+            </h2>
+            <p className="mt-1 text-xs text-white/50">
+              Últimos créditos extra otorgados manualmente por administración.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-white/10">
+            <table className="min-w-full border-collapse bg-[#111111]">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
+                  <th className="px-3 py-3">Usuario</th>
+                  <th className="px-3 py-3">Cantidad</th>
+                  <th className="px-3 py-3">Motivo</th>
+                  <th className="px-3 py-3">Fecha</th>
+                  <th className="px-3 py-3">Otorgado por</th>
+                </tr>
+              </thead>
+              <tbody>
+                {creditosOtorgados.map((row) => (
+                  <tr key={row.id} className="border-b border-white/10 text-sm text-white/90">
+                    <td className="px-3 py-3">
+                      <p className="font-semibold">{row.users?.nombre ?? 'Usuario no disponible'}</p>
+                      <p className="text-xs text-white/55">{row.users?.email ?? row.user_id}</p>
+                    </td>
+                    <td className="px-3 py-3 font-black text-[#E8FF47]">+{row.cantidad}</td>
+                    <td className="px-3 py-3">{row.motivo}</td>
+                    <td className="px-3 py-3 text-white/75">
+                      {new Date(row.created_at).toLocaleString('es-MX', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </td>
+                    <td className="px-3 py-3 uppercase text-xs font-bold text-[#CBBEFF]">
+                      {row.otorgado_por ?? 'admin'}
+                    </td>
+                  </tr>
+                ))}
+                {creditosOtorgados.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-sm text-white/50">
+                      No hay créditos otorgados todavía.
                     </td>
                   </tr>
                 )}

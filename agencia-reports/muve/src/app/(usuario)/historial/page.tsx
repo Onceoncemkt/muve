@@ -21,6 +21,12 @@ type PerfilCiclo = {
   fecha_inicio_ciclo: string | null
   fecha_fin_plan: string | null
 }
+type CreditoHistorialRow = {
+  id: string
+  cantidad: number
+  motivo: string
+  created_at: string
+}
 
 const CATEGORIA_COLORES: Record<string, string> = {
   gimnasio: '#6B4FE8',
@@ -86,6 +92,13 @@ export default async function HistorialPage() {
     .lte('fecha', fechaYmd(ciclo.fin))
 
   const noShowsCiclo = noShowsCicloCount ?? 0
+  const { data: creditosHistorial } = await supabase
+    .from('creditos_historial')
+    .select('id, cantidad, motivo, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20)
+    .returns<CreditoHistorialRow[]>()
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
@@ -161,6 +174,40 @@ export default async function HistorialPage() {
             })}
           </div>
         )}
+      </div>
+
+      <div className="mt-6 px-4">
+        <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+          <h2 className="text-sm font-black uppercase tracking-wider text-[#0A0A0A]">
+            Créditos extra
+          </h2>
+          {!creditosHistorial || creditosHistorial.length === 0 ? (
+            <p className="mt-2 text-xs text-[#888]">No tienes créditos extra registrados.</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {creditosHistorial.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold text-[#0A0A0A]">{item.motivo}</p>
+                    <p className="text-[11px] text-[#888]">
+                      {new Date(item.created_at).toLocaleDateString('es-MX', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs font-black text-[#6B4FE8]">
+                    {item.cantidad >= 0 ? '+' : ''}{item.cantidad}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

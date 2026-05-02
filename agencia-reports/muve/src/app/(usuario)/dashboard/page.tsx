@@ -35,6 +35,7 @@ type CreditoHistorialRow = {
   cantidad: number
   motivo: string
   created_at: string
+  otorgado_por?: string | null
 }
 
 const PLAN_BADGE_LABEL: Record<PlanMembresia, string> = {
@@ -96,6 +97,10 @@ function inicialesDesdeNombre(nombre: string) {
     .map(fragmento => fragmento[0]?.toUpperCase() ?? '')
     .join('')
     .slice(0, 2) || 'MU'
+}
+function faltaColumna(error: { message?: string } | null | undefined, columna: string) {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('column') && message.includes(columna.toLowerCase())
 }
 
 export default async function DashboardPage({
@@ -267,15 +272,24 @@ export default async function DashboardPage({
 
   const consultaCreditosHistorial = await supabase
     .from('creditos_historial')
-    .select('id, cantidad, motivo, created_at')
+    .select('id, cantidad, motivo, created_at, otorgado_por')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(8)
     .returns<CreditoHistorialRow[]>()
-
-  const creditosHistorial = consultaCreditosHistorial.error
+  let creditosHistorial = consultaCreditosHistorial.error
     ? []
     : (consultaCreditosHistorial.data ?? [])
+  if (faltaColumna(consultaCreditosHistorial.error, 'otorgado_por')) {
+    const fallback = await supabase
+      .from('creditos_historial')
+      .select('id, cantidad, motivo, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(8)
+      .returns<Array<Omit<CreditoHistorialRow, 'otorgado_por'>>>()
+    creditosHistorial = (fallback.data ?? []).map((row) => ({ ...row, otorgado_por: null }))
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
@@ -356,7 +370,7 @@ export default async function DashboardPage({
             )}
             {creditosExtra > 0 && (
               <p className="mt-2 inline-flex rounded-full bg-[#6B4FE8] px-3 py-1 text-xs font-black uppercase tracking-wider text-white">
-                Tienes {creditosExtra} créditos de regalo
+                Tienes {creditosExtra} créditos extra disponibles
               </p>
             )}
           </div>
@@ -445,6 +459,9 @@ export default async function DashboardPage({
                 >
                   <div className="min-w-0">
                     <p className="truncate text-xs font-bold text-[#0A0A0A]">{movimiento.motivo}</p>
+                    <p className="text-[11px] text-[#6B4FE8]">
+                      {movimiento.otorgado_por === 'admin' ? 'Otorgado por admin' : 'Otorgado por sistema'}
+                    </p>
                     <p className="text-[11px] text-[#888]">
                       {new Date(movimiento.created_at).toLocaleDateString('es-MX', {
                         day: '2-digit',
