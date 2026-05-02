@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { enviarPushAUsuarios } from '@/lib/push/server'
+import { formatHora } from '@/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
 
     const pushResult = await enviarPushAUsuarios([reservacion.user_id], {
       title: 'MUVET',
-      body: `Tu clase en ${negocio} es en 2 horas. Si no puedes ir cancela con tiempo.`,
+      body: `Tu clase en ${negocio} es a las ${formatHora(hora)} (en 2 horas). Si no puedes ir cancela con tiempo.`,
       url: '/dashboard',
     })
     if (pushResult.sent > 0) pushEnviados += 1

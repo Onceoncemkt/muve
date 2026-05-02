@@ -150,5 +150,12 @@ export function proximaFecha(dia: DiaSemana): Date {
 }
 
 export function formatHora(h: string): string {
-  return h.slice(0, 5) // "HH:MM:SS" → "HH:MM"
+  if (!h) return ''
+  const [horasRaw, minutosRaw] = h.split(':')
+  const horas = Number.parseInt(horasRaw, 10)
+  const minutos = (minutosRaw ?? '00').padStart(2, '0')
+  if (!Number.isFinite(horas)) return h.slice(0, 5)
+  const ampm = horas >= 12 ? 'PM' : 'AM'
+  const horas12 = horas % 12 || 12
+  return `${horas12}:${minutos} ${ampm}`
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
-import type { DiaSemana } from '@/types'
+import { formatHora, type DiaSemana } from '@/types'
 import { enviarPushAUsuarios, obtenerStaffIdsPorNegocio } from '@/lib/push/server'
 import {
   PLAN_MAX_VISITAS_POR_LUGAR,
@@ -17,9 +17,6 @@ function diaSemanaDesdeFecha(fecha: string): DiaSemana | null {
   return dias[date.getDay()]
 }
 
-function formatHora(hora: string) {
-  return hora.slice(0, 5)
-}
 
 function normalizarTextoOpcional(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -156,35 +153,171 @@ function admin() {
   )
 }
 
-// GET /api/reservaciones — próximas reservaciones del usuario autenticado
+// GET /api/reservaciones — reservaciones del usuario autenticado
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const hoy = new Date().toISOString().split('T')[0]
   const now_ms = Date.now()
+  const db = admin()
 
-  const { data, error } = await admin()
+  const { data: dataJoin, error: errorJoin } = await db
     .from('reservaciones')
     .select(`
-      id, fecha, estado, created_at,
+      id, fecha, estado, created_at, horario_id,
       horarios (
-        id, dia_semana, hora_inicio, hora_fin, capacidad_total,
-        negocios ( id, nombre, direccion )
+        id, dia_semana, hora_inicio, hora_fin, capacidad_total, tipo_clase, nombre_coach,
+        negocios ( id, nombre, categoria, direccion )
       )
     `)
     .eq('user_id', user.id)
-    .gte('fecha', hoy)
     .order('fecha', { ascending: true })
-    .order('horarios(hora_inicio)', { ascending: true })
+    .order('created_at', { ascending: true })
 
-  if (error) {
-    console.error('[GET /api/reservaciones]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!errorJoin) {
+    const reservacionesJoin = (dataJoin ?? []).sort((a, b) => {
+      const horarioA = Array.isArray(a.horarios) ? a.horarios[0] : a.horarios
+      const horarioB = Array.isArray(b.horarios) ? b.horarios[0] : b.horarios
+      const keyA = `${a.fecha}T${horarioA?.hora_inicio ?? '23:59:59'}`
+      const keyB = `${b.fecha}T${horarioB?.hora_inicio ?? '23:59:59'}`
+      return keyA.localeCompare(keyB)
+    })
+    return NextResponse.json({ reservaciones: reservacionesJoin, now_ms })
   }
 
-  return NextResponse.json({ reservaciones: data, now_ms })
+  console.warn('[GET /api/reservaciones] fallback sin join', errorJoin)
+
+  const { data: reservacionesBase, error: reservacionesBaseError } = await db
+    .from('reservaciones')
+    .select('id, fecha, estado, created_at, horario_id')
+    .eq('user_id', user.id)
+    .order('fecha', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (reservacionesBaseError) {
+    console.error('[GET /api/reservaciones] fallback base', reservacionesBaseError)
+    return NextResponse.json({ error: reservacionesBaseError.message }, { status: 500 })
+  }
+
+  const horarioIds = Array.from(new Set(
+    (reservacionesBase ?? [])
+      .map((reserva) => reserva.horario_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  ))
+
+  const horariosMap = new Map<string, {
+    id: string
+    dia_semana: string
+    hora_inicio: string
+    hora_fin: string
+    capacidad_total: number | null
+    tipo_clase: string | null
+    nombre_coach: string | null
+    negocios: { id: string; nombre: string; categoria: string | null; direccion: string | null } | null
+  }>()
+
+  if (horarioIds.length > 0) {
+    const { data: horariosJoin, error: horariosJoinError } = await db
+      .from('horarios')
+      .select(`
+        id, dia_semana, hora_inicio, hora_fin, capacidad_total, tipo_clase, nombre_coach, negocio_id,
+        negocios ( id, nombre, categoria, direccion )
+      `)
+      .in('id', horarioIds)
+
+    if (!horariosJoinError) {
+      for (const horario of horariosJoin ?? []) {
+        const negocio = Array.isArray(horario.negocios) ? horario.negocios[0] : horario.negocios
+        horariosMap.set(horario.id, {
+          id: horario.id,
+          dia_semana: horario.dia_semana,
+          hora_inicio: horario.hora_inicio,
+          hora_fin: horario.hora_fin,
+          capacidad_total: typeof horario.capacidad_total === 'number' ? horario.capacidad_total : null,
+          tipo_clase: typeof horario.tipo_clase === 'string' ? horario.tipo_clase : null,
+          nombre_coach: typeof horario.nombre_coach === 'string' ? horario.nombre_coach : null,
+          negocios: negocio
+            ? {
+              id: negocio.id,
+              nombre: negocio.nombre,
+              categoria: typeof negocio.categoria === 'string' ? negocio.categoria : null,
+              direccion: typeof negocio.direccion === 'string' ? negocio.direccion : null,
+            }
+            : null,
+        })
+      }
+    } else {
+      const { data: horariosBase, error: horariosBaseError } = await db
+        .from('horarios')
+        .select('id, dia_semana, hora_inicio, hora_fin, capacidad_total, tipo_clase, nombre_coach, negocio_id')
+        .in('id', horarioIds)
+
+      if (horariosBaseError) {
+        console.error('[GET /api/reservaciones] fallback horarios', horariosBaseError)
+        return NextResponse.json({ error: horariosBaseError.message }, { status: 500 })
+      }
+
+      const negocioIds = Array.from(new Set(
+        (horariosBase ?? [])
+          .map((horario) => horario.negocio_id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      ))
+
+      const negociosMap = new Map<string, { id: string; nombre: string; categoria: string | null; direccion: string | null }>()
+      if (negocioIds.length > 0) {
+        const { data: negocios, error: negociosError } = await db
+          .from('negocios')
+          .select('id, nombre, categoria, direccion')
+          .in('id', negocioIds)
+
+        if (negociosError) {
+          console.error('[GET /api/reservaciones] fallback negocios', negociosError)
+          return NextResponse.json({ error: negociosError.message }, { status: 500 })
+        }
+
+        for (const negocio of negocios ?? []) {
+          negociosMap.set(negocio.id, {
+            id: negocio.id,
+            nombre: negocio.nombre,
+            categoria: typeof negocio.categoria === 'string' ? negocio.categoria : null,
+            direccion: typeof negocio.direccion === 'string' ? negocio.direccion : null,
+          })
+        }
+      }
+
+      for (const horario of horariosBase ?? []) {
+        const negocio = typeof horario.negocio_id === 'string' ? (negociosMap.get(horario.negocio_id) ?? null) : null
+        horariosMap.set(horario.id, {
+          id: horario.id,
+          dia_semana: horario.dia_semana,
+          hora_inicio: horario.hora_inicio,
+          hora_fin: horario.hora_fin,
+          capacidad_total: typeof horario.capacidad_total === 'number' ? horario.capacidad_total : null,
+          tipo_clase: typeof horario.tipo_clase === 'string' ? horario.tipo_clase : null,
+          nombre_coach: typeof horario.nombre_coach === 'string' ? horario.nombre_coach : null,
+          negocios: negocio,
+        })
+      }
+    }
+  }
+
+  const reservaciones = (reservacionesBase ?? [])
+    .map((reserva) => ({
+      ...reserva,
+      horarios: typeof reserva.horario_id === 'string'
+        ? (horariosMap.get(reserva.horario_id) ?? null)
+        : null,
+    }))
+    .sort((a, b) => {
+      const horarioA = Array.isArray(a.horarios) ? a.horarios[0] : a.horarios
+      const horarioB = Array.isArray(b.horarios) ? b.horarios[0] : b.horarios
+      const keyA = `${a.fecha}T${horarioA?.hora_inicio ?? '23:59:59'}`
+      const keyB = `${b.fecha}T${horarioB?.hora_inicio ?? '23:59:59'}`
+      return keyA.localeCompare(keyB)
+    })
+
+  return NextResponse.json({ reservaciones, now_ms, fallback: true })
 }
 
 // POST /api/reservaciones — crear reservación
