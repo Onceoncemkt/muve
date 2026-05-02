@@ -8,6 +8,14 @@ export const metadata: Metadata = {
   title: 'MUVET — Membresía de bienestar',
   description: 'Un pase. Todo el bienestar. Gimnasios, clases, estéticas y restaurantes saludables en tu ciudad.',
   manifest: '/manifest.json',
+  themeColor: '#5B3FFF',
+  icons: {
+    icon: '/favicon.png',
+    apple: [
+      { url: '/icon-192.png', sizes: '192x192' },
+      { url: '/icon-512.png', sizes: '512x512' },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -15,7 +23,7 @@ export const metadata: Metadata = {
   },
 }
 export const viewport: Viewport = {
-  themeColor: '#E8FF47',
+  themeColor: '#5B3FFF',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
