@@ -28,6 +28,7 @@ type VisitaPeriodo = {
 
 type PagoExistente = {
   negocio_id: string
+  estado: 'completado' | 'pendiente' | null
 }
 
 type RegistroPago = {
@@ -215,7 +216,7 @@ export async function GET(request: NextRequest) {
   const idsNegociosConStripe = negociosConStripe.map(negocio => negocio.id)
   const { data: pagosExistentes, error: pagosExistentesError } = await db
     .from('pagos_negocios')
-    .select('negocio_id')
+    .select('negocio_id, estado')
     .in('negocio_id', idsNegociosConStripe)
     .eq('periodo_inicio', inicioRegistro)
     .eq('periodo_fin', finRegistro)
@@ -235,9 +236,13 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const negociosConPagoPrevio = new Set((pagosExistentes ?? []).map(pago => pago.negocio_id))
+  const negociosConPagoCompletoPrevio = new Set(
+    (pagosExistentes ?? [])
+      .filter(pago => pago.estado === 'completado')
+      .map(pago => pago.negocio_id)
+  )
   const negociosPendientes = negociosConStripe.filter(
-    negocio => !negociosConPagoPrevio.has(negocio.id)
+    negocio => !negociosConPagoCompletoPrevio.has(negocio.id)
   )
 
   if (negociosPendientes.length === 0) {
