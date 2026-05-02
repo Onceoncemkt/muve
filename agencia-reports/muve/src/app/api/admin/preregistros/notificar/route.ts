@@ -152,14 +152,14 @@ function emailLanzamientoTemplate({
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; max-width: 600px;">
-          
+          <!-- Header negro con logo amarillo -->
           <tr>
             <td style="background-color: #0A0A0A !important; padding: 32px 20px; text-align: center;">
               <h1 style="color: #E8FF47 !important; font-size: 36px; margin: 0; letter-spacing: 2px; font-weight: 700;">MUVET</h1>
               <p style="color: #ffffff !important; font-size: 14px; margin: 8px 0 0 0; opacity: 0.7;">Ya estamos en ${ciudad} 🎉</p>
             </td>
           </tr>
-          
+          <!-- Cuerpo blanco -->
           <tr>
             <td style="padding: 32px; background-color: #ffffff;">
               <h2 style="color: #0A0A0A !important; font-size: 24px; margin: 0 0 16px 0; font-weight: 700;">¡Hola${nombre ? ` ${nombre}` : ''}! 🎁</h2>
@@ -171,7 +171,7 @@ function emailLanzamientoTemplate({
               <p style="color: #333333 !important; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
                 <b>MUVET ya está disponible en ${ciudad}.</b> Y como prometimos, tu código exclusivo está listo para usarse:
               </p>
-              
+              <!-- Caja amarilla con código -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0;">
                 <tr>
                   <td style="background-color: #E8FF47 !important; padding: 24px; border-radius: 12px; text-align: center;">
@@ -180,10 +180,20 @@ function emailLanzamientoTemplate({
                   </td>
                 </tr>
               </table>
-              
+              <!-- Acento morado decorativo (paleta MUVET completa) -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0;">
                 <tr>
-                  <td style="background-color: #FFF0F0 !important; border-left: 4px solid #DC2626 !important; padding: 16px 20px;">
+                  <td style="background-color: #F5F3FF !important; border-left: 4px solid #6B4FE8 !important; padding: 16px 20px; border-radius: 0;">
+                    <p style="margin: 0; color: #6B4FE8 !important; font-size: 13px; font-weight: 600; line-height: 1.6;">
+                      💜 Eres parte de los primeros 100 con descuento. Gracias por confiar en MUVET desde el día uno.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              <!-- Urgencia con acento rojo -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0;">
+                <tr>
+                  <td style="background-color: #FFF0F0 !important; border-left: 4px solid #DC2626 !important; padding: 16px 20px; border-radius: 0;">
                     <p style="margin: 0 0 4px 0; color: #DC2626 !important; font-size: 14px; font-weight: 700;">⏰ TU CÓDIGO EXPIRA EL ${expiraAt.toUpperCase()}</p>
                     <p style="margin: 0; color: #444444 !important; font-size: 13px; line-height: 1.6;">
                       Después de esa fecha, ya no podrás usar este descuento.
@@ -195,7 +205,7 @@ function emailLanzamientoTemplate({
               <p style="color: #333333 !important; font-size: 15px; line-height: 1.6; margin: 0 0 24px 0;">
                 Crea tu cuenta hoy y disfruta del <b>20% durante tus primeros 3 meses</b> en cualquier plan que elijas.
               </p>
-              
+              <!-- CTA principal con paleta MUVET (botón negro + texto amarillo) -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 32px 0;">
                 <tr>
                   <td align="center">
@@ -217,7 +227,7 @@ function emailLanzamientoTemplate({
               </p>
             </td>
           </tr>
-          
+          <!-- Footer -->
           <tr>
             <td style="background-color: #f5f5f5 !important; padding: 16px; text-align: center;">
               <p style="color: #888888 !important; font-size: 11px; margin: 0;">MUVET · muvet.mx</p>
