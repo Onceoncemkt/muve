@@ -11,6 +11,7 @@ import AdminUsuarioPlanToggle from '@/components/admin/AdminUsuarioPlanToggle'
 import AdminDarCreditosModal from '@/components/admin/AdminDarCreditosModal'
 import AdminInvitarUsuarioModal from '@/components/admin/AdminInvitarUsuarioModal'
 import AdminInvitarNegocioForm from '@/components/admin/AdminInvitarNegocioForm'
+import AdminReservacionesSection from '@/components/admin/AdminReservacionesSection'
 import type { Ciudad, Categoria, NivelNegocio, Rol, ZonaNegocio } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 
@@ -309,6 +310,12 @@ export default async function AdminPage({
                 Clientes
               </a>
               <a
+                href="#reservaciones"
+                className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+              >
+                Reservaciones
+              </a>
+              <a
                 href="#negocios"
                 className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
               >
@@ -500,6 +507,8 @@ export default async function AdminPage({
             </table>
           </div>
         </section>
+
+        <AdminReservacionesSection />
 
         <section id="negocios" className="scroll-mt-24">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
