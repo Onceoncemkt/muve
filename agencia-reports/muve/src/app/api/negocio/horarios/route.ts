@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import type { DiaSemana } from '@/types'
+
+const DIA_INDEX: Record<DiaSemana, number> = {
+  domingo: 0,
+  lunes: 1,
+  martes: 2,
+  miercoles: 3,
+  jueves: 4,
+  viernes: 5,
+  sabado: 6,
+}
 function diaSemanaDesdeFecha(fecha: string): DiaSemana | null {
   const dias: DiaSemana[] = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
   const date = new Date(`${fecha}T00:00:00`)
@@ -27,6 +37,35 @@ function normalizarTextoOpcional(value: unknown): string | null {
   return limpio.length > 0 ? limpio : null
 }
 
+function fechaIsoYmd(value: Date) {
+  return value.toISOString().slice(0, 10)
+}
+
+function siguienteFechaParaHorario(diaSemana: DiaSemana, horaInicio: string, ahora: Date) {
+  const fechaBase = new Date(ahora)
+  fechaBase.setHours(0, 0, 0, 0)
+
+  const diaActual = ahora.getDay()
+  const diaObjetivo = DIA_INDEX[diaSemana]
+  const diff = (diaObjetivo - diaActual + 7) % 7
+
+  const candidata = new Date(fechaBase)
+  candidata.setDate(candidata.getDate() + diff)
+
+  const [horaTexto, minutoTexto = '0'] = horaInicio.split(':')
+  const hora = Number.parseInt(horaTexto ?? '', 10)
+  const minuto = Number.parseInt(minutoTexto ?? '', 10)
+  if (!Number.isFinite(hora) || !Number.isFinite(minuto)) {
+    return null
+  }
+
+  candidata.setHours(hora, minuto, 0, 0)
+  if (candidata.getTime() <= ahora.getTime()) {
+    candidata.setDate(candidata.getDate() + 7)
+  }
+  return candidata
+}
+
 function admin() {
   return createAdmin(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,6 +82,7 @@ export async function GET(request: NextRequest) {
   const negocio_id = searchParams.get('negocio_id')
   const fechaParam = searchParams.get('fecha')
   const incluirInactivos = searchParams.get('incluir_inactivos') === 'true'
+  const soloFuturos = searchParams.get('solo_futuros') === 'true'
   const fecha = fechaParam ?? new Date().toISOString().split('T')[0]
 
   if (!negocio_id) {
@@ -77,6 +117,47 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  if (!fechaParam && soloFuturos) {
+    const ahora = new Date()
+    const horariosConSpots = await Promise.all(
+      (horarios ?? []).map(async h => {
+        if (!esDiaSemana(h.dia_semana) || typeof h.hora_inicio !== 'string') return null
+        const fechaProxima = siguienteFechaParaHorario(h.dia_semana, h.hora_inicio, ahora)
+        if (!fechaProxima) return null
+        const fechaProximaYmd = fechaIsoYmd(fechaProxima)
+
+        const { count } = await db
+          .from('reservaciones')
+          .select('id', { count: 'exact', head: true })
+          .eq('horario_id', h.id)
+          .eq('fecha', fechaProximaYmd)
+          .eq('estado', 'confirmada')
+
+        return {
+          ...h,
+          fecha_proxima: fechaProximaYmd,
+          spots_disponibles: h.capacidad_total - (count ?? 0),
+          spots_ocupados: count ?? 0,
+        }
+      })
+    )
+
+    const futuros = horariosConSpots
+      .filter((horario): horario is NonNullable<typeof horario> => Boolean(horario))
+      .filter((horario) => {
+        if (typeof horario.fecha_proxima !== 'string') return false
+        const inicio = new Date(`${horario.fecha_proxima}T${horario.hora_inicio}`)
+        return !Number.isNaN(inicio.getTime()) && inicio.getTime() > ahora.getTime()
+      })
+      .sort((a, b) => {
+        const keyA = `${a.fecha_proxima}T${a.hora_inicio}`
+        const keyB = `${b.fecha_proxima}T${b.hora_inicio}`
+        return keyA.localeCompare(keyB)
+      })
+
+    return NextResponse.json({ horarios: futuros })
   }
 
   // Para cada horario, contar reservaciones confirmadas en la fecha dada

@@ -40,21 +40,12 @@ type HorarioExplorar = {
   dia_semana: DiaSemana
   hora_inicio: string
   hora_fin: string
+  fecha_proxima?: string
   nombre_coach: string | null
   tipo_clase: string | null
   spots_disponibles?: number
 }
 type MensajeCard = { tipo: 'ok' | 'error'; texto: string }
-
-const ORDEN_DIAS: Record<DiaSemana, number> = {
-  lunes: 1,
-  martes: 2,
-  miercoles: 3,
-  jueves: 4,
-  viernes: 5,
-  sabado: 6,
-  domingo: 7,
-}
 
 const FILTROS_CATEGORIA: Array<{ value: FiltroCategoria; label: string }> = [
   { value: 'todas', label: 'Todas' },
@@ -143,22 +134,6 @@ function formatearFechaISO(fecha: Date): string {
   return `${anio}-${mes}-${dia}`
 }
 
-function estadoHorarioHoy(diaSemana: DiaSemana, horaInicio: string, horaFin: string) {
-  const fechaObjetivo = proximaFecha(diaSemana)
-  const ahora = new Date()
-
-  const esHoy = fechaObjetivo.toDateString() === ahora.toDateString()
-  if (!esHoy) return { bloqueado: false, etiqueta: null as string | null }
-
-  const inicio = new Date(`${formatearFechaISO(fechaObjetivo)}T${horaInicio}`)
-  const fin = new Date(`${formatearFechaISO(fechaObjetivo)}T${horaFin}`)
-  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
-    return { bloqueado: false, etiqueta: null as string | null }
-  }
-  if (ahora.getTime() >= fin.getTime()) return { bloqueado: true, etiqueta: 'Finalizado' }
-  if (ahora.getTime() >= inicio.getTime()) return { bloqueado: true, etiqueta: 'En curso' }
-  return { bloqueado: false, etiqueta: null as string | null }
-}
 function normalizarHandleSocial(handle: string | null | undefined): string | null {
   if (!handle) return null
   const limpio = handle.trim().replace(/^@+/, '')
@@ -328,7 +303,7 @@ export default function ExplorarPage() {
     setErrorHorariosPorNegocioId((prev) => ({ ...prev, [negocioId]: null }))
 
     try {
-      const res = await fetch(`/api/negocio/horarios?negocio_id=${encodeURIComponent(negocioId)}`, {
+      const res = await fetch(`/api/negocio/horarios?negocio_id=${encodeURIComponent(negocioId)}&solo_futuros=true`, {
         cache: 'no-store',
       })
       const data = await res.json().catch(() => ({}))
@@ -345,9 +320,9 @@ export default function ExplorarPage() {
       const horariosOrdenados = ((data.horarios ?? []) as HorarioExplorar[])
         .slice()
         .sort((a, b) => {
-          const diferenciaDia = ORDEN_DIAS[a.dia_semana] - ORDEN_DIAS[b.dia_semana]
-          if (diferenciaDia !== 0) return diferenciaDia
-          return a.hora_inicio.localeCompare(b.hora_inicio)
+          const keyA = `${a.fecha_proxima ?? '9999-12-31'}T${a.hora_inicio}`
+          const keyB = `${b.fecha_proxima ?? '9999-12-31'}T${b.hora_inicio}`
+          return keyA.localeCompare(keyB)
         })
 
       setHorariosPorNegocioId((prev) => ({ ...prev, [negocioId]: horariosOrdenados }))
@@ -385,18 +360,9 @@ export default function ExplorarPage() {
   const reservarHorario = useCallback(async (negocio: Negocio, horario: HorarioExplorar) => {
     const negocioId = negocio.id
     const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
-    const estadoHorario = estadoHorarioHoy(horario.dia_semana, horario.hora_inicio, horario.hora_fin)
-    if (estadoHorario.bloqueado) {
-      setMensajeReservaPorNegocioId((prev) => ({
-        ...prev,
-        [negocioId]: {
-          tipo: 'error',
-          texto: 'Ya no puedes reservar esta clase. Las reservaciones cierran en punto de la hora de inicio.',
-        },
-      }))
-      return
-    }
-    const fecha = formatearFechaISO(proximaFecha(horario.dia_semana))
+    const fecha = typeof horario.fecha_proxima === 'string' && horario.fecha_proxima.length > 0
+      ? horario.fecha_proxima
+      : formatearFechaISO(proximaFecha(horario.dia_semana))
     const payload: { horario_id: string; fecha: string; servicio_id?: string } = {
       horario_id: horario.id,
       fecha,
@@ -475,6 +441,20 @@ export default function ExplorarPage() {
 
     return resultado
   }, [negocios, filtroCiudad, filtroCategoria])
+
+  useEffect(() => {
+    const negociosObjetivo = negociosFiltrados
+      .filter((negocio) => normalizarCategoriaNegocio(negocio.categoria) !== 'restaurante')
+      .map((negocio) => negocio.id)
+      .filter((negocioId) => (
+        !Object.prototype.hasOwnProperty.call(horariosPorNegocioId, negocioId)
+        && !cargandoHorariosPorNegocioId[negocioId]
+      ))
+
+    for (const negocioId of negociosObjetivo) {
+      void cargarHorarios(negocioId)
+    }
+  }, [negociosFiltrados, horariosPorNegocioId, cargandoHorariosPorNegocioId, cargarHorarios])
   const regresarOInicio = useCallback(() => {
     router.push('/dashboard')
   }, [router])
@@ -637,7 +617,9 @@ export default function ExplorarPage() {
               const menuReservasAbierto = Boolean(menuReservasAbiertoPorNegocioId[negocio.id])
               const cargandoHorarios = Boolean(cargandoHorariosPorNegocioId[negocio.id])
               const horarios = horariosPorNegocioId[negocio.id] ?? []
+              const disponibilidadCargada = Object.prototype.hasOwnProperty.call(horariosPorNegocioId, negocio.id)
               const errorHorarios = errorHorariosPorNegocioId[negocio.id]
+              const sinHorariosFuturos = !esRestaurante && disponibilidadCargada && !cargandoHorarios && !errorHorarios && horarios.length === 0
               const mensajeReserva = mensajeReservaPorNegocioId[negocio.id]
               const serviciosWellness = esWellness
                 ? serviciosWellnessVisibles(negocio)
@@ -846,38 +828,44 @@ export default function ExplorarPage() {
                       </button>
                     )
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (bloqueadoPorMembresia) {
-                          router.push('/planes')
-                          return
-                        }
-                        abrirOCerrarMenuReservas(negocio, menuReservasAbierto)
-                      }}
-                      disabled={!puedeReservar && !bloqueadoPorMembresia}
-                      className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
-                        puedeReservar
-                          ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
-                          : bloqueadoPorMembresia
-                            ? 'border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
-                            : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
-                      }`}
-                    >
-                      {!puedeReservar
-                        ? bloqueadoPorMembresia
-                          ? '🔒 Activar plan'
-                          : planRequerido === 'plus'
-                          ? 'Requiere Plus'
-                          : 'Requiere Total'
-                        : menuReservasAbierto
-                          ? esWellness
-                            ? 'Ocultar disponibilidad'
-                            : 'Ocultar horarios'
-                          : esWellness
-                            ? 'Reservar servicio'
-                            : 'Reservar clase'}
-                    </button>
+                    sinHorariosFuturos && puedeReservar ? (
+                      <div className="mt-4 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#666]">
+                        Sin horarios disponibles por ahora
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (bloqueadoPorMembresia) {
+                            router.push('/planes')
+                            return
+                          }
+                          abrirOCerrarMenuReservas(negocio, menuReservasAbierto)
+                        }}
+                        disabled={!puedeReservar && !bloqueadoPorMembresia}
+                        className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
+                          puedeReservar
+                            ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
+                            : bloqueadoPorMembresia
+                              ? 'border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                              : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                        }`}
+                      >
+                        {!puedeReservar
+                          ? bloqueadoPorMembresia
+                            ? '🔒 Activar plan'
+                            : planRequerido === 'plus'
+                            ? 'Requiere Plus'
+                            : 'Requiere Total'
+                          : menuReservasAbierto
+                            ? esWellness
+                              ? 'Ocultar disponibilidad'
+                              : 'Ocultar horarios'
+                            : esWellness
+                              ? 'Reservar servicio'
+                              : 'Reservar clase'}
+                      </button>
+                    )
                   )}
                   {!puedeReservar && (
                     <div className="mt-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-center">
@@ -953,18 +941,15 @@ export default function ExplorarPage() {
                       ) : errorHorarios ? (
                         <p className="mt-2 text-xs font-semibold text-red-800">{errorHorarios}</p>
                       ) : horarios.length === 0 ? (
-                        <p className="mt-2 text-xs text-[#666]">
-                          {esWellness
-                            ? 'No hay disponibilidad de agenda'
-                            : 'No hay horarios disponibles'}
-                        </p>
+                        <p className="mt-2 text-xs text-[#666]">Sin horarios disponibles por ahora</p>
                       ) : (
                         <div className="mt-2 space-y-2">
                           {horarios.map((horario) => {
                             const reservando = reservandoHorarioId === horario.id
-                            const proxima = proximaFecha(horario.dia_semana)
-                            const estadoHorario = estadoHorarioHoy(horario.dia_semana, horario.hora_inicio, horario.hora_fin)
-                            const fechaProxima = proxima.toLocaleDateString('es-MX', {
+                            const fechaProximaRaw = typeof horario.fecha_proxima === 'string'
+                              ? new Date(`${horario.fecha_proxima}T00:00:00`)
+                              : proximaFecha(horario.dia_semana)
+                            const fechaProxima = fechaProximaRaw.toLocaleDateString('es-MX', {
                               day: '2-digit',
                               month: 'short',
                             })
@@ -972,7 +957,7 @@ export default function ExplorarPage() {
                               ? Math.max(horario.spots_disponibles, 0)
                               : null
                             const requiereServicioWellness = esWellness
-                            const puedeReservarHorario = (!requiereServicioWellness || Boolean(servicioSeleccionadoId)) && !estadoHorario.bloqueado
+                            const puedeReservarHorario = !requiereServicioWellness || Boolean(servicioSeleccionadoId)
 
                             return (
                               <button
@@ -989,11 +974,6 @@ export default function ExplorarPage() {
                                   <span className="text-xs text-[#666]">
                                     Próxima fecha: {fechaProxima}
                                   </span>
-                                  {estadoHorario.bloqueado && (
-                                    <span className="mt-1 inline-flex w-fit rounded-full bg-[#E5E5E5] px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#666]">
-                                      Ya inició
-                                    </span>
-                                  )}
                                   {!esWellness && horario.nombre_coach && (
                                     <span className="text-xs text-[#666]">
                                       Coach: {horario.nombre_coach}
@@ -1011,8 +991,6 @@ export default function ExplorarPage() {
                                 <span className="ml-3 shrink-0 text-xs font-bold text-[#6B4FE8]">
                                   {reservando
                                     ? 'Reservando...'
-                                    : estadoHorario.bloqueado
-                                      ? 'Ya inició'
                                     : !puedeReservarHorario
                                       ? 'Selecciona servicio'
                                       : 'Reservar'}
