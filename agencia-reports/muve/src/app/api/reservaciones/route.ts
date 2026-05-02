@@ -552,6 +552,22 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   }
+  const { data: reservacionExistente, error: reservacionExistenteError } = await db
+    .from('reservaciones')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('horario_id', horario_id)
+    .eq('fecha', fecha)
+    .eq('estado', 'confirmada')
+    .limit(1)
+
+  if (reservacionExistenteError) {
+    return NextResponse.json({ error: 'No se pudo validar si ya existe la reservación' }, { status: 500 })
+  }
+
+  if ((reservacionExistente ?? []).length > 0) {
+    return NextResponse.json({ error: 'Ya tienes una reservación en este horario' }, { status: 409 })
+  }
 
   // Verificar spots disponibles
   const { count } = await db

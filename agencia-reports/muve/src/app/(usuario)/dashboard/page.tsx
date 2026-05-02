@@ -247,6 +247,28 @@ export default async function DashboardPage({
   const checkInsRealizados = Math.max(usadasCiclo, 0)
   const visitasDisponibles = visitasIncluidasPlan + creditosExtra
   const visitasRestantes = Math.max(visitasDisponibles - checkInsRealizados, 0)
+  let noShowsCiclo = 0
+  const inicioCicloNoShows = parseFechaSegura(perfil?.fecha_inicio_ciclo)
+  if (inicioCicloNoShows) {
+    const { count: noShowsCount, error: noShowsError } = await supabase
+      .from('reservaciones')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .in('estado', ['no_show', 'cancelada_sin_devolucion'])
+      .gte('fecha', inicioCicloNoShows.toISOString().slice(0, 10))
+
+    if (!noShowsError) {
+      noShowsCiclo = noShowsCount ?? 0
+    } else {
+      const { count: noShowsFallbackCount } = await supabase
+        .from('reservaciones')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('estado', 'no_show')
+        .gte('fecha', inicioCicloNoShows.toISOString().slice(0, 10))
+      noShowsCiclo = noShowsFallbackCount ?? 0
+    }
+  }
   const progresoCiclo = visitasDisponibles > 0
     ? Math.min((checkInsRealizados / visitasDisponibles) * 100, 100)
     : 0
@@ -403,6 +425,9 @@ export default async function DashboardPage({
                 )}
                 <p className="mt-1 text-[11px] font-semibold text-[#E8FF47]">
                   Los créditos NO se acumulan — al terminar el ciclo se reinician a 0.
+                </p>
+                <p className="mt-1 text-[11px] font-semibold text-[#FCA5A5]">
+                  {noShowsCiclo} de 3 no-shows permitidos este ciclo
                 </p>
               </>
             )}
