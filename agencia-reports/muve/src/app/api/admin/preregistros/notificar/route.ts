@@ -145,21 +145,23 @@ function emailLanzamientoTemplate({
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
 <title>MUVET ya está en ${ciudad}</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #0A0A0A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #0A0A0A; padding: 24px 0;">
+<body bgcolor="#0A0A0A" style="margin: 0; padding: 0; background-color: #0A0A0A !important; color: #FFFFFF !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0A0A0A" style="background-color: #0A0A0A !important; padding: 24px 0;">
     <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #111111; border: 1px solid #232323; border-radius: 14px; overflow: hidden; max-width: 600px;">
+      <td align="center" bgcolor="#0A0A0A" style="background-color: #0A0A0A !important;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background-color: #111111 !important; border: 1px solid #232323; border-radius: 14px; overflow: hidden; max-width: 600px;">
           <tr>
-            <td style="background-color: #0A0A0A !important; padding: 32px 20px; text-align: center; border-bottom: 1px solid #232323;">
+            <td bgcolor="#0A0A0A" style="background-color: #0A0A0A !important; padding: 32px 20px; text-align: center; border-bottom: 1px solid #232323;">
               <h1 style="color: #E8FF47 !important; font-size: 36px; margin: 0; letter-spacing: 2px; font-weight: 700;">MUVET</h1>
               <p style="color: #FFFFFF !important; font-size: 14px; margin: 10px 0 0 0; opacity: 0.85;">Ya estamos en ${ciudad} 🎉</p>
             </td>
           </tr>
           <tr>
-            <td style="padding: 32px; background-color: #111111;">
+            <td bgcolor="#111111" style="padding: 32px; background-color: #111111 !important; color: #FFFFFF !important;">
               <h2 style="color: #FFFFFF !important; font-size: 24px; margin: 0 0 16px 0; font-weight: 700;">¡Hola${nombre ? ` ${nombre}` : ''}! 🎁</h2>
               
               <p style="color: #FFFFFF !important; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
@@ -171,7 +173,7 @@ function emailLanzamientoTemplate({
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0;">
                 <tr>
-                  <td style="background-color: #E8FF47 !important; padding: 24px; border-radius: 12px; text-align: center;">
+                  <td bgcolor="#E8FF47" style="background-color: #E8FF47 !important; padding: 24px; border-radius: 12px; text-align: center;">
                     <p style="margin: 0; color: #0A0A0A !important; font-size: 12px; letter-spacing: 1.5px; font-weight: 600;">TU CÓDIGO DE 20% OFF</p>
                     <p style="margin: 8px 0 0 0; color: #0A0A0A !important; font-size: 24px; font-weight: 700; letter-spacing: 2px;">${codigo}</p>
                   </td>
@@ -179,7 +181,7 @@ function emailLanzamientoTemplate({
               </table>
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0;">
                 <tr>
-                  <td style="background-color: #161616 !important; border-left: 4px solid #E8FF47 !important; padding: 16px 20px;">
+                  <td bgcolor="#161616" style="background-color: #161616 !important; border-left: 4px solid #E8FF47 !important; padding: 16px 20px;">
                     <p style="margin: 0; color: #FFFFFF !important; font-size: 13px; font-weight: 600; line-height: 1.6;">
                       Eres parte de los primeros en recibir este beneficio. Gracias por confiar en MUVET desde el día uno.
                     </p>
@@ -188,7 +190,7 @@ function emailLanzamientoTemplate({
               </table>
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0;">
                 <tr>
-                  <td style="background-color: #161616 !important; border: 1px solid #2B2B2B !important; padding: 16px 20px; border-radius: 10px;">
+                  <td bgcolor="#161616" style="background-color: #161616 !important; border: 1px solid #2B2B2B !important; padding: 16px 20px; border-radius: 10px;">
                     <p style="margin: 0 0 4px 0; color: #E8FF47 !important; font-size: 14px; font-weight: 700;">⏰ TU CÓDIGO EXPIRA EL ${expiraAt.toUpperCase()}</p>
                     <p style="margin: 0; color: #FFFFFF !important; font-size: 13px; line-height: 1.6;">
                       Después de esa fecha, ya no podrás usar este descuento.
@@ -205,7 +207,7 @@ function emailLanzamientoTemplate({
                   <td align="center">
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td style="background-color: #E8FF47 !important; border-radius: 8px;">
+                        <td bgcolor="#E8FF47" style="background-color: #E8FF47 !important; border-radius: 8px;">
                           <a href="${linkRegistro}" style="display: inline-block; color: #0A0A0A !important; padding: 16px 32px; text-decoration: none; font-size: 16px; font-weight: 700; letter-spacing: 0.5px;">
                             Crear mi cuenta y aplicar 20% →
                           </a>
@@ -217,12 +219,13 @@ function emailLanzamientoTemplate({
               </table>
               
               <p style="color: #D1D5DB !important; font-size: 13px; line-height: 1.6; margin: 32px 0 0 0; text-align: center;">
-                ¿Preguntas? Responde este correo o escríbenos a hola@muvet.mx
+                ¿Preguntas? Responde este correo o escríbenos a
+                <a href="mailto:hola@muvet.mx" style="color: #E8FF47 !important; text-decoration: none;">hola@muvet.mx</a>
               </p>
             </td>
           </tr>
           <tr>
-            <td style="background-color: #0A0A0A !important; padding: 16px; text-align: center; border-top: 1px solid #232323;">
+            <td bgcolor="#0A0A0A" style="background-color: #0A0A0A !important; padding: 16px; text-align: center; border-top: 1px solid #232323;">
               <p style="color: #9CA3AF !important; font-size: 11px; margin: 0;">MUVET · muvet.mx</p>
             </td>
           </tr>
