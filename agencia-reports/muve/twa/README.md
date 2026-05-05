@@ -1,6 +1,7 @@
 # TWA de Muvet (`https://muvet.mx`)
 ## Archivos incluidos
-- `build.gradle`: configuración base de la app Android (package `mx.muvet.app`) y placeholders TWA.
+- `build.gradle`: configuración raíz de Gradle para el proyecto.
+- `app/build.gradle`: configuración del módulo Android (package `mx.muvet.app`) y placeholders TWA.
 - `app/src/main/AndroidManifest.xml`: actividad `LauncherActivity` para TWA y URL por defecto.
 - `assetlinks.json`: archivo para publicar en `https://muvet.mx/.well-known/assetlinks.json`.
 

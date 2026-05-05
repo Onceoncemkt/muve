@@ -1,43 +1,9 @@
-plugins {
-    id 'com.android.application'
-}
-
-android {
-    namespace 'mx.muvet.app'
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "mx.muvet.app"
-        minSdk 21
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-        manifestPlaceholders = [
-                twaDefaultUrl: "https://muvet.mx",
-                twaHostName  : "muvet.mx"
-        ]
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
     }
-
-    sourceSets {
-        main {
-            manifest.srcFile 'app/src/main/AndroidManifest.xml'
-        }
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.0'
     }
 }
-
-dependencies {
-    implementation 'androidx.browser:browser:1.8.0'
-    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
-}
-
-ext.twaConfig = [
-        defaultUrl: "https://muvet.mx",
-        hostName  : "muvet.mx"
-]
