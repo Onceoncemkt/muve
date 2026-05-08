@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getEmailFrom } from '@/lib/email'
-import { CIUDADES_OPERATIVAS } from '@/types'
-
-const CIUDADES_VALIDAS = CIUDADES_OPERATIVAS
+import { normalizarCiudadOperativa } from '@/types'
 
 function generarCodigo(): string {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -48,13 +46,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email inválido' }, { status: 400 })
     }
 
-    if (!ciudad || !CIUDADES_VALIDAS.includes(String(ciudad).toLowerCase())) {
+    const ciudadNormalizada = normalizarCiudadOperativa(ciudad)
+    if (!ciudadNormalizada) {
       return NextResponse.json({ error: 'Ciudad inválida' }, { status: 400 })
     }
 
     const db = createServiceClient()
     const emailNormalizado = String(email).toLowerCase().trim()
-    const ciudadNormalizada = String(ciudad).toLowerCase().trim()
+    const ciudadCapitalizada = capitalizar(ciudadNormalizada)
 
     const { data: existente } = await db
       .from('preregistros')
@@ -73,7 +72,6 @@ export async function POST(req: NextRequest) {
     }
 
     const codigo = await generarCodigoUnico(db)
-    const ciudadCapitalizada = capitalizar(ciudadNormalizada)
     const nombreLimpio = typeof nombre === 'string' && nombre.trim() ? nombre.trim() : ''
 
     const baseUrl = construirBaseUrl(req)

@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { Resend } from 'resend'
-import { CIUDADES_OPERATIVAS, type Ciudad, type Rol } from '@/types'
+import { normalizarCiudadOperativa, type Rol } from '@/types'
 import { getEmailFrom } from '@/lib/email'
-
-const CIUDADES_VALIDAS: Ciudad[] = CIUDADES_OPERATIVAS
 
 type PreregistroPendiente = {
   id: string
@@ -34,9 +32,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}))
-    const ciudad = typeof body.ciudad === 'string' ? body.ciudad.toLowerCase().trim() : ''
-
-    if (!ciudad || !CIUDADES_VALIDAS.includes(ciudad as Ciudad)) {
+    const ciudad = normalizarCiudadOperativa(body.ciudad)
+    if (!ciudad) {
       return NextResponse.json({ error: 'Ciudad inválida' }, { status: 400 })
     }
 

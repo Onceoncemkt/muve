@@ -11,6 +11,14 @@ export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada' | 'no_show
 export type EstadoVisita = 'asistio' | 'no_show' | 'cancelado'
 export type EstadoPreregistro = 'pendiente' | 'convertido' | 'cancelado'
 export const CIUDADES_OPERATIVAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana', 'tecate']
+export function normalizarCiudadOperativa(value: unknown): Ciudad | null {
+  if (typeof value !== 'string') return null
+  const ciudadNormalizada = value.trim().toLowerCase()
+  if ((CIUDADES_OPERATIVAS as readonly string[]).includes(ciudadNormalizada)) {
+    return ciudadNormalizada as Ciudad
+  }
+  return null
+}
 export interface ServicioNegocio {
   id: string
   negocio_id: string

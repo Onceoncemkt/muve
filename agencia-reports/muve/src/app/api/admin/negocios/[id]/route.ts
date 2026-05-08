@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { CIUDADES_OPERATIVAS, type Categoria, type Ciudad, type NivelNegocio, type Rol, type ZonaNegocio } from '@/types'
-
-const CIUDADES_VALIDAS: Ciudad[] = CIUDADES_OPERATIVAS
+import { normalizarCiudadOperativa, type Categoria, type Ciudad, type NivelNegocio, type Rol, type ZonaNegocio } from '@/types'
 const CATEGORIAS_VALIDAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
 const ZONAS_VALIDAS: ZonaNegocio[] = ['zona1', 'zona2']
 const NIVELES_VALIDOS: NivelNegocio[] = ['basico', 'plus', 'total']
@@ -164,9 +162,7 @@ export async function POST(
   const categoria = CATEGORIAS_VALIDAS.includes(categoriaRaw as Categoria)
     ? (categoriaRaw as Categoria)
     : null
-  const ciudad = CIUDADES_VALIDAS.includes(ciudadRaw as Ciudad)
-    ? (ciudadRaw as Ciudad)
-    : null
+  const ciudad = normalizarCiudadOperativa(ciudadRaw)
   const zona = ZONAS_VALIDAS.includes(zonaRaw as ZonaNegocio)
     ? (zonaRaw as ZonaNegocio)
     : 'zona1'
