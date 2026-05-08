@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { CREDITOS_POR_PLAN, PLAN_LABELS, normalizarPlan } from '@/lib/planes'
+import { CREDITOS_POR_PLAN, PLAN_LABELS, esCiudadBC, normalizarPlan } from '@/lib/planes'
 import { CIUDAD_LABELS, type Ciudad, type PlanMembresia } from '@/types'
 import ConfirmarCheckoutClient from './ConfirmarCheckoutClient'
 
@@ -18,14 +18,14 @@ const PRECIOS_POR_REGION: Record<'centro' | 'bc', Record<PlanMembresia, number>>
 }
 
 function normalizarCiudad(ciudad: string | null | undefined): Ciudad {
-  if (ciudad === 'tulancingo' || ciudad === 'pachuca' || ciudad === 'ensenada' || ciudad === 'tijuana') {
+  if (ciudad === 'tulancingo' || ciudad === 'pachuca' || ciudad === 'ensenada' || ciudad === 'tijuana' || ciudad === 'tecate') {
     return ciudad
   }
   return 'tulancingo'
 }
 
 function zonaDesdeCiudad(ciudad: Ciudad): 'zona1' | 'zona2' {
-  return ciudad === 'tijuana' ? 'zona2' : 'zona1'
+  return esCiudadBC(ciudad) ? 'zona2' : 'zona1'
 }
 
 export default async function ConfirmarPlanPage({

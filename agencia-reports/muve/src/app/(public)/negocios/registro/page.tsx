@@ -21,7 +21,7 @@ type FormData = {
 
 const TOTAL_PASOS = 5
 const CATEGORIAS = ['GYM', 'Clases boutique', 'Estéticas y Spa', 'Restaurante', 'Clínica', 'Otro']
-const CIUDADES = ['Tulancingo', 'Pachuca', 'Ensenada', 'Tijuana', 'Otra']
+const CIUDADES = ['Tulancingo', 'Pachuca', 'Ensenada', 'Tijuana', 'Tecate', 'Otra']
 const CLIENTES_MES = ['Menos de 50', '50-100', '100-300', 'Más de 300']
 
 const FORMULARIO_INICIAL: FormData = {

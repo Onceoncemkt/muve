@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import type { Categoria, Ciudad, NivelNegocio, Rol, ZonaNegocio } from '@/types'
+import { CIUDADES_OPERATIVAS, type Categoria, type Ciudad, type NivelNegocio, type Rol, type ZonaNegocio } from '@/types'
 
-const CIUDADES_VALIDAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES_VALIDAS: Ciudad[] = CIUDADES_OPERATIVAS
 const CATEGORIAS_VALIDAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
 const ZONAS_VALIDAS: ZonaNegocio[] = ['zona1', 'zona2']
 const NIVELES_VALIDOS: NivelNegocio[] = ['basico', 'plus', 'total']

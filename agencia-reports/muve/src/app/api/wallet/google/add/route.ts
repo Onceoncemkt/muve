@@ -51,7 +51,7 @@ function formatearFecha(value: string | null | undefined) {
 }
 
 function ciudadSegura(ciudad: Ciudad | null | undefined): Ciudad {
-  if (ciudad === 'pachuca' || ciudad === 'ensenada' || ciudad === 'tijuana') return ciudad
+  if (ciudad === 'pachuca' || ciudad === 'ensenada' || ciudad === 'tijuana' || ciudad === 'tecate') return ciudad
   return 'tulancingo'
 }
 

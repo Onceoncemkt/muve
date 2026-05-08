@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { type Ciudad, type GeneroPerfil, type ObjetivoFitness } from '@/types'
+import { CIUDADES_OPERATIVAS, type Ciudad, type GeneroPerfil, type ObjetivoFitness } from '@/types'
 import { PLAN_LABELS, PLAN_VISITAS_MENSUALES, normalizarPlan } from '@/lib/planes'
 import PerfilPageClient from './PerfilPageClient'
 
@@ -27,7 +27,7 @@ type PerfilUsuarioMinimo = {
   ciudad: Ciudad | null
 }
 
-const CIUDADES_VALIDAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES_VALIDAS: Ciudad[] = CIUDADES_OPERATIVAS
 const GENEROS_VALIDOS: GeneroPerfil[] = ['masculino', 'femenino', 'prefiero_no_decir']
 const OBJETIVOS_VALIDOS: ObjetivoFitness[] = [
   'perder_peso',

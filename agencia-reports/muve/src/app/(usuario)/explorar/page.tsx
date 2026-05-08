@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   CATEGORIA_LABELS,
   CIUDAD_LABELS,
+  CIUDADES_OPERATIVAS,
   DIA_LABELS,
   formatHora,
   proximaFecha,
@@ -418,11 +419,10 @@ export default function ExplorarPage() {
   const planEfectivo = planActivo ? (planUsuario ?? 'basico') : null
   const requiereMembresia = !autenticado || !planEfectivo
   const ciudadesDisponibles = useMemo(() => {
-    const ciudadesUnicas = Array.from(new Set(negocios.map((negocio) => negocio.ciudad)))
-    return ciudadesUnicas.sort((a, b) =>
+    return [...CIUDADES_OPERATIVAS].sort((a, b) =>
       CIUDAD_LABELS[a].localeCompare(CIUDAD_LABELS[b], 'es')
     )
-  }, [negocios])
+  }, [])
 
   const negociosFiltrados = useMemo(() => {
     let resultado = negocios

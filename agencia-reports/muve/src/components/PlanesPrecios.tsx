@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { Ciudad } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad } from '@/types'
+import { esCiudadBC } from '@/lib/planes'
 
 type RegionPrecios = 'centro' | 'bc'
 type PlanId = 'basico' | 'plus' | 'total'
@@ -33,12 +34,9 @@ const PRECIOS_ANTERIORES_POR_REGION: Record<RegionPrecios, Partial<Record<PlanId
   },
 }
 
-const CIUDADES: Array<{ value: Ciudad; label: string }> = [
-  { value: 'tulancingo', label: 'Tulancingo' },
-  { value: 'pachuca', label: 'Pachuca' },
-  { value: 'ensenada', label: 'Ensenada' },
-  { value: 'tijuana', label: 'Tijuana' },
-]
+const CIUDADES: Array<{ value: Ciudad; label: string }> = CIUDADES_OPERATIVAS
+  .map((ciudad) => ({ value: ciudad, label: CIUDAD_LABELS[ciudad] }))
+const TEXTO_CIUDADES_PLAN = `Las ${CIUDADES.length} ciudades`
 
 const PLANES = [
   {
@@ -50,7 +48,7 @@ const PLANES = [
       '8 créditos al ciclo',
       'máx 3 por lugar',
       'Gimnasios y clases',
-      'Las 4 ciudades',
+      TEXTO_CIUDADES_PLAN,
     ],
     recomendado: false,
   },
@@ -63,7 +61,7 @@ const PLANES = [
       '16 créditos al ciclo',
       'máx 6 por lugar',
       'Gimnasios, clases, estéticas y wellness',
-      'Las 4 ciudades',
+      TEXTO_CIUDADES_PLAN,
     ],
     recomendado: true,
   },
@@ -76,7 +74,7 @@ const PLANES = [
       '25 créditos al ciclo',
       'máx 10 por lugar',
       'Gimnasios, clases, estéticas, restaurantes',
-      'Las 4 ciudades',
+      TEXTO_CIUDADES_PLAN,
     ],
     recomendado: false,
   },
@@ -138,9 +136,6 @@ function BotonPlan({
   )
 }
 
-function esCiudadBC(ciudad: Ciudad) {
-  return ciudad === 'tijuana'
-}
 
 export default function PlanesPrecios({
   ciudadInicial,

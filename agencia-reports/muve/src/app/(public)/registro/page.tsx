@@ -4,9 +4,9 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import type { Ciudad } from '@/types'
-import { CIUDAD_LABELS } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS } from '@/types'
 
-const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES: Ciudad[] = CIUDADES_OPERATIVAS
 
 function normalizarCodigoDescuento(value: string | null | undefined) {
   if (!value) return ''

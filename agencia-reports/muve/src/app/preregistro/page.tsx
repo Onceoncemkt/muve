@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/service'
-import { CIUDAD_LABELS, type Ciudad } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad } from '@/types'
 import PreregistroForm from './PreregistroForm'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +13,7 @@ type NegocioLanding = {
   activo?: boolean
 }
 
-const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES: Ciudad[] = CIUDADES_OPERATIVAS
 
 async function obtenerAliados() {
   const db = createServiceClient()

@@ -1,4 +1,4 @@
-export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana'
+export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana' | 'tecate'
 export type ZonaNegocio = 'zona1' | 'zona2'
 export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante'
 export type Rol = 'usuario' | 'staff' | 'admin'
@@ -10,6 +10,7 @@ export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' 
 export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada' | 'no_show'
 export type EstadoVisita = 'asistio' | 'no_show' | 'cancelado'
 export type EstadoPreregistro = 'pendiente' | 'convertido' | 'cancelado'
+export const CIUDADES_OPERATIVAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana', 'tecate']
 export interface ServicioNegocio {
   id: string
   negocio_id: string
@@ -128,6 +129,7 @@ export const CIUDAD_LABELS: Record<Ciudad, string> = {
   pachuca: 'Pachuca',
   ensenada: 'Ensenada',
   tijuana: 'Tijuana',
+  tecate: 'Tecate',
 }
 
 export const CATEGORIA_LABELS: Record<Categoria, string> = {

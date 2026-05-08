@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
 import { enviarPushAUsuarios } from '@/lib/push/server'
 import { getEmailFrom } from '@/lib/email'
-import { normalizarPlan, obtenerStripePriceIdsPorRegion } from '@/lib/planes'
+import { esCiudadBC, normalizarPlan, obtenerStripePriceIdsPorRegion } from '@/lib/planes'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,9 +38,6 @@ function faltaColumna(error: { message?: string } | null | undefined, columna: s
   return message.includes('column') && message.includes(columna.toLowerCase())
 }
 
-function esCiudadBC(ciudad: string | null | undefined) {
-  return ciudad === 'tijuana'
-}
 
 function normalizarTexto(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''

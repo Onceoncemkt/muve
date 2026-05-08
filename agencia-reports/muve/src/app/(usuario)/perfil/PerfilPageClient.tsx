@@ -3,9 +3,9 @@
 import Link from 'next/link'
 import { useRef, useState, type ChangeEvent, type FormEvent, type ReactElement } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CIUDAD_LABELS, type Ciudad, type GeneroPerfil, type ObjetivoFitness } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad, type GeneroPerfil, type ObjetivoFitness } from '@/types'
 
-const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES: Ciudad[] = CIUDADES_OPERATIVAS
 const MAX_FOTO_SIZE_BYTES = 2 * 1024 * 1024
 const MIME_TYPES_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp']
 const GENERO_OPTIONS: Array<{ value: GeneroPerfil; label: string }> = [

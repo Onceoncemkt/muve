@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { Resend } from 'resend'
-import type { Ciudad, Rol } from '@/types'
+import { CIUDADES_OPERATIVAS, type Ciudad, type Rol } from '@/types'
 import { getEmailFrom } from '@/lib/email'
 
-const CIUDADES_VALIDAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES_VALIDAS: Ciudad[] = CIUDADES_OPERATIVAS
 
 type PreregistroPendiente = {
   id: string

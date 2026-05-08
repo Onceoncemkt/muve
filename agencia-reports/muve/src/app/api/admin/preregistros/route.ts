@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { CIUDAD_LABELS, type Ciudad, type EstadoPreregistro, type Rol } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad, type EstadoPreregistro, type Rol } from '@/types'
 
 type PreregistroRow = {
   id: string
@@ -13,7 +13,7 @@ type PreregistroRow = {
   created_at: string
 }
 
-const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES: Ciudad[] = CIUDADES_OPERATIVAS
 const ESTADOS: EstadoPreregistro[] = ['pendiente', 'convertido', 'cancelado']
 
 function csvEscape(value: unknown) {

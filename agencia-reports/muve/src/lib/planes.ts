@@ -179,9 +179,13 @@ export function normalizarZonaNegocio(zona: unknown): ZonaNegocio | null {
   if (normalizada === 'zona2' || normalizada === 'zona 2') return 'zona2'
   return null
 }
+export function esCiudadBC(ciudad: unknown): boolean {
+  if (typeof ciudad !== 'string') return false
+  const ciudadNormalizada = ciudad.trim().toLowerCase()
+  return ciudadNormalizada === 'ensenada' || ciudadNormalizada === 'tijuana'
+}
 export function zonaPorCiudad(ciudad: unknown): ZonaNegocio {
-  const ciudadNormalizada = typeof ciudad === 'string' ? ciudad.trim().toLowerCase() : ''
-  return ciudadNormalizada === 'tijuana' ? 'zona2' : 'zona1'
+  return esCiudadBC(ciudad) ? 'zona2' : 'zona1'
 }
 export function resolverZonaNegocio({ zona, ciudad }: { zona?: unknown; ciudad?: unknown }): ZonaNegocio {
   return normalizarZonaNegocio(zona) ?? zonaPorCiudad(ciudad)

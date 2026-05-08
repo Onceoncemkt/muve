@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CIUDAD_LABELS, type Ciudad, type EstadoPreregistro } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad, type EstadoPreregistro } from '@/types'
 
 type PreregistroItem = {
   id: string
@@ -19,7 +19,7 @@ type StatsPayload = {
   porEstado: Array<{ estado: EstadoPreregistro; total: number }>
 }
 
-const CIUDADES: Array<'todas' | Ciudad> = ['todas', 'tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES: Array<'todas' | Ciudad> = ['todas', ...CIUDADES_OPERATIVAS]
 const ESTADOS: Array<'todos' | EstadoPreregistro> = ['todos', 'pendiente', 'convertido', 'cancelado']
 
 function badgeEstado(estado: EstadoPreregistro) {
@@ -135,7 +135,7 @@ export default function AdminPreregistrosClient() {
           Cada uno recibe su código con validez de 7 días.
         </p>
         <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
-          {(['tulancingo', 'pachuca', 'ensenada', 'tijuana'] as Ciudad[]).map((ciudadDestino) => (
+          {CIUDADES_OPERATIVAS.map((ciudadDestino) => (
             <button
               key={ciudadDestino}
               onClick={() => notificarLanzamiento(ciudadDestino)}

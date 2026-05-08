@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getEmailFrom } from '@/lib/email'
+import { CIUDADES_OPERATIVAS } from '@/types'
 
-const CIUDADES_VALIDAS = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES_VALIDAS = CIUDADES_OPERATIVAS
 
 function generarCodigo(): string {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase()

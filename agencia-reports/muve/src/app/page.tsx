@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import PlanesPrecios from '@/components/PlanesPrecios'
 import { createClient } from '@/lib/supabase/server'
-import type { Ciudad } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad } from '@/types'
 
 const PASOS = [
   { num: '01', titulo: 'Elige tu plan', desc: 'Desde $549/mes. Cancela cuando quieras. Sin contratos.' },
@@ -16,12 +16,17 @@ const BENEFICIOS = [
   { titulo: 'Nutrición', desc: 'Restaurantes saludables incluidos en tu membresía' },
 ]
 
-const CIUDADES = [
-  { nombre: 'Tulancingo', negocios: 8 },
-  { nombre: 'Pachuca',    negocios: 8 },
-  { nombre: 'Ensenada',   negocios: 4 },
-  { nombre: 'Tijuana',    negocios: 8 },
-]
+const NEGOCIOS_POR_CIUDAD: Record<Ciudad, number> = {
+  tulancingo: 8,
+  pachuca: 8,
+  ensenada: 4,
+  tijuana: 8,
+  tecate: 0,
+}
+const CIUDADES = CIUDADES_OPERATIVAS.map((ciudad) => ({
+  nombre: CIUDAD_LABELS[ciudad],
+  negocios: NEGOCIOS_POR_CIUDAD[ciudad],
+}))
 
 const FAQ_BLOCKS = [
   {
@@ -149,7 +154,7 @@ export default async function LandingPage() {
       {/* ── HERO ────────────────────────────────────────────── */}
       <section className="bg-[#0A0A0A] px-6 pb-28 pt-24 text-center">
         <p className="mb-6 text-xs font-bold uppercase tracking-[0.2em] text-white/40">
-          Ya disponible en 4 ciudades de México
+          {`Ya disponible en ${CIUDADES.length} ciudades de México`}
         </p>
         <h1 className="mx-auto max-w-3xl text-6xl font-black leading-none tracking-tight sm:text-7xl lg:text-8xl">
           <span className="block text-white">UN PASE.</span>
@@ -232,7 +237,7 @@ export default async function LandingPage() {
           <p className="mb-10 text-center text-sm text-white/40">
             Creciendo a más ciudades de México
           </p>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             {CIUDADES.map(c => (
               <div key={c.nombre} className="rounded-xl border border-white/10 p-5">
                 <p className="font-bold text-white">{c.nombre}</p>

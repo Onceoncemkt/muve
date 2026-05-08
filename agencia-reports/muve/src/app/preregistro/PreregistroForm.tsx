@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CIUDAD_LABELS, type Ciudad } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad } from '@/types'
 
-const CIUDADES: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana']
+const CIUDADES: Ciudad[] = CIUDADES_OPERATIVAS
 
 type FormState = {
   nombre: string

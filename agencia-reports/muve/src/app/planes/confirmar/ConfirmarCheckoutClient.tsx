@@ -22,7 +22,7 @@ export default function ConfirmarCheckoutClient({
 }: {
   planId: PlanMembresia
   ciudadLabel: string
-  ciudadValue: 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana'
+  ciudadValue: 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana' | 'tecate'
   zonaLabel: 'zona1' | 'zona2'
   planLabel: string
   creditos: number

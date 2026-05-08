@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
-import { normalizarPlan, obtenerStripePriceIdsCandidatos, obtenerStripePriceIdsPorRegion, planDesdePriceId } from '@/lib/planes'
+import { esCiudadBC, normalizarPlan, obtenerStripePriceIdsCandidatos, obtenerStripePriceIdsPorRegion, planDesdePriceId } from '@/lib/planes'
 
 type PerfilCheckout = {
   nombre: string | null
@@ -55,9 +55,6 @@ type PreregistroCodigoRow = {
   codigo_expira_at: string | null
 }
 
-function esCiudadBC(ciudad: string | null | undefined) {
-  return ciudad === 'tijuana'
-}
 
 function normalizarCodigoDescuento(value: unknown) {
   if (typeof value !== 'string') return null
