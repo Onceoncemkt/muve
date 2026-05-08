@@ -252,23 +252,36 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
+        const customerId = typeof session.customer === 'string' ? session.customer : null
+        const subscriptionId = (
+          (typeof session.subscription === 'string' ? session.subscription : null)
+          || (session as Stripe.Checkout.Session & {
+            parent?: { subscription_details?: { subscription?: string | null } }
+          }).parent?.subscription_details?.subscription
+          || null
+        ) as string | null
         if (session.mode !== 'subscription') {
           console.error('[stripe-webhook] checkout.session.completed con mode no subscription', session.id)
           break
         }
-        if (!session.customer) {
+        if (!customerId) {
           console.error('[stripe-webhook] checkout.session.completed sin customer', session.id)
           break
         }
-        if (!session.subscription) {
+        if (!subscriptionId) {
           console.error('[stripe-webhook] checkout.session.completed sin subscription', session.id)
           break
         }
-
-        const plan = await obtenerPlanDesdeSubscription(session.subscription as string)
+        const plan = await obtenerPlanDesdeSubscription(subscriptionId)
+        console.log('[stripe-webhook] llamando activarMembresia', {
+          customerId,
+          subscriptionId,
+          plan,
+          source: 'checkout.session.completed',
+        })
         await activarMembresia(
-          session.customer as string,
-          session.subscription as string,
+          customerId,
+          subscriptionId,
           plan
         )
         await marcarDescuentoComoUsado(session.metadata)
@@ -278,27 +291,37 @@ export async function POST(request: NextRequest) {
       case 'invoice.paid':
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice
-        const invoiceConSubscription = invoice as Stripe.Invoice & { subscription?: string | null }
-        const subId = typeof invoiceConSubscription.subscription === 'string'
-          ? invoiceConSubscription.subscription
-          : (
-            typeof invoice.parent === 'object' && invoice.parent?.type === 'subscription_details'
-              ? (invoice.parent as { subscription_id?: string }).subscription_id ?? null
-              : null
-          )
-        if (!invoice.customer) {
+        const customerId = typeof invoice.customer === 'string' ? invoice.customer : null
+        const subscriptionId = (
+          (invoice as Stripe.Invoice & { subscription?: string | null }).subscription
+          || (invoice as Stripe.Invoice & {
+            parent?: { subscription_details?: { subscription?: string | null } }
+          }).parent?.subscription_details?.subscription
+          || null
+        ) as string | null
+        if (!customerId) {
           console.error('[stripe-webhook] invoice.payment_succeeded sin customer', invoice.id)
           break
         }
-        if (!subId) {
-          console.error('[stripe-webhook] invoice.payment_succeeded sin subscription id', invoice.id)
+        if (!subscriptionId) {
+          console.error('[stripe-webhook] invoice sin subscription_id', {
+            invoiceId: invoice.id,
+            customerId,
+            parentType: (invoice as Stripe.Invoice & { parent?: { type?: string } }).parent?.type,
+            fullParent: (invoice as Stripe.Invoice & { parent?: unknown }).parent,
+          })
           break
         }
-
-        const plan = await obtenerPlanDesdeSubscription(subId)
+        const plan = await obtenerPlanDesdeSubscription(subscriptionId)
+        console.log('[stripe-webhook] llamando activarMembresia', {
+          customerId,
+          subscriptionId,
+          plan,
+          source: 'invoice.payment_succeeded',
+        })
         await activarMembresia(
-          invoice.customer as string,
-          subId,
+          customerId,
+          subscriptionId,
           plan
         )
         break
