@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import PlanesPrecios from '@/components/PlanesPrecios'
 import { createClient } from '@/lib/supabase/server'
+import { esCiudadBC } from '@/lib/planes'
 import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad } from '@/types'
 
 const PASOS = [
@@ -16,16 +17,10 @@ const BENEFICIOS = [
   { titulo: 'Nutrición', desc: 'Restaurantes saludables incluidos en tu membresía' },
 ]
 
-const NEGOCIOS_POR_CIUDAD: Record<Ciudad, number> = {
-  tulancingo: 8,
-  pachuca: 8,
-  ensenada: 4,
-  tijuana: 8,
-  tecate: 0,
-}
 const CIUDADES = CIUDADES_OPERATIVAS.map((ciudad) => ({
+  id: ciudad,
   nombre: CIUDAD_LABELS[ciudad],
-  negocios: NEGOCIOS_POR_CIUDAD[ciudad],
+  estado: esCiudadBC(ciudad) ? 'Baja California' : 'Hidalgo',
 }))
 
 const FAQ_BLOCKS = [
@@ -237,10 +232,10 @@ export default async function LandingPage() {
           </p>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             {CIUDADES.map(c => (
-              <div key={c.nombre} className="rounded-xl border border-white/10 p-5">
+              <div key={c.id} className="rounded-xl border border-white/10 p-5">
                 <p className="font-bold text-white">{c.nombre}</p>
-                <p className="mt-1 text-sm font-semibold text-[#E8FF47]">
-                  {c.negocios} negocios
+                <p className="mt-1 text-xs font-medium text-white/50">
+                  {c.estado}
                 </p>
               </div>
             ))}
