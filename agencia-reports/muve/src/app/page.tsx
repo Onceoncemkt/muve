@@ -124,7 +124,6 @@ export default async function LandingPage() {
     ciudadInicial = perfil?.ciudad ?? 'tulancingo'
   }
 
-  const usuarioAutenticado = Boolean(user)
 
   return (
     <div className="bg-white">
@@ -224,7 +223,6 @@ export default async function LandingPage() {
       <div className="bg-[#F7F7F7]">
         <PlanesPrecios
           ciudadInicial={ciudadInicial}
-          usuarioAutenticado={usuarioAutenticado}
         />
       </div>
 

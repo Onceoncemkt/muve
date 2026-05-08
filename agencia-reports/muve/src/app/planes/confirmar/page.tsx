@@ -1,28 +1,8 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { CREDITOS_POR_PLAN, PLAN_LABELS, esCiudadBC, normalizarPlan } from '@/lib/planes'
-import { CIUDAD_LABELS, type Ciudad, type PlanMembresia } from '@/types'
+import { CREDITOS_POR_PLAN, PLAN_LABELS, PRECIOS_MEMBRESIA_POR_REGION, esCiudadBC, normalizarPlan } from '@/lib/planes'
+import { CIUDAD_LABELS, normalizarCiudadOperativa, type Ciudad, type PlanMembresia } from '@/types'
 import ConfirmarCheckoutClient from './ConfirmarCheckoutClient'
-
-const PRECIOS_POR_REGION: Record<'centro' | 'bc', Record<PlanMembresia, number>> = {
-  centro: {
-    basico: 649,
-    plus: 1249,
-    total: 2199,
-  },
-  bc: {
-    basico: 1380,
-    plus: 2720,
-    total: 4499,
-  },
-}
-
-function normalizarCiudad(ciudad: string | null | undefined): Ciudad {
-  if (ciudad === 'tulancingo' || ciudad === 'pachuca' || ciudad === 'ensenada' || ciudad === 'tijuana' || ciudad === 'tecate') {
-    return ciudad
-  }
-  return 'tulancingo'
-}
 
 function zonaDesdeCiudad(ciudad: Ciudad): 'zona1' | 'zona2' {
   return esCiudadBC(ciudad) ? 'zona2' : 'zona1'
@@ -38,7 +18,8 @@ export default async function ConfirmarPlanPage({
   const { data: { user } } = await supabase.auth.getUser()
 
   const plan = (normalizarPlan(params.plan) ?? 'basico') as PlanMembresia
-  let ciudad = normalizarCiudad(params.ciudad)
+  const ciudadDesdeQuery = normalizarCiudadOperativa(params.ciudad)
+  let ciudad = ciudadDesdeQuery ?? 'tulancingo'
 
   if (user) {
     const { data: perfil } = await supabase
@@ -46,12 +27,13 @@ export default async function ConfirmarPlanPage({
       .select('ciudad')
       .eq('id', user.id)
       .single<{ ciudad: Ciudad }>()
-    ciudad = normalizarCiudad(perfil?.ciudad ?? ciudad)
+    const ciudadPerfil = normalizarCiudadOperativa(perfil?.ciudad)
+    ciudad = ciudadDesdeQuery ?? ciudadPerfil ?? 'tulancingo'
   }
 
   const zona = zonaDesdeCiudad(ciudad)
   const region = zona === 'zona2' ? 'bc' : 'centro'
-  const precioMensual = PRECIOS_POR_REGION[region][plan]
+  const precioMensual = PRECIOS_MEMBRESIA_POR_REGION[region][plan]
   const codigoDescuento = typeof params.codigo_descuento === 'string' ? params.codigo_descuento : null
   const backHref = user
     ? '/perfil'

@@ -24,7 +24,6 @@ export default async function PlanesPage({
     ciudadInicial = perfil?.ciudad ?? 'tulancingo'
   }
 
-  const usuarioAutenticado = Boolean(user)
 
   return (
     <div className="min-h-screen bg-[#F7F7F7]">
@@ -52,7 +51,6 @@ export default async function PlanesPage({
 
       <PlanesPrecios
         ciudadInicial={ciudadInicial}
-        usuarioAutenticado={usuarioAutenticado}
         codigoDescuentoInicial={codigoDescuentoInicial}
         mostrarCampoDescuento
       />

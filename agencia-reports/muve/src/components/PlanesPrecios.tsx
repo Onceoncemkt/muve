@@ -3,36 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad } from '@/types'
-import { esCiudadBC } from '@/lib/planes'
-
-type RegionPrecios = 'centro' | 'bc'
+import { esCiudadBC, PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION, PRECIOS_MEMBRESIA_POR_REGION, type RegionPrecios } from '@/lib/planes'
 type PlanId = 'basico' | 'plus' | 'total'
-
-const PRECIOS_POR_REGION: Record<RegionPrecios, Record<PlanId, number>> = {
-  centro: {
-    basico: 649,
-    plus: 1299,
-    total: 1999,
-  },
-  bc: {
-    basico: 1380,
-    plus: 2720,
-    total: 4499,
-  },
-}
-
-const PRECIOS_ANTERIORES_POR_REGION: Record<RegionPrecios, Partial<Record<PlanId, number>>> = {
-  centro: {
-    basico: 749,
-    plus: 1499,
-    total: 2349,
-  },
-  bc: {
-    basico: 1899,
-    plus: 3749,
-    total: 5799,
-  },
-}
 
 const CIUDADES: Array<{ value: Ciudad; label: string }> = CIUDADES_OPERATIVAS
   .map((ciudad) => ({ value: ciudad, label: CIUDAD_LABELS[ciudad] }))
@@ -139,18 +111,14 @@ function BotonPlan({
 
 export default function PlanesPrecios({
   ciudadInicial,
-  usuarioAutenticado,
   codigoDescuentoInicial = null,
   mostrarCampoDescuento = false,
 }: {
   ciudadInicial: Ciudad
-  usuarioAutenticado: boolean
   codigoDescuentoInicial?: string | null
   mostrarCampoDescuento?: boolean
 }) {
-  const [ciudadSeleccionada, setCiudadSeleccionada] = useState<Ciudad | null>(
-    usuarioAutenticado ? ciudadInicial : null
-  )
+  const [ciudadSeleccionada, setCiudadSeleccionada] = useState<Ciudad>(ciudadInicial)
   const [codigoDescuento, setCodigoDescuento] = useState(() => {
     const inicial = normalizarCodigoDescuento(codigoDescuentoInicial)
     if (inicial) return inicial
@@ -170,12 +138,10 @@ export default function PlanesPrecios({
     }
   }
 
-  const ciudadActiva = usuarioAutenticado
-    ? ciudadInicial
-    : (ciudadSeleccionada ?? 'tulancingo')
+  const ciudadActiva = ciudadSeleccionada
   const regionActiva: RegionPrecios = esCiudadBC(ciudadActiva) ? 'bc' : 'centro'
-  const preciosActivos = PRECIOS_POR_REGION[regionActiva]
-  const preciosAnterioresActivos = PRECIOS_ANTERIORES_POR_REGION[regionActiva]
+  const preciosActivos = PRECIOS_MEMBRESIA_POR_REGION[regionActiva] as Record<PlanId, number>
+  const preciosAnterioresActivos = PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION[regionActiva] as Partial<Record<PlanId, number>>
   return (
     <section id="planes" className="px-6 py-20">
       <div className="mx-auto max-w-5xl">
@@ -186,24 +152,22 @@ export default function PlanesPrecios({
           <p className="mt-3 text-sm text-[#888]">
             Pago mensual. Cancela cuando quieras. Sin contratos.
           </p>
-          {!usuarioAutenticado && (
-            <div className="mx-auto mt-5 max-w-sm rounded-lg border border-[#E5E5E5] bg-white p-3 text-left">
-              <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#555]">
-                ¿En qué ciudad estás?
-              </label>
-              <select
-                value={ciudadActiva}
-                onChange={(event) => setCiudadSeleccionada(event.target.value as Ciudad)}
-                className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
-              >
-                {CIUDADES.map((ciudad) => (
-                  <option key={ciudad.value} value={ciudad.value}>
-                    {ciudad.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="mx-auto mt-5 max-w-sm rounded-lg border border-[#E5E5E5] bg-white p-3 text-left">
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#555]">
+              ¿En qué ciudad estás?
+            </label>
+            <select
+              value={ciudadActiva}
+              onChange={(event) => setCiudadSeleccionada(event.target.value as Ciudad)}
+              className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+            >
+              {CIUDADES.map((ciudad) => (
+                <option key={ciudad.value} value={ciudad.value}>
+                  {ciudad.label}
+                </option>
+              ))}
+            </select>
+          </div>
           {mostrarCampoDescuento && (
             <div className="mx-auto mt-3 max-w-sm rounded-lg border border-[#E5E5E5] bg-white p-3 text-left">
               <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#555]">

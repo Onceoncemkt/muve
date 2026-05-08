@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import type { PlanMembresia } from '@/types'
+import type { Ciudad, PlanMembresia } from '@/types'
 
 function normalizarCodigoDescuento(value: string | null | undefined) {
   if (!value) return ''
@@ -22,7 +22,7 @@ export default function ConfirmarCheckoutClient({
 }: {
   planId: PlanMembresia
   ciudadLabel: string
-  ciudadValue: 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana' | 'tecate'
+  ciudadValue: Ciudad
   zonaLabel: 'zona1' | 'zona2'
   planLabel: string
   creditos: number

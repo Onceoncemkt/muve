@@ -15,6 +15,30 @@ export const CREDITOS_POR_PLAN: Record<PlanMembresia, number> = {
   plus: 16,
   total: 25,
 }
+export const PRECIOS_MEMBRESIA_POR_REGION: Record<'centro' | 'bc', Record<PlanMembresia, number>> = {
+  centro: {
+    basico: 649,
+    plus: 1299,
+    total: 1999,
+  },
+  bc: {
+    basico: 1380,
+    plus: 2720,
+    total: 4499,
+  },
+}
+export const PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION: Record<'centro' | 'bc', Partial<Record<PlanMembresia, number>>> = {
+  centro: {
+    basico: 749,
+    plus: 1499,
+    total: 2349,
+  },
+  bc: {
+    basico: 1899,
+    plus: 3749,
+    total: 5799,
+  },
+}
 export const MAX_VISITAS_POR_LUGAR: Record<PlanMembresia, number> = {
   basico: 3,
   plus: 6,
@@ -182,7 +206,7 @@ export function normalizarZonaNegocio(zona: unknown): ZonaNegocio | null {
 export function esCiudadBC(ciudad: unknown): boolean {
   if (typeof ciudad !== 'string') return false
   const ciudadNormalizada = ciudad.trim().toLowerCase()
-  return ciudadNormalizada === 'ensenada' || ciudadNormalizada === 'tijuana'
+  return ciudadNormalizada === 'ensenada' || ciudadNormalizada === 'tijuana' || ciudadNormalizada === 'tecate'
 }
 export function zonaPorCiudad(ciudad: unknown): ZonaNegocio {
   return esCiudadBC(ciudad) ? 'zona2' : 'zona1'
