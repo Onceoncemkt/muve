@@ -52,8 +52,7 @@ async function activarMembresia(
   const inicioCiclo = new Date()
   const fechaInicioCiclo = inicioCiclo.toISOString()
   const fechaFinPlan = sumarUnMes(inicioCiclo).toISOString()
-
-  let { error } = await supabase
+  let { data, error } = await supabase
     .from('users')
     .update({
       plan_activo: true,
@@ -63,6 +62,15 @@ async function activarMembresia(
       fecha_fin_plan: fechaFinPlan,
     })
     .eq('stripe_customer_id', customerId)
+    .select()
+
+  if (error) {
+    console.error('[activarMembresia] Supabase update error:', { customerId, plan, error })
+  } else if (!data || data.length === 0) {
+    console.error('[activarMembresia] No rows updated for customer:', customerId)
+  } else {
+    console.log('[activarMembresia] Success:', { customerId, plan, rows: data.length })
+  }
 
   if (
     columnaPlanNoExiste(error)
@@ -87,7 +95,17 @@ async function activarMembresia(
       .from('users')
       .update(fallbackPayload)
       .eq('stripe_customer_id', customerId)
+      .select()
+    data = fallback.data
     error = fallback.error
+
+    if (error) {
+      console.error('[activarMembresia] Supabase update error (fallback):', { customerId, plan, error })
+    } else if (!data || data.length === 0) {
+      console.error('[activarMembresia] No rows updated for customer (fallback):', customerId)
+    } else {
+      console.log('[activarMembresia] Success (fallback):', { customerId, plan, rows: data.length })
+    }
   }
 
   if (error) throw new Error(`activarMembresia: ${error.message}`)
@@ -95,7 +113,7 @@ async function activarMembresia(
 
 async function desactivarMembresia(customerId: string) {
   const supabase = getServiceClient()
-  let { error } = await supabase
+  let { data, error } = await supabase
     .from('users')
     .update({
       plan_activo: false,
@@ -105,6 +123,15 @@ async function desactivarMembresia(customerId: string) {
       fecha_fin_plan: null,
     })
     .eq('stripe_customer_id', customerId)
+    .select()
+
+  if (error) {
+    console.error('[desactivarMembresia] Supabase update error:', { customerId, plan: null, error })
+  } else if (!data || data.length === 0) {
+    console.error('[desactivarMembresia] No rows updated for customer:', customerId)
+  } else {
+    console.log('[desactivarMembresia] Success:', { customerId, plan: null, rows: data.length })
+  }
 
   if (
     columnaPlanNoExiste(error)
@@ -129,7 +156,17 @@ async function desactivarMembresia(customerId: string) {
       .from('users')
       .update(fallbackPayload)
       .eq('stripe_customer_id', customerId)
+      .select()
+    data = fallback.data
     error = fallback.error
+
+    if (error) {
+      console.error('[desactivarMembresia] Supabase update error (fallback):', { customerId, plan: null, error })
+    } else if (!data || data.length === 0) {
+      console.error('[desactivarMembresia] No rows updated for customer (fallback):', customerId)
+    } else {
+      console.log('[desactivarMembresia] Success (fallback):', { customerId, plan: null, rows: data.length })
+    }
   }
 
   if (error) throw new Error(`desactivarMembresia: ${error.message}`)
@@ -215,8 +252,18 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
-        if (session.mode !== 'subscription') break
-        if (!session.customer || !session.subscription) break
+        if (session.mode !== 'subscription') {
+          console.error('[stripe-webhook] checkout.session.completed con mode no subscription', session.id)
+          break
+        }
+        if (!session.customer) {
+          console.error('[stripe-webhook] checkout.session.completed sin customer', session.id)
+          break
+        }
+        if (!session.subscription) {
+          console.error('[stripe-webhook] checkout.session.completed sin subscription', session.id)
+          break
+        }
 
         const plan = await obtenerPlanDesdeSubscription(session.subscription as string)
         await activarMembresia(
@@ -228,7 +275,8 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      case 'invoice.paid': {
+      case 'invoice.paid':
+      case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice
         const invoiceConSubscription = invoice as Stripe.Invoice & { subscription?: string | null }
         const subId = typeof invoiceConSubscription.subscription === 'string'
@@ -238,7 +286,14 @@ export async function POST(request: NextRequest) {
               ? (invoice.parent as { subscription_id?: string }).subscription_id ?? null
               : null
           )
-        if (!invoice.customer || !subId) break
+        if (!invoice.customer) {
+          console.error('[stripe-webhook] invoice.payment_succeeded sin customer', invoice.id)
+          break
+        }
+        if (!subId) {
+          console.error('[stripe-webhook] invoice.payment_succeeded sin subscription id', invoice.id)
+          break
+        }
 
         const plan = await obtenerPlanDesdeSubscription(subId)
         await activarMembresia(
@@ -257,14 +312,25 @@ export async function POST(request: NextRequest) {
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription
-        if (!sub.customer) break
+        if (!sub.customer) {
+          console.error('[stripe-webhook] customer.subscription.deleted sin customer', sub.id)
+          break
+        }
         await desactivarMembresia(sub.customer as string)
+        break
+      }
+      case 'customer.subscription.created': {
+        const sub = event.data.object as Stripe.Subscription
+        console.log('[stripe-webhook] subscription.created received, no action needed', sub.id)
         break
       }
 
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription
-        if (!sub.customer) break
+        if (!sub.customer) {
+          console.error('[stripe-webhook] customer.subscription.updated sin customer', sub.id)
+          break
+        }
 
         const activo = sub.status === 'active' || sub.status === 'trialing'
         if (!activo) {
