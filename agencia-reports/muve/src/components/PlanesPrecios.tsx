@@ -10,8 +10,8 @@ type PlanId = 'basico' | 'plus' | 'total'
 const PRECIOS_POR_REGION: Record<RegionPrecios, Record<PlanId, number>> = {
   centro: {
     basico: 649,
-    plus: 1249,
-    total: 2199,
+    plus: 1299,
+    total: 1999,
   },
   bc: {
     basico: 1380,
@@ -22,14 +22,14 @@ const PRECIOS_POR_REGION: Record<RegionPrecios, Record<PlanId, number>> = {
 
 const PRECIOS_ANTERIORES_POR_REGION: Record<RegionPrecios, Partial<Record<PlanId, number>>> = {
   centro: {
-    basico: 800,
-    plus: 1700,
-    total: 2600,
+    basico: 749,
+    plus: 1499,
+    total: 2349,
   },
   bc: {
-    basico: 1800,
-    plus: 3500,
-    total: 5500,
+    basico: 1899,
+    plus: 3749,
+    total: 5799,
   },
 }
 
