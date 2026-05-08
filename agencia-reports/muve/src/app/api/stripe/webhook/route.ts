@@ -5,6 +5,7 @@ import type Stripe from 'stripe'
 import { planDesdePriceId } from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
 import { sumarUnMes } from '@/lib/ciclos'
+export const runtime = 'nodejs'
 
 // Service role para saltarse RLS — solo en server, nunca exponer al cliente
 function serviceRoleKey() {
@@ -177,15 +178,34 @@ async function marcarDescuentoComoUsado(metadata: Stripe.Metadata | null | undef
 export async function POST(request: NextRequest) {
   const body = await request.text()
   const sig = request.headers.get('stripe-signature')
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  const bodyPrimerCaracter = body.length > 0 ? body[0] : '(vacío)'
+  const bodyUltimoCaracter = body.length > 0 ? body[body.length - 1] : '(vacío)'
+  const firmaPreview = sig ? sig.slice(0, 50) : '(missing)'
+  const secretPreview = webhookSecret ? webhookSecret.slice(0, 10) : '(missing)'
+
+  console.log('[stripe-webhook] body info', {
+    primerCaracter: bodyPrimerCaracter,
+    ultimoCaracter: bodyUltimoCaracter,
+    longitud: body.length,
+  })
+  console.log('[stripe-webhook] stripe-signature preview', firmaPreview)
+  console.log('[stripe-webhook] secret info', {
+    existe: Boolean(webhookSecret),
+    preview: secretPreview,
+  })
 
   if (!sig) {
     return NextResponse.json({ error: 'Sin firma Stripe' }, { status: 400 })
+  }
+  if (!webhookSecret) {
+    return NextResponse.json({ error: 'Falta STRIPE_WEBHOOK_SECRET' }, { status: 500 })
   }
 
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!)
+    event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : 'Firma inválida'
     return NextResponse.json({ error: `Webhook error: ${mensaje}` }, { status: 400 })
