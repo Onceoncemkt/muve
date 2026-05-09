@@ -211,6 +211,23 @@ async function marcarDescuentoComoUsado(metadata: Stripe.Metadata | null | undef
     throw new Error(`marcarDescuentoComoUsado: ${error.message}`)
   }
 }
+async function obtenerPlanActualUsuario(customerId: string): Promise<PlanMembresia | null> {
+  const supabase = getServiceClient()
+  const { data, error } = await supabase
+    .from('users')
+    .select('plan')
+    .eq('stripe_customer_id', customerId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[stripe-webhook] Error leyendo plan actual de usuario', { customerId, error })
+    return null
+  }
+
+  const plan = typeof data?.plan === 'string' ? data.plan : null
+  if (plan === 'basico' || plan === 'plus' || plan === 'total') return plan
+  return null
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.text()
@@ -335,11 +352,22 @@ export async function POST(request: NextRequest) {
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription
-        if (!sub.customer) {
+        const customerId = typeof sub.customer === 'string' ? sub.customer : null
+        const subscriptionId = sub.id
+        console.log('[stripe-webhook] subscription.deleted', { customerId, subscriptionId })
+        if (!customerId) {
           console.error('[stripe-webhook] customer.subscription.deleted sin customer', sub.id)
           break
         }
-        await desactivarMembresia(sub.customer as string)
+        try {
+          await desactivarMembresia(customerId)
+        } catch (err) {
+          console.error('[stripe-webhook] Error desactivando membresía en subscription.deleted', {
+            customerId,
+            subscriptionId,
+            err,
+          })
+        }
         break
       }
       case 'customer.subscription.created': {
@@ -350,27 +378,99 @@ export async function POST(request: NextRequest) {
 
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription
-        if (!sub.customer) {
+        const customerId = typeof sub.customer === 'string' ? sub.customer : null
+        const subscriptionId = sub.id
+        const status = sub.status
+        console.log('[stripe-webhook] subscription.updated', { customerId, subscriptionId, status })
+        if (!customerId) {
           console.error('[stripe-webhook] customer.subscription.updated sin customer', sub.id)
           break
         }
-
-        const activo = sub.status === 'active' || sub.status === 'trialing'
-        if (!activo) {
-          await desactivarMembresia(sub.customer as string)
+        if (status === 'canceled' || status === 'unpaid') {
+          try {
+            await desactivarMembresia(customerId)
+          } catch (err) {
+            console.error('[stripe-webhook] Error desactivando membresía en subscription.updated', {
+              customerId,
+              subscriptionId,
+              status,
+              err,
+            })
+          }
+          break
+        }
+        if (status === 'past_due') {
+          console.log('[stripe-webhook] subscription.updated past_due, esperando reintentos de cobro', {
+            customerId,
+            subscriptionId,
+          })
+          break
+        }
+        if (status !== 'active' && status !== 'trialing') {
+          console.log('[stripe-webhook] subscription.updated status sin acción', {
+            customerId,
+            subscriptionId,
+            status,
+          })
           break
         }
 
-        let plan = planDesdePriceId(sub.items.data[0]?.price?.id)
-        if (!plan) {
-          plan = await obtenerPlanDesdeSubscription(sub.id)
+        let nuevoPlan = planDesdePriceId(sub.items.data[0]?.price?.id)
+        if (!nuevoPlan) {
+          nuevoPlan = await obtenerPlanDesdeSubscription(subscriptionId)
+        }
+        if (!nuevoPlan) {
+          console.error('[stripe-webhook] No se pudo resolver plan en subscription.updated', {
+            customerId,
+            subscriptionId,
+            status,
+          })
+          break
         }
 
-        await activarMembresia(
-          sub.customer as string,
-          sub.id,
-          plan
-        )
+        const planActual = await obtenerPlanActualUsuario(customerId)
+        if (planActual === nuevoPlan) {
+          console.log('[stripe-webhook] subscription.updated sin cambio de plan', {
+            customerId,
+            subscriptionId,
+            status,
+            plan: nuevoPlan,
+          })
+          break
+        }
+
+        console.log('[stripe-webhook] subscription.updated con cambio de plan, sincronizando DB', {
+          customerId,
+          subscriptionId,
+          status,
+          planActual,
+          nuevoPlan,
+        })
+        try {
+          await activarMembresia(
+            customerId,
+            subscriptionId,
+            nuevoPlan
+          )
+        } catch (err) {
+          console.error('[stripe-webhook] Error activando membresía en subscription.updated', {
+            customerId,
+            subscriptionId,
+            status,
+            nuevoPlan,
+            err,
+          })
+        }
+        break
+      }
+
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge
+        console.log('[stripe-webhook] charge.refunded', {
+          chargeId: charge.id,
+          amount: charge.amount_refunded || charge.amount,
+          customer: charge.customer,
+        })
         break
       }
 
