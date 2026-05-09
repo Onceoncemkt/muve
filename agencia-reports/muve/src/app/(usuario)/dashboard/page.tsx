@@ -8,11 +8,14 @@ import MisReservaciones from '@/components/MisReservaciones'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import PushNotificationsSetup from '@/components/push/PushNotificationsSetup'
 import RoleRedirectEffect from './RoleRedirectEffect'
+import DashboardNotices from './DashboardNotices'
 import { CIUDAD_LABELS } from '@/types'
 import type { Ciudad, PlanMembresia } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 import { CREDITOS_POR_PLAN, normalizarPlan, planDesdePriceId } from '@/lib/planes'
 import { stripe } from '@/lib/stripe'
+import { calcularVisitasRestantes } from '@/lib/creditos'
+import BotonRenovacion from '@/components/BotonRenovacion'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -103,11 +106,7 @@ function faltaColumna(error: { message?: string } | null | undefined, columna: s
   return message.includes('column') && message.includes(columna.toLowerCase())
 }
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ membresia?: string }>
-}) {
+export default async function DashboardPage() {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -170,8 +169,6 @@ export default async function DashboardPage({
   const ciudad = perfil?.ciudad ?? 'tulancingo'
   const fotoUrl = typeof fotoPerfilData?.foto_url === 'string' ? fotoPerfilData.foto_url : null
   const inicialesUsuario = inicialesDesdeNombre(nombre)
-  const params = await searchParams
-  const recienActivada = params.membresia === 'activada'
   const reservasSuspendidasHasta = parseFechaSegura(perfil?.reservas_suspendidas_hasta)
   const ahoraSuspensionMs = Number(new Date())
   const reservasSuspendidas = Boolean(
@@ -246,7 +243,14 @@ export default async function DashboardPage({
   }
   const checkInsRealizados = Math.max(usadasCiclo, 0)
   const visitasDisponibles = visitasIncluidasPlan + creditosExtra
-  const visitasRestantes = Math.max(visitasDisponibles - checkInsRealizados, 0)
+  const visitasRestantes = calcularVisitasRestantes({
+    plan: planUsuario,
+    creditosExtra,
+    visitasUsadasCiclo: checkInsRealizados,
+  })
+  const sinCreditos = visitasRestantes === 0
+  const tienePlanActivo = planActivoFlag === true
+  const mostrarRenovacion = sinCreditos && tienePlanActivo
   let noShowsCiclo = 0
   const inicioCicloNoShows = parseFechaSegura(perfil?.fecha_inicio_ciclo)
   if (inicioCicloNoShows) {
@@ -317,12 +321,7 @@ export default async function DashboardPage({
     <div className="min-h-screen bg-[#F7F7F7] pb-20">
       <RoleRedirectEffect />
       <PushNotificationsSetup />
-      {/* Membresía recién activada */}
-      {recienActivada && (
-        <div className="bg-[#6B4FE8] px-4 py-3 text-center text-sm font-bold text-white">
-          Membresía activada. Bienvenid@ a MUVET.
-        </div>
-      )}
+      <DashboardNotices />
 
       {/* Sin membresía activa */}
       {mostrarBannerActivacion && (
@@ -429,6 +428,7 @@ export default async function DashboardPage({
                 <p className="mt-1 text-[11px] font-semibold text-[#FCA5A5]">
                   {noShowsCiclo} de 3 no-shows permitidos este ciclo
                 </p>
+                {mostrarRenovacion && <BotonRenovacion />}
               </>
             )}
           </div>

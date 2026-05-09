@@ -1,4 +1,4 @@
-import type { Categoria, PlanMembresia, ZonaNegocio } from '@/types'
+import type { Categoria, Ciudad, PlanMembresia, ZonaNegocio } from '@/types'
 
 export const PLAN_LABELS: Record<PlanMembresia, string> = {
   basico: 'BÁSICO',
@@ -181,6 +181,16 @@ export function planDesdePriceId(priceId: string | null | undefined): PlanMembre
     if (priceIds.includes(priceId)) return plan
   }
   return null
+}
+export function priceIdDesdePlanYCiudad(plan: 'basico' | 'plus' | 'total', ciudad: Ciudad): string | null {
+  const region = esCiudadBC(ciudad) ? 'bc' : 'centro'
+  const priceIds = obtenerStripePriceIdsPorRegion()
+  const priceId = priceIds[region]?.[plan]
+  if (!priceId) {
+    console.error('[priceIdDesdePlanYCiudad] no se encontró priceId para', { plan, ciudad, region })
+    return null
+  }
+  return priceId
 }
 export function puedeReservarConPlan(planUsuario: PlanMembresia, planRequerido: PlanMembresia) {
   return PLAN_NIVELES[planUsuario] >= PLAN_NIVELES[planRequerido]

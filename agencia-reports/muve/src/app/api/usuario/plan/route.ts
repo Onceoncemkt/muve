@@ -10,6 +10,7 @@ import {
 import type { PlanMembresia } from '@/types'
 import { createServiceClient } from '@/lib/supabase/service'
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
+import { calcularVisitasRestantes } from '@/lib/creditos'
 
 type PerfilPlan = {
   plan_activo: boolean | null
@@ -245,7 +246,11 @@ export async function GET() {
     }
 
     const visitasDisponibles = limiteVisitasMensuales + creditosExtra
-    const visitasRestantesCiclo = Math.max(visitasDisponibles - visitasUsadasCiclo, 0)
+    const visitasRestantesCiclo = calcularVisitasRestantes({
+      plan: planActivo ? plan : null,
+      creditosExtra,
+      visitasUsadasCiclo,
+    })
 
     return NextResponse.json({
       authenticated: true,
