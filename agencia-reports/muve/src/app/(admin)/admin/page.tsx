@@ -35,6 +35,7 @@ type NegocioAdmin = {
   ciudad: Ciudad
   zona?: ZonaNegocio | null
   nivel?: NivelNegocio
+  plan_negocio?: NivelNegocio | null
   categoria: Categoria
   direccion: string
   descripcion: string | null
@@ -95,6 +96,7 @@ function faltaColumnaRequiereReserva(error: { message?: string } | null | undefi
       || message.includes('stripe_account_id')
       || message.includes('zona')
       || message.includes('nivel')
+      || message.includes('plan_negocio')
     )
 }
 
@@ -210,17 +212,40 @@ export default async function AdminPage({
     }
   }
 
-  const consultaNegocios = await db
+  let negociosAfiliados: NegocioAdmin[] = []
+  let consultaNegociosError: { message?: string } | null = null
+
+  const consultaConPlan = await db
     .from('negocios')
-    .select('id, nombre, ciudad, zona, nivel, categoria, direccion, descripcion, imagen_url, logo_url, mostrar_en_landing, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
+    .select('id, nombre, ciudad, zona, nivel, plan_negocio, categoria, direccion, descripcion, imagen_url, logo_url, mostrar_en_landing, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
     .order('ciudad')
     .order('nombre')
 
-  let negociosAfiliados: NegocioAdmin[] = []
-  if (!consultaNegocios.error) {
-    negociosAfiliados = (consultaNegocios.data ?? []) as NegocioAdmin[]
-  } else if (faltaColumnaRequiereReserva(consultaNegocios.error)) {
-    type NegocioAdminLegacy = Omit<NegocioAdmin, 'zona' | 'nivel' | 'imagen_url' | 'logo_url' | 'mostrar_en_landing' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default' | 'stripe_account_id'>
+  if (!consultaConPlan.error) {
+    negociosAfiliados = (consultaConPlan.data ?? []) as NegocioAdmin[]
+  } else {
+    consultaNegociosError = consultaConPlan.error
+    if (faltaColumnaRequiereReserva(consultaConPlan.error)) {
+      const consultaSinPlan = await db
+        .from('negocios')
+        .select('id, nombre, ciudad, zona, nivel, categoria, direccion, descripcion, imagen_url, logo_url, mostrar_en_landing, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
+        .order('ciudad')
+        .order('nombre')
+
+      if (!consultaSinPlan.error) {
+        negociosAfiliados = ((consultaSinPlan.data ?? []) as Omit<NegocioAdmin, 'plan_negocio'>[]).map(negocio => ({
+          ...negocio,
+          plan_negocio: 'basico',
+        }))
+        consultaNegociosError = null
+      } else {
+        consultaNegociosError = consultaSinPlan.error
+      }
+    }
+  }
+
+  if (consultaNegociosError && faltaColumnaRequiereReserva(consultaNegociosError)) {
+    type NegocioAdminLegacy = Omit<NegocioAdmin, 'zona' | 'nivel' | 'plan_negocio' | 'imagen_url' | 'logo_url' | 'mostrar_en_landing' | 'instagram_handle' | 'requiere_reserva' | 'capacidad_default' | 'stripe_account_id'>
     const fallback = await db
       .from('negocios')
       .select('id, nombre, ciudad, categoria, direccion, descripcion, activo')
@@ -232,6 +257,7 @@ export default async function AdminPage({
         ...negocio,
         zona: 'zona1',
         nivel: 'basico',
+        plan_negocio: 'basico',
         imagen_url: null,
         logo_url: null,
         mostrar_en_landing: false,
@@ -559,362 +585,405 @@ export default async function AdminPage({
           )}
 
           <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
-            <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
-              <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-[#E8FF47]">
+            <div className="rounded-2xl border border-white/10 bg-[#111111] p-5">
+              <h3 className="mb-4 text-sm font-black uppercase tracking-wider text-[#E8FF47]">
                 Lista de negocios existentes
               </h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
-                      <th className="px-2 py-2">Nombre</th>
-                      <th className="px-2 py-2">Categoría</th>
-                      <th className="px-2 py-2">Ciudad</th>
-                      <th className="px-2 py-2">Zona</th>
-                      <th className="px-2 py-2">Nivel</th>
-                      <th className="px-2 py-2">Activo</th>
-                      <th className="px-2 py-2">Pagos</th>
-                      <th className="px-2 py-2">Staff asignado</th>
-                      <th className="px-2 py-2">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {negociosAfiliados.map(negocio => {
-                      const staffAsignado = staffPorNegocio.get(negocio.id) ?? []
 
-                      return (
-                        <tr key={negocio.id} className="border-b border-white/10 align-top text-sm text-white/85">
-                          <td className="px-2 py-2">
-                            <p className="font-semibold">{negocio.nombre}</p>
-                            <p className="mt-0.5 text-xs text-white/45">{negocio.direccion}</p>
-                            <p className={`mt-1 inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                              negocio.stripe_account_id
-                                ? 'bg-[#E8FF47]/20 text-[#E8FF47]'
-                                : 'bg-white/10 text-white/60'
-                            }`}>
-                              Stripe: {negocio.stripe_account_id ? 'Conectado' : 'Pendiente'}
-                            </p>
-                          </td>
-                          <td className="px-2 py-2">{CATEGORIA_LABELS[negocio.categoria]}</td>
-                          <td className="px-2 py-2">{CIUDAD_LABELS[negocio.ciudad]}</td>
-                          <td className="px-2 py-2">{ZONA_LABELS[(negocio.zona ?? 'zona1') as ZonaNegocio]}</td>
-                          <td className="px-2 py-2">{NIVEL_LABELS[(negocio.nivel ?? 'basico') as NivelNegocio]}</td>
-                          <td className="px-2 py-2">
-                            <span
-                              className={`rounded-md px-2 py-1 text-xs font-bold ${
-                                negocio.activo
-                                  ? 'bg-[#E8FF47] text-[#0A0A0A]'
-                                  : 'bg-white/10 text-white/70'
-                              }`}
-                            >
-                              {negocio.activo ? 'Activo' : 'Inactivo'}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2">
-                            {(() => {
-                              const stripeStatus = stripeStatusPorNegocio.get(negocio.id) ?? 'no_account'
-                              if (stripeStatus === 'active') {
-                                return (
-                                  <span className="rounded-md bg-green-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-green-800 ring-1 ring-green-300">
-                                    Activo
-                                  </span>
-                                )
-                              }
-                              if (stripeStatus === 'pending') {
-                                return (
-                                  <span className="rounded-md bg-yellow-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-yellow-800 ring-1 ring-yellow-300">
-                                    Pendiente
-                                  </span>
-                                )
-                              }
-                              return (
-                                <span className="rounded-md bg-white/10 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white/60">
-                                  Sin conectar
-                                </span>
-                              )
-                            })()}
-                          </td>
-                          <td className="px-2 py-2">
-                            {staffAsignado.length === 0 ? (
-                              <span className="text-xs text-white/45">Sin staff asignado</span>
-                            ) : (
-                              <div className="space-y-1">
-                                {staffAsignado.map(staff => (
-                                  <p key={staff.id} className="text-xs text-[#E8FF47]">
-                                    {staff.nombre}
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-2 py-2">
-                            <div className="flex flex-col gap-2">
-                              <div className="flex flex-wrap gap-2">
-                                <form method="POST" action={`/api/admin/negocios/${negocio.id}/stripe-connect`}>
-                                  <input type="hidden" name="next" value="/admin" />
-                                  <button
-                                    type="submit"
-                                    className="rounded-md bg-[#0A0A0A] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#E8FF47] hover:bg-[#222222]"
+              {negociosAfiliados.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/45">
+                  No hay negocios registrados.
+                </p>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {negociosAfiliados.map(negocio => {
+                    const staffAsignado = staffPorNegocio.get(negocio.id) ?? []
+                    const planActual = (negocio.plan_negocio ?? 'basico') as NivelNegocio
+                    const stripeStatus = stripeStatusPorNegocio.get(negocio.id) ?? 'no_account'
+                    const planBadgeClass = planActual === 'total'
+                      ? 'bg-[#E8FF47] text-[#0A0A0A] ring-[#E8FF47]'
+                      : planActual === 'plus'
+                        ? 'bg-[#6B4FE8]/20 text-[#CBBEFF] ring-[#6B4FE8]/50'
+                        : 'bg-white/5 text-white/65 ring-white/15'
+
+                    return (
+                      <article
+                        key={negocio.id}
+                        className="rounded-2xl border border-white/10 bg-[#151515] p-4 transition-colors hover:border-[#6B4FE8]/40"
+                      >
+                        <header className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="truncate text-base font-black text-white">{negocio.nombre}</h4>
+                            <p className="mt-0.5 truncate text-xs text-white/45">{negocio.direccion}</p>
+                          </div>
+                          <details className="shrink-0">
+                            <summary className="cursor-pointer list-none rounded-md border border-white/15 px-2.5 py-1 text-base leading-none text-white/70 transition-colors hover:border-[#6B4FE8] hover:text-white">
+                              ···
+                            </summary>
+                            <div className="mt-3 space-y-3 rounded-xl border border-white/10 bg-[#0A0A0A] p-3">
+                              <details>
+                                <summary className="cursor-pointer list-none rounded-md border border-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#CBBEFF] hover:bg-[#6B4FE8]/20">
+                                  Editar
+                                </summary>
+                                <div className="mt-2 max-w-full rounded-lg border border-white/10 bg-[#0A0A0A] p-3">
+                                  <form
+                                    method="POST"
+                                    encType="multipart/form-data"
+                                    action={`/api/admin/negocios/${negocio.id}`}
+                                    className="grid gap-2 sm:grid-cols-2"
                                   >
-                                    {negocio.stripe_account_id ? 'Reconectar Stripe' : 'Conectar cuenta Stripe'}
-                                  </button>
-                                </form>
-                                <details>
-                                  <summary className="cursor-pointer rounded-md border border-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#CBBEFF] hover:bg-[#6B4FE8]/20">
-                                    Editar
-                                  </summary>
-                                  <div className="mt-2 w-[26rem] max-w-full rounded-lg border border-white/10 bg-[#0A0A0A] p-3">
-                                    <form
-                                      method="POST"
-                                      encType="multipart/form-data"
-                                      action={`/api/admin/negocios/${negocio.id}`}
-                                      className="grid gap-2 sm:grid-cols-2"
-                                    >
-                                      <input type="hidden" name="next" value="/admin" />
-                                      <div className="sm:col-span-2">
+                                    <input type="hidden" name="next" value="/admin" />
+                                    <div className="sm:col-span-2">
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Nombre
+                                      </label>
+                                      <input
+                                        type="text"
+                                        name="nombre"
+                                        required
+                                        defaultValue={negocio.nombre}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        URL del logo
+                                      </label>
+                                      <input
+                                        type="url"
+                                        name="logo_url"
+                                        defaultValue={negocio.logo_url ?? ''}
+                                        placeholder="https://..."
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                      <p className="mt-1 text-[10px] text-white/45">
+                                        URL pública del logo para la landing.
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Categoría
+                                      </label>
+                                      <select
+                                        name="categoria"
+                                        required
+                                        defaultValue={negocio.categoria}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      >
+                                        {CATEGORIAS.map(categoria => (
+                                          <option key={categoria} value={categoria}>
+                                            {CATEGORIA_LABELS[categoria]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Zona
+                                      </label>
+                                      <select
+                                        name="zona"
+                                        required
+                                        defaultValue={negocio.zona ?? 'zona1'}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      >
+                                        {ZONAS.map(zona => (
+                                          <option key={zona} value={zona}>
+                                            {ZONA_LABELS[zona]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Nivel
+                                      </label>
+                                      <select
+                                        name="nivel"
+                                        required
+                                        defaultValue={negocio.nivel ?? 'basico'}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      >
+                                        {NIVELES.map(nivel => (
+                                          <option key={nivel} value={nivel}>
+                                            {NIVEL_LABELS[nivel]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Plan (tarifa)
+                                      </label>
+                                      <select
+                                        name="plan_negocio"
+                                        required
+                                        defaultValue={planActual}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      >
+                                        {NIVELES.map(plan => (
+                                          <option key={plan} value={plan}>
+                                            {NIVEL_LABELS[plan]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Ciudad
+                                      </label>
+                                      <select
+                                        name="ciudad"
+                                        required
+                                        defaultValue={negocio.ciudad}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      >
+                                        {CIUDADES.map(ciudad => (
+                                          <option key={ciudad} value={ciudad}>
+                                            {CIUDAD_LABELS[ciudad]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Dirección
+                                      </label>
+                                      <input
+                                        type="text"
+                                        name="direccion"
+                                        required
+                                        defaultValue={negocio.direccion}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Descripción
+                                      </label>
+                                      <textarea
+                                        name="descripcion"
+                                        defaultValue={negocio.descripcion ?? ''}
+                                        rows={2}
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Instagram
+                                      </label>
+                                      <input
+                                        type="text"
+                                        name="instagram_handle"
+                                        defaultValue={negocio.instagram_handle ?? ''}
+                                        placeholder="usuario"
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Foto del negocio
+                                      </label>
+                                      {negocio.imagen_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={negocio.imagen_url}
+                                          alt={negocio.nombre}
+                                          className="mb-2 h-28 w-full rounded-md border border-white/10 object-cover"
+                                        />
+                                      ) : (
+                                        <p className="mb-2 text-[10px] text-white/45">Sin foto actual</p>
+                                      )}
+                                      <input
+                                        type="file"
+                                        name="foto_negocio"
+                                        accept="image/*"
+                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-[11px] text-white file:mr-3 file:rounded-md file:border-0 file:bg-[#6B4FE8] file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:tracking-wide file:text-white hover:file:bg-[#5b40cd]"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <input
+                                        id={`mostrar-landing-${negocio.id}`}
+                                        type="checkbox"
+                                        name="mostrar_en_landing"
+                                        value="true"
+                                        defaultChecked={negocio.mostrar_en_landing}
+                                        className="h-4 w-4 accent-[#6B4FE8]"
+                                      />
+                                      <label
+                                        htmlFor={`mostrar-landing-${negocio.id}`}
+                                        className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
+                                      >
+                                        Mostrar en landing de pre-registro
+                                      </label>
+                                      <p className="mt-1 text-[10px] text-white/45">
+                                        Activa esto para que el logo aparezca en /preregistro.
+                                      </p>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <input
+                                        id={`requiere-reserva-${negocio.id}`}
+                                        type="checkbox"
+                                        name="requiere_reserva"
+                                        value="true"
+                                        defaultChecked={negocio.requiere_reserva}
+                                        className="peer h-4 w-4 accent-[#6B4FE8]"
+                                      />
+                                      <label
+                                        htmlFor={`requiere-reserva-${negocio.id}`}
+                                        className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
+                                      >
+                                        Requiere reserva
+                                      </label>
+                                      <div className="mt-2 hidden peer-checked:block">
                                         <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Nombre
+                                          Capacidad por clase
                                         </label>
                                         <input
-                                          type="text"
-                                          name="nombre"
-                                          required
-                                          defaultValue={negocio.nombre}
+                                          type="number"
+                                          name="capacidad_default"
+                                          min={1}
+                                          defaultValue={negocio.capacidad_default ?? 10}
                                           className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
                                         />
                                       </div>
-                                      <div>
-                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          URL del logo
-                                        </label>
-                                        <input
-                                          type="url"
-                                          name="logo_url"
-                                          defaultValue={negocio.logo_url ?? ''}
-                                          placeholder="https://..."
-                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                        />
-                                        <p className="mt-1 text-[10px] text-white/45">
-                                          URL pública del logo para la landing.
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Categoría
-                                        </label>
-                                        <select
-                                          name="categoria"
-                                          required
-                                          defaultValue={negocio.categoria}
-                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                        >
-                                          {CATEGORIAS.map(categoria => (
-                                            <option key={categoria} value={categoria}>
-                                              {CATEGORIA_LABELS[categoria]}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <div>
-                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Zona
-                                        </label>
-                                        <select
-                                          name="zona"
-                                          required
-                                          defaultValue={negocio.zona ?? 'zona1'}
-                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                        >
-                                          {ZONAS.map(zona => (
-                                            <option key={zona} value={zona}>
-                                              {ZONA_LABELS[zona]}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <div>
-                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Nivel
-                                        </label>
-                                        <select
-                                          name="nivel"
-                                          required
-                                          defaultValue={negocio.nivel ?? 'basico'}
-                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                        >
-                                          {NIVELES.map(nivel => (
-                                            <option key={nivel} value={nivel}>
-                                              {NIVEL_LABELS[nivel]}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <div>
-                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Ciudad
-                                        </label>
-                                        <select
-                                          name="ciudad"
-                                          required
-                                          defaultValue={negocio.ciudad}
-                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                        >
-                                          {CIUDADES.map(ciudad => (
-                                            <option key={ciudad} value={ciudad}>
-                                              {CIUDAD_LABELS[ciudad]}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <div className="sm:col-span-2">
-                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Dirección
-                                        </label>
-                                        <input
-                                          type="text"
-                                          name="direccion"
-                                          required
-                                          defaultValue={negocio.direccion}
-                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                        />
-                                      </div>
-                                      <div className="sm:col-span-2">
-                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Descripción
-                                        </label>
-                                        <textarea
-                                          name="descripcion"
-                                          defaultValue={negocio.descripcion ?? ''}
-                                          rows={2}
-                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Instagram
-                                        </label>
-                                        <input
-                                          type="text"
-                                          name="instagram_handle"
-                                          defaultValue={negocio.instagram_handle ?? ''}
-                                          placeholder="usuario"
-                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                        />
-                                      </div>
-                                      <div className="sm:col-span-2">
-                                        <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                          Foto del negocio
-                                        </label>
-                                        {negocio.imagen_url ? (
-                                          // eslint-disable-next-line @next/next/no-img-element
-                                          <img
-                                            src={negocio.imagen_url}
-                                            alt={negocio.nombre}
-                                            className="mb-2 h-28 w-full rounded-md border border-white/10 object-cover"
-                                          />
-                                        ) : (
-                                          <p className="mb-2 text-[10px] text-white/45">Sin foto actual</p>
-                                        )}
-                                        <input
-                                          type="file"
-                                          name="foto_negocio"
-                                          accept="image/*"
-                                          className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-[11px] text-white file:mr-3 file:rounded-md file:border-0 file:bg-[#6B4FE8] file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:tracking-wide file:text-white hover:file:bg-[#5b40cd]"
-                                        />
-                                      </div>
-                                      <div className="sm:col-span-2">
-                                        <input
-                                          id={`mostrar-landing-${negocio.id}`}
-                                          type="checkbox"
-                                          name="mostrar_en_landing"
-                                          value="true"
-                                          defaultChecked={negocio.mostrar_en_landing}
-                                          className="h-4 w-4 accent-[#6B4FE8]"
-                                        />
-                                        <label
-                                          htmlFor={`mostrar-landing-${negocio.id}`}
-                                          className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
-                                        >
-                                          Mostrar en landing de pre-registro
-                                        </label>
-                                        <p className="mt-1 text-[10px] text-white/45">
-                                          Activa esto para que el logo aparezca en /preregistro.
-                                        </p>
-                                      </div>
-                                      <div className="sm:col-span-2">
-                                        <input
-                                          id={`requiere-reserva-${negocio.id}`}
-                                          type="checkbox"
-                                          name="requiere_reserva"
-                                          value="true"
-                                          defaultChecked={negocio.requiere_reserva}
-                                          className="peer h-4 w-4 accent-[#6B4FE8]"
-                                        />
-                                        <label
-                                          htmlFor={`requiere-reserva-${negocio.id}`}
-                                          className="ml-2 inline-flex cursor-pointer items-center rounded-md border border-white/10 bg-[#151515] px-2.5 py-1.5 text-xs text-white/80"
-                                        >
-                                          Requiere reserva
-                                        </label>
-                                        <div className="mt-2 hidden peer-checked:block">
-                                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                            Capacidad por clase
-                                          </label>
-                                          <input
-                                            type="number"
-                                            name="capacidad_default"
-                                            min={1}
-                                            defaultValue={negocio.capacidad_default ?? 10}
-                                            className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                          />
-                                        </div>
-                                      </div>
-                                      <div className="sm:col-span-2 flex justify-end">
-                                        <button
-                                          type="submit"
-                                          className="rounded-md bg-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white hover:bg-[#5b40cd]"
-                                        >
-                                          Guardar cambios
-                                        </button>
-                                      </div>
-                                    </form>
-                                  </div>
-                                </details>
+                                    </div>
+                                    <div className="sm:col-span-2 flex justify-end">
+                                      <button
+                                        type="submit"
+                                        className="rounded-md bg-[#6B4FE8] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white hover:bg-[#5b40cd]"
+                                      >
+                                        Guardar cambios
+                                      </button>
+                                    </div>
+                                  </form>
+                                </div>
+                              </details>
 
-                                <form method="POST" action={`/api/admin/negocios/${negocio.id}/toggle-activo`}>
-                                  <input type="hidden" name="next" value="/admin" />
-                                  <button
-                                    type="submit"
-                                    className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${
-                                      negocio.activo
-                                        ? 'bg-[#6B4FE8] text-white hover:bg-[#5b40cd]'
-                                        : 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#d8f03f]'
-                                    }`}
-                                  >
-                                    {negocio.activo ? 'Desactivar' : 'Activar'}
-                                  </button>
-                                </form>
-                              </div>
+                              <details>
+                                <summary className="cursor-pointer list-none rounded-md border border-white/15 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white/70 hover:border-[#6B4FE8] hover:text-white">
+                                  Ver pagos
+                                </summary>
+                                <div className="mt-2 rounded-lg border border-white/10 bg-[#0A0A0A] p-3 text-xs text-white/55">
+                                  Próximamente: historial de transferencias semanales por negocio.
+                                </div>
+                              </details>
 
-                              <NegocioStaffAsignarSelect
-                                negocioId={negocio.id}
-                                opciones={staffParaAsignar}
-                              />
+                              <form method="POST" action={`/api/admin/negocios/${negocio.id}/stripe-connect`}>
+                                <input type="hidden" name="next" value="/admin" />
+                                <button
+                                  type="submit"
+                                  className="w-full rounded-md bg-[#0A0A0A] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#E8FF47] hover:bg-[#222222]"
+                                >
+                                  {negocio.stripe_account_id ? 'Reconectar Stripe' : 'Conectar cuenta Stripe'}
+                                </button>
+                              </form>
+
+                              <form method="POST" action={`/api/admin/negocios/${negocio.id}/toggle-activo`}>
+                                <input type="hidden" name="next" value="/admin" />
+                                <button
+                                  type="submit"
+                                  className={`w-full rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${
+                                    negocio.activo
+                                      ? 'bg-[#6B4FE8] text-white hover:bg-[#5b40cd]'
+                                      : 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#d8f03f]'
+                                  }`}
+                                >
+                                  {negocio.activo ? 'Dar de baja' : 'Reactivar'}
+                                </button>
+                              </form>
                             </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                    {negociosAfiliados.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="px-2 py-4 text-sm text-white/50">
-                          No hay negocios registrados.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                          </details>
+                        </header>
+
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/65 ring-1 ring-white/10">
+                            {CATEGORIA_LABELS[negocio.categoria]}
+                          </span>
+                          <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/65 ring-1 ring-white/10">
+                            {CIUDAD_LABELS[negocio.ciudad]}
+                          </span>
+                          <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${planBadgeClass}`}>
+                            Plan {NIVEL_LABELS[planActual]}
+                          </span>
+                          {stripeStatus === 'active' && (
+                            <span className="rounded-md bg-green-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-300 ring-1 ring-green-500/40">
+                              Stripe activo
+                            </span>
+                          )}
+                          {stripeStatus === 'pending' && (
+                            <span className="rounded-md bg-yellow-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-200 ring-1 ring-yellow-500/40">
+                              Stripe pendiente
+                            </span>
+                          )}
+                          {stripeStatus === 'no_account' && (
+                            <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/50 ring-1 ring-white/10">
+                              Stripe sin conectar
+                            </span>
+                          )}
+                          {!negocio.activo && (
+                            <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/55 ring-1 ring-white/15">
+                              Inactivo
+                            </span>
+                          )}
+                        </div>
+
+                        <form
+                          method="POST"
+                          action={`/api/admin/negocios/${negocio.id}/plan`}
+                          className="mt-3 flex flex-wrap items-center gap-2"
+                        >
+                          <input type="hidden" name="next" value="/admin" />
+                          <label
+                            htmlFor={`plan-negocio-${negocio.id}`}
+                            className="text-[10px] font-bold uppercase tracking-widest text-white/45"
+                          >
+                            Cambiar plan
+                          </label>
+                          <select
+                            id={`plan-negocio-${negocio.id}`}
+                            name="plan_negocio"
+                            defaultValue={planActual}
+                            className="rounded-md border border-white/15 bg-[#0A0A0A] px-2 py-1 text-xs text-white outline-none focus:border-[#6B4FE8]"
+                          >
+                            {NIVELES.map(plan => (
+                              <option key={plan} value={plan}>
+                                {NIVEL_LABELS[plan]}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="submit"
+                            className="rounded-md bg-[#6B4FE8] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white hover:bg-[#5b40cd]"
+                          >
+                            Guardar
+                          </button>
+                        </form>
+
+                        {staffAsignado.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1">
+                            {staffAsignado.map(staff => (
+                              <span
+                                key={staff.id}
+                                className="rounded-md bg-[#E8FF47]/10 px-2 py-0.5 text-[10px] font-semibold text-[#E8FF47]"
+                              >
+                                {staff.nombre}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="mt-3 border-t border-white/10 pt-3">
+                          <NegocioStaffAsignarSelect
+                            negocioId={negocio.id}
+                            opciones={staffParaAsignar}
+                          />
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">

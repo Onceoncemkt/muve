@@ -93,7 +93,14 @@ export interface Negocio {
   capacidad_default?: number | null
   plan_requerido?: PlanMembresia | null
   nivel?: NivelNegocio
+  plan_negocio?: NivelNegocio
   activo: boolean
+}
+
+export const PLAN_NEGOCIO_LABELS: Record<NivelNegocio, string> = {
+  basico: 'Básico',
+  plus: 'Plus',
+  total: 'Total',
 }
 
 export interface Horario {

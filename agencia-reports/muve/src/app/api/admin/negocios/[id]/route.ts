@@ -8,6 +8,7 @@ const NIVELES_VALIDOS: NivelNegocio[] = ['basico', 'plus', 'total']
 const COLUMNAS_OPCIONALES_NEGOCIO = [
   'zona',
   'nivel',
+  'plan_negocio',
   'requiere_reserva',
   'capacidad_default',
   'instagram_handle',
@@ -150,6 +151,7 @@ export async function POST(
   const ciudadRaw = texto(formData.get('ciudad')).toLowerCase()
   const zonaRaw = texto(formData.get('zona')).toLowerCase()
   const nivelRaw = texto(formData.get('nivel')).toLowerCase()
+  const planNegocioRaw = texto(formData.get('plan_negocio')).toLowerCase()
   const direccion = texto(formData.get('direccion'))
   const descripcionRaw = texto(formData.get('descripcion'))
   const instagramRaw = texto(formData.get('instagram_handle'))
@@ -168,6 +170,9 @@ export async function POST(
     : 'zona1'
   const nivel = NIVELES_VALIDOS.includes(nivelRaw as NivelNegocio)
     ? (nivelRaw as NivelNegocio)
+    : 'basico'
+  const planNegocio = NIVELES_VALIDOS.includes(planNegocioRaw as NivelNegocio)
+    ? (planNegocioRaw as NivelNegocio)
     : 'basico'
 
   if (!nombre || !categoria || !ciudad || !direccion) {
@@ -239,6 +244,7 @@ export async function POST(
     ciudad,
     zona,
     nivel,
+    plan_negocio: planNegocio,
     direccion,
     descripcion,
     instagram_handle: instagramHandle,

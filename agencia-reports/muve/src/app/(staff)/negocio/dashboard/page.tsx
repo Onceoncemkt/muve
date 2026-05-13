@@ -3,9 +3,9 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
-import type { DiaSemana, EstadoReserva, PlanMembresia } from '@/types'
-import { DIA_LABELS, formatHora } from '@/types'
-import { normalizarCategoriaNegocio } from '@/lib/planes'
+import type { DiaSemana, EstadoReserva, NivelNegocio, PlanMembresia } from '@/types'
+import { DIA_LABELS, PLAN_NEGOCIO_LABELS, formatHora } from '@/types'
+import { normalizarCategoriaNegocio, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
 
 type UsuarioReserva = { id: string; nombre: string; email: string }
 type HorarioReserva = {
@@ -51,6 +51,7 @@ interface NegocioDashboard {
   id: string
   nombre: string
   ciudad: string
+  zona?: string | null
   categoria: string
   imagen_url?: string | null
   instagram_handle?: string | null
@@ -58,6 +59,7 @@ interface NegocioDashboard {
   stripe_account_id?: string | null
   monto_maximo_visita?: number | null
   servicios_incluidos?: string | null
+  plan_negocio?: NivelNegocio | string | null
 }
 
 interface GananciasSemana {
@@ -571,6 +573,23 @@ export default function NegocioDashboardPage() {
   const esGimnasio = categoriaNegocio === 'gimnasio'
   const esEstetica = categoriaNegocio === 'estetica' || serviciosDisponibles.length > 0
   const esClases = !esRestaurante && !esGimnasio && !esEstetica
+  const planNegocio: NivelNegocio = (
+    negocio?.plan_negocio === 'plus' || negocio?.plan_negocio === 'total'
+      ? negocio.plan_negocio
+      : 'basico'
+  )
+  const tarifaMiCheckin = useMemo(() => {
+    if (!negocio) return 0
+    const tarifas = obtenerTarifasNegocioPorPlan(negocio.categoria, negocio.zona)
+    return tarifas[planNegocio] ?? 0
+  }, [negocio, planNegocio])
+  const etiquetaCategoriaTarifa = esGimnasio
+    ? 'Gym'
+    : esClases
+      ? 'Clases'
+      : esRestaurante
+        ? 'Restaurante'
+        : 'Estética'
   const totalVisitasSemana = PLANES_MEMBRESIA.reduce(
     (acumulado, plan) => acumulado + (ganancias.semana.visitas_por_plan[plan] ?? 0),
     0
@@ -687,6 +706,35 @@ export default function NegocioDashboardPage() {
               Tu cuenta aún no tiene un negocio asignado. Contacta al administrador.
             </p>
           </div>
+        )}
+
+        {!sinNegocio && negocio && (
+          <section className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mi tarifa</p>
+                <p className="mt-1 text-3xl font-black text-[#0A0A0A]">
+                  {formatMonedaMXN(tarifaMiCheckin)}{' '}
+                  <span className="text-base font-bold text-[#666]">por check-in</span>
+                </p>
+                <p className="mt-1 text-xs text-[#666]">
+                  {etiquetaCategoriaTarifa} · Plan{' '}
+                  <span className="font-bold text-[#0A0A0A]">{PLAN_NEGOCIO_LABELS[planNegocio]}</span>
+                </p>
+              </div>
+              <span
+                className={`inline-flex rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ring-1 ${
+                  planNegocio === 'total'
+                    ? 'bg-[#E8FF47] text-[#0A0A0A] ring-[#E8FF47]'
+                    : planNegocio === 'plus'
+                      ? 'bg-[#6B4FE8]/15 text-[#6B4FE8] ring-[#6B4FE8]/40'
+                      : 'bg-[#F3F4F6] text-[#666] ring-[#E5E5E5]'
+                }`}
+              >
+                Plan {PLAN_NEGOCIO_LABELS[planNegocio]}
+              </span>
+            </div>
+          </section>
         )}
 
         {!sinNegocio && negocio && (

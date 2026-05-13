@@ -55,6 +55,7 @@ type NegocioDashboard = {
   stripe_account_id?: string | null
   monto_maximo_visita?: number | null
   servicios_incluidos?: string | null
+  plan_negocio?: string | null
 }
 
 type GananciasSemana = {
@@ -325,14 +326,15 @@ export async function GET(request: NextRequest) {
   }
 
   const consultasNegocio = [
-    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita, servicios_incluidos', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: true },
-    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, stripe_account_id', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, zona, categoria, imagen_url', incluyeZona: true, incluyeImagen: true, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, zona, categoria', incluyeZona: true, incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
-    { select: 'id, nombre, ciudad, categoria', incluyeZona: false, incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita, servicios_incluidos, plan_negocio', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: true, incluyePlanNegocio: true },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita, servicios_incluidos', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: true, incluyePlanNegocio: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id, monto_maximo_visita', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: true, incluyeServiciosIncluidos: false, incluyePlanNegocio: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, tiktok_handle, stripe_account_id', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: true, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false, incluyePlanNegocio: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle, stripe_account_id', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: true, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false, incluyePlanNegocio: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url, instagram_handle', incluyeZona: true, incluyeImagen: true, incluyeInstagram: true, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false, incluyePlanNegocio: false },
+    { select: 'id, nombre, ciudad, zona, categoria, imagen_url', incluyeZona: true, incluyeImagen: true, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false, incluyePlanNegocio: false },
+    { select: 'id, nombre, ciudad, zona, categoria', incluyeZona: true, incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false, incluyePlanNegocio: false },
+    { select: 'id, nombre, ciudad, categoria', incluyeZona: false, incluyeImagen: false, incluyeInstagram: false, incluyeTiktok: false, incluyeStripeAccountId: false, incluyeMontoMaximoVisita: false, incluyeServiciosIncluidos: false, incluyePlanNegocio: false },
   ] as const
 
   let negocio: NegocioDashboard | null = null
@@ -368,6 +370,9 @@ export async function GET(request: NextRequest) {
             ? resultado.data.servicios_incluidos
             : null)
           : null,
+        plan_negocio: consulta.incluyePlanNegocio
+          ? (typeof resultado.data.plan_negocio === 'string' ? resultado.data.plan_negocio : null)
+          : null,
       }
       negocioError = null
       break
@@ -382,6 +387,7 @@ export async function GET(request: NextRequest) {
       || (consulta.incluyeStripeAccountId && faltaColumna(resultado.error, 'stripe_account_id'))
       || (consulta.incluyeMontoMaximoVisita && faltaColumna(resultado.error, 'monto_maximo_visita'))
       || (consulta.incluyeServiciosIncluidos && faltaColumna(resultado.error, 'servicios_incluidos'))
+      || (consulta.incluyePlanNegocio && faltaColumna(resultado.error, 'plan_negocio'))
     )
     if (!errorPorColumnaOpcional) break
   }
