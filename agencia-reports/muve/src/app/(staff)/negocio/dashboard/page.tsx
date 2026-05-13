@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
+import NegocioReservacionesPanel from '@/components/negocio/NegocioReservacionesPanel'
 import type { DiaSemana, EstadoReserva, NivelNegocio, PlanMembresia } from '@/types'
 import { DIA_LABELS, PLAN_NEGOCIO_LABELS, formatHora } from '@/types'
 import { normalizarCategoriaNegocio, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
@@ -1008,6 +1009,10 @@ export default function NegocioDashboardPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="md:col-span-4">
+              <NegocioReservacionesPanel />
             </div>
 
             <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">

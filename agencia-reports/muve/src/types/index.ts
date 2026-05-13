@@ -66,6 +66,11 @@ export interface User {
   rol: Rol
   negocio_id?: string | null
   fecha_registro: string
+  lesiones?: string | null
+  objetivo_entrenamiento?: string | null
+  nivel_condicion?: string | null
+  disciplinas?: string[] | null
+  notas_negocio?: string | null
 }
 
 export interface Negocio {
