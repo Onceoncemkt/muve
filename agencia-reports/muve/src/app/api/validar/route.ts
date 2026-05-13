@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import {
-  calcularMontoNegocioPorVisita,
   PLAN_MAX_VISITAS_POR_LUGAR,
   PLAN_VISITAS_MENSUALES,
   normalizarPlan,
   resolverZonaNegocio,
+  tarifaNegocioPorCheckin,
   zonaPorCiudad,
 } from '@/lib/planes'
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
@@ -273,6 +273,7 @@ export async function POST(request: NextRequest) {
     nombre: string
     categoria: string | null
     nivel: 'basico' | 'plus' | 'total'
+    plan_negocio: 'basico' | 'plus' | 'total'
     ciudad: string | null
     zona: string | null
     monto_maximo_visita: number | null
@@ -280,12 +281,13 @@ export async function POST(request: NextRequest) {
   } | null = null
   const consultaNegocio = await db
     .from('negocios')
-    .select('nombre, categoria, nivel, ciudad, zona, monto_maximo_visita, requiere_reserva')
+    .select('nombre, categoria, nivel, plan_negocio, ciudad, zona, monto_maximo_visita, requiere_reserva')
     .eq('id', negocioIdObjetivo)
     .maybeSingle<{
       nombre: string
       categoria: string | null
       nivel?: 'basico' | 'plus' | 'total' | null
+      plan_negocio?: 'basico' | 'plus' | 'total' | null
       ciudad: string | null
       zona: string | null
       monto_maximo_visita: number | null
@@ -298,15 +300,20 @@ export async function POST(request: NextRequest) {
       nivel: consultaNegocio.data.nivel === 'plus' || consultaNegocio.data.nivel === 'total'
         ? consultaNegocio.data.nivel
         : 'basico',
+      plan_negocio: consultaNegocio.data.plan_negocio === 'plus' || consultaNegocio.data.plan_negocio === 'total'
+        ? consultaNegocio.data.plan_negocio
+        : 'basico',
     }
   } else if (
     faltaColumna(consultaNegocio.error, 'zona')
     || faltaColumna(consultaNegocio.error, 'ciudad')
     || faltaColumna(consultaNegocio.error, 'monto_maximo_visita')
     || faltaColumna(consultaNegocio.error, 'requiere_reserva')
+    || faltaColumna(consultaNegocio.error, 'plan_negocio')
   ) {
     const faltaMontoMaximoVisita = faltaColumna(consultaNegocio.error, 'monto_maximo_visita')
     const faltaRequiereReserva = faltaColumna(consultaNegocio.error, 'requiere_reserva')
+    const faltaPlanNegocio = faltaColumna(consultaNegocio.error, 'plan_negocio')
     const columnasFallback = ['nombre', 'categoria', 'ciudad']
     if (!faltaColumna(consultaNegocio.error, 'zona')) {
       columnasFallback.push('zona')
@@ -317,6 +324,9 @@ export async function POST(request: NextRequest) {
     if (!faltaRequiereReserva) {
       columnasFallback.push('requiere_reserva')
     }
+    if (!faltaPlanNegocio) {
+      columnasFallback.push('plan_negocio')
+    }
     const fallbackNegocio = await db
       .from('negocios')
       .select(columnasFallback.join(', '))
@@ -325,6 +335,7 @@ export async function POST(request: NextRequest) {
         nombre: string
         categoria: string | null
         nivel?: 'basico' | 'plus' | 'total' | null
+        plan_negocio?: 'basico' | 'plus' | 'total' | null
         ciudad?: string | null
         zona?: string | null
         monto_maximo_visita?: number | null
@@ -338,6 +349,9 @@ export async function POST(request: NextRequest) {
         ...fallbackNegocio.data,
         nivel: fallbackNegocio.data.nivel === 'plus' || fallbackNegocio.data.nivel === 'total'
           ? fallbackNegocio.data.nivel
+          : 'basico',
+        plan_negocio: fallbackNegocio.data.plan_negocio === 'plus' || fallbackNegocio.data.plan_negocio === 'total'
+          ? fallbackNegocio.data.plan_negocio
           : 'basico',
         ciudad: typeof fallbackNegocio.data.ciudad === 'string' ? fallbackNegocio.data.ciudad : null,
         zona: typeof fallbackNegocio.data.zona === 'string' ? fallbackNegocio.data.zona : null,
@@ -374,14 +388,9 @@ export async function POST(request: NextRequest) {
       error: 'Límite de créditos en este lugar alcanzado',
     })
   }
-  const planTarifaMontoNegocio = (
-    categoriaNegocio === 'clases' && negocio.nivel === 'total'
-      ? 'total'
-      : planUsuario
-  )
-  const montoNegocioMxn = calcularMontoNegocioPorVisita({
+  const montoNegocioMxn = tarifaNegocioPorCheckin({
     categoria: categoriaNegocio,
-    planUsuario: planTarifaMontoNegocio,
+    planNegocio: negocio.plan_negocio,
     zona: negocio.zona,
     ciudad: negocio.ciudad,
   })

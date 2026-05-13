@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { stripe } from '@/lib/stripe'
 import {
-  normalizarCategoriaNegocio,
   normalizarPlan,
-  resolverZonaNegocio,
-  obtenerTarifasNegocioPorPlan,
+  tarifaNegocioPorCheckin,
 } from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
 
@@ -18,6 +16,7 @@ type NegocioConStripe = {
   categoria: string | null
   ciudad: string | null
   zona: string | null
+  plan_negocio: string | null
   stripe_account_id: string | null
 }
 
@@ -52,33 +51,8 @@ function admin() {
   )
 }
 
-function planTarifaParaVisita({
-  categoria,
-  zona,
-  ciudad,
-  planUsuario,
-}: {
-  categoria: string | null | undefined
-  zona: string | null | undefined
-  ciudad: string | null | undefined
-  planUsuario: string | null | undefined
-}) {
-  const zonaNegocio = resolverZonaNegocio({ zona, ciudad })
-
-  const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
-  if (
-    categoriaNormalizada
-    && (
-      (zonaNegocio === 'zona1' && categoriaNormalizada !== 'clases')
-      || (zonaNegocio === 'zona2' && ['gimnasio', 'estetica', 'restaurante'].includes(categoriaNormalizada))
-    )
-  ) {
-    return 'basico'
-  }
-  const planNormalizado = normalizarPlan(planUsuario)
-  if (planNormalizado) return planNormalizado
-
-  return null
+function planUsuarioBucket(planUsuario: string | null | undefined): PlanMembresia {
+  return normalizarPlan(planUsuario) ?? 'basico'
 }
 
 function esRequestAutorizado(request: NextRequest) {
@@ -130,13 +104,10 @@ function obtenerPeriodoSemanal() {
 
 function calcularTotalMXN(
   resumen: Record<PlanMembresia, number>,
-  tarifasPorPlan: Record<PlanMembresia, number>
+  tarifaPorCheckin: number
 ) {
-  return (
-    (resumen.basico * tarifasPorPlan.basico)
-    + (resumen.plus * tarifasPorPlan.plus)
-    + (resumen.total * tarifasPorPlan.total)
-  )
+  const totalVisitas = resumen.basico + resumen.plus + resumen.total
+  return totalVisitas * tarifaPorCheckin
 }
 
 function faltaColumna(error: { message?: string } | null | undefined, columna: string) {
@@ -166,20 +137,30 @@ export async function GET(request: NextRequest) {
 
   const consultaNegocios = await db
     .from('negocios')
-    .select('id, nombre, categoria, ciudad, zona, stripe_account_id')
+    .select('id, nombre, categoria, ciudad, zona, plan_negocio, stripe_account_id')
     .not('stripe_account_id', 'is', null)
     .returns<NegocioConStripe[]>()
   let negocios = consultaNegocios.data
   let negociosError = consultaNegocios.error
+
+  if (faltaColumna(negociosError, 'plan_negocio')) {
+    const fallbackPlan = await db
+      .from('negocios')
+      .select('id, nombre, categoria, ciudad, zona, stripe_account_id')
+      .not('stripe_account_id', 'is', null)
+      .returns<Array<Omit<NegocioConStripe, 'plan_negocio'>>>()
+    negociosError = fallbackPlan.error
+    negocios = (fallbackPlan.data ?? []).map((negocio) => ({ ...negocio, plan_negocio: 'basico' }))
+  }
 
   if (faltaColumna(negociosError, 'zona')) {
     const fallbackNegocios = await db
       .from('negocios')
       .select('id, nombre, categoria, ciudad, stripe_account_id')
       .not('stripe_account_id', 'is', null)
-      .returns<Array<Omit<NegocioConStripe, 'zona'>>>()
+      .returns<Array<Omit<NegocioConStripe, 'zona' | 'plan_negocio'>>>()
     negociosError = fallbackNegocios.error
-    negocios = (fallbackNegocios.data ?? []).map((negocio) => ({ ...negocio, zona: null }))
+    negocios = (fallbackNegocios.data ?? []).map((negocio) => ({ ...negocio, zona: null, plan_negocio: 'basico' }))
   }
 
   if (faltaColumna(negociosError, 'stripe_account_id')) {
@@ -290,14 +271,8 @@ export async function GET(request: NextRequest) {
 
   for (const visita of visitasPeriodo ?? []) {
     const negocioVisita = negocioPorId.get(visita.negocio_id)
-    const categoriaNegocio = negocioVisita?.categoria ?? null
-    const plan = planTarifaParaVisita({
-      categoria: categoriaNegocio,
-      zona: negocioVisita?.zona ?? null,
-      ciudad: negocioVisita?.ciudad ?? null,
-      planUsuario: visita.plan_usuario,
-    })
-    if (!plan) continue
+    if (!negocioVisita) continue
+    const plan = planUsuarioBucket(visita.plan_usuario)
     const resumen = resumenPorNegocio.get(visita.negocio_id)
     if (!resumen) continue
     resumen[plan] += 1
@@ -309,9 +284,13 @@ export async function GET(request: NextRequest) {
 
   for (const negocio of negociosPendientes) {
     const resumen = resumenPorNegocio.get(negocio.id) ?? crearResumenVacio()
-    const zonaNegocio = resolverZonaNegocio({ zona: negocio.zona, ciudad: negocio.ciudad })
-    const tarifasPorPlan = obtenerTarifasNegocioPorPlan(negocio.categoria, zonaNegocio)
-    const totalMXN = calcularTotalMXN(resumen, tarifasPorPlan)
+    const tarifaCheckin = tarifaNegocioPorCheckin({
+      categoria: negocio.categoria,
+      planNegocio: negocio.plan_negocio,
+      zona: negocio.zona,
+      ciudad: negocio.ciudad,
+    })
+    const totalMXN = calcularTotalMXN(resumen, tarifaCheckin)
 
     if (totalMXN <= 0) {
       continue

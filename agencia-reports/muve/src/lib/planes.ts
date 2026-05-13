@@ -54,7 +54,7 @@ const TARIFA_NEGOCIO_CLASES_ZONA1_POR_PLAN: Record<PlanMembresia, number> = {
 }
 const TARIFA_NEGOCIO_FIJA_ZONA1_POR_CATEGORIA: Record<Exclude<Categoria, 'clases'>, number> = {
   gimnasio: 40,
-  estetica: 50,
+  estetica: 60,
   restaurante: 60,
 }
 const TARIFA_NEGOCIO_CLASES_ZONA2_POR_PLAN: Record<PlanMembresia, number> = {
@@ -258,6 +258,25 @@ export function calcularMontoNegocioPorVisita({
   ciudad?: unknown
 }) {
   const plan = planUsuario ?? 'basico'
+  const zonaNegocio = resolverZonaNegocio({ zona, ciudad })
+  const tarifas = obtenerTarifasNegocioPorPlan(categoria, zonaNegocio)
+  return tarifas[plan]
+}
+
+export function tarifaNegocioPorCheckin({
+  categoria,
+  planNegocio,
+  zona,
+  ciudad,
+}: {
+  categoria: unknown
+  planNegocio: unknown
+  zona?: unknown
+  ciudad?: unknown
+}): number {
+  const plan: PlanMembresia = planNegocio === 'plus' || planNegocio === 'total'
+    ? planNegocio
+    : 'basico'
   const zonaNegocio = resolverZonaNegocio({ zona, ciudad })
   const tarifas = obtenerTarifasNegocioPorPlan(categoria, zonaNegocio)
   return tarifas[plan]

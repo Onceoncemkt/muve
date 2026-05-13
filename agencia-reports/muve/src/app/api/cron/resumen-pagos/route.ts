@@ -4,7 +4,7 @@ import { getEmailFrom } from '@/lib/email'
 import {
   normalizarPlan,
   resolverZonaNegocio,
-  obtenerTarifasNegocioPorPlan,
+  tarifaNegocioPorCheckin,
 } from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
 
@@ -17,6 +17,7 @@ type NegocioRow = {
   categoria: string | null
   ciudad: string | null
   zona: string | null
+  plan_negocio: string | null
   stripe_account_id: string | null
   activo: boolean | null
 }
@@ -91,32 +92,8 @@ function crearResumenVacio() {
   } satisfies Record<PlanMembresia, number>
 }
 
-function planTarifaParaVisita({
-  categoria,
-  zona,
-  ciudad,
-  planUsuario,
-}: {
-  categoria: string | null | undefined
-  zona: string | null | undefined
-  ciudad: string | null | undefined
-  planUsuario: string | null | undefined
-}) {
-  const zonaNegocio = resolverZonaNegocio({ zona, ciudad })
-
-  if (
-    categoria
-    && (
-      (zonaNegocio === 'zona1' && categoria !== 'clases')
-      || (zonaNegocio === 'zona2' && ['gimnasio', 'estetica', 'restaurante'].includes(categoria))
-    )
-  ) {
-    return 'basico'
-  }
-
-  const plan = normalizarPlan(planUsuario)
-  if (plan) return plan
-  return null
+function planUsuarioBucket(planUsuario: string | null | undefined) {
+  return normalizarPlan(planUsuario) ?? 'basico'
 }
 
 function calcularSubtotal(cantidad: number, tarifa: number) {
@@ -148,20 +125,38 @@ export async function GET(request: NextRequest) {
   const db = createServiceClient()
   const { inicioConsulta, finConsultaExclusivo, inicioRegistro, finRegistro } = periodoSemanaActual()
 
-  const { data: negocios, error: negociosError } = await db
+  let negociosActivos: NegocioRow[] = []
+  const consultaConPlan = await db
     .from('negocios')
-    .select('id, nombre, categoria, ciudad, zona, stripe_account_id, activo')
+    .select('id, nombre, categoria, ciudad, zona, plan_negocio, stripe_account_id, activo')
     .eq('activo', true)
     .returns<NegocioRow[]>()
 
-  if (negociosError) {
-    return NextResponse.json(
-      { error: negociosError.message ?? 'No se pudieron cargar negocios activos' },
-      { status: 500 }
-    )
+  if (!consultaConPlan.error) {
+    negociosActivos = consultaConPlan.data ?? []
+  } else {
+    const messageLower = consultaConPlan.error.message?.toLowerCase() ?? ''
+    if (messageLower.includes('column') && messageLower.includes('plan_negocio')) {
+      const fallback = await db
+        .from('negocios')
+        .select('id, nombre, categoria, ciudad, zona, stripe_account_id, activo')
+        .eq('activo', true)
+        .returns<Array<Omit<NegocioRow, 'plan_negocio'>>>()
+      if (fallback.error) {
+        return NextResponse.json(
+          { error: fallback.error.message ?? 'No se pudieron cargar negocios activos' },
+          { status: 500 }
+        )
+      }
+      negociosActivos = (fallback.data ?? []).map((negocio) => ({ ...negocio, plan_negocio: 'basico' }))
+    } else {
+      return NextResponse.json(
+        { error: consultaConPlan.error.message ?? 'No se pudieron cargar negocios activos' },
+        { status: 500 }
+      )
+    }
   }
 
-  const negociosActivos = negocios ?? []
   if (negociosActivos.length === 0) {
     return NextResponse.json({
       ok: true,
@@ -199,14 +194,7 @@ export async function GET(request: NextRequest) {
     const negocio = negocioPorId.get(visita.negocio_id)
     if (!negocio) continue
 
-    const categoria = negocio.categoria ?? null
-    const plan = planTarifaParaVisita({
-      categoria,
-      zona: negocio.zona ?? null,
-      ciudad: negocio.ciudad ?? null,
-      planUsuario: visita.plan_usuario,
-    })
-    if (!plan) continue
+    const plan = planUsuarioBucket(visita.plan_usuario)
     const resumen = resumenPorNegocio.get(visita.negocio_id)
     if (!resumen) continue
     resumen[plan] += 1
@@ -219,12 +207,18 @@ export async function GET(request: NextRequest) {
   for (const negocio of negociosActivos) {
     const resumen = resumenPorNegocio.get(negocio.id) ?? crearResumenVacio()
     const zona = resolverZonaNegocio({ zona: negocio.zona, ciudad: negocio.ciudad })
-    const tarifas = obtenerTarifasNegocioPorPlan(negocio.categoria, zona)
+    const planNegocio = negocio.plan_negocio === 'plus' || negocio.plan_negocio === 'total'
+      ? negocio.plan_negocio
+      : 'basico'
+    const tarifa = tarifaNegocioPorCheckin({
+      categoria: negocio.categoria,
+      planNegocio,
+      zona,
+      ciudad: negocio.ciudad,
+    })
 
-    const subtotalBasico = calcularSubtotal(resumen.basico, tarifas.basico)
-    const subtotalPlus = calcularSubtotal(resumen.plus, tarifas.plus)
-    const subtotalTotal = calcularSubtotal(resumen.total, tarifas.total)
-    const totalNegocio = subtotalBasico + subtotalPlus + subtotalTotal
+    const totalVisitas = resumen.basico + resumen.plus + resumen.total
+    const totalNegocio = calcularSubtotal(totalVisitas, tarifa)
     totalGeneral += totalNegocio
 
     if (totalNegocio > 0) {
@@ -245,15 +239,25 @@ export async function GET(request: NextRequest) {
       ? ''
       : '<p style="margin:8px 0 0; color:#EF4444; font-weight:800;">SIN CUENTA STRIPE — pago manual requerido</p>'
 
+    const desglosePlanesHtml = (resumen.basico + resumen.plus + resumen.total) > 0
+      ? `<p style="margin:6px 0 0; color:#9CA3AF; font-size:11px;">
+          Desglose por plan de usuario:
+          ${resumen.basico ? ` básico ${resumen.basico}` : ''}
+          ${resumen.plus ? ` · plus ${resumen.plus}` : ''}
+          ${resumen.total ? ` · total ${resumen.total}` : ''}
+        </p>`
+      : ''
+
     const rowHtml = `
       <div style="margin: 0 0 16px; border:1px solid #1f2937; border-radius:10px; padding:14px; background:#0A0A0A;">
         <p style="margin:0 0 8px; color:#E8FF47; font-weight:900;">${escapeHtml(negocio.nombre)}</p>
         <p style="margin:0 0 8px; color:#9CA3AF; font-size:12px;">
-          ${escapeHtml(negocio.ciudad ?? 'Sin ciudad')} · ${escapeHtml(zona.toUpperCase())} · ${escapeHtml(negocio.categoria ?? 'Sin categoría')}
+          ${escapeHtml(negocio.ciudad ?? 'Sin ciudad')} · ${escapeHtml(zona.toUpperCase())} · ${escapeHtml(negocio.categoria ?? 'Sin categoría')} · Plan ${escapeHtml(planNegocio)}
         </p>
-        <p style="margin:0; color:#E5E7EB; font-size:13px;">Básico: ${resumen.basico} × ${formatMoney(tarifas.basico)} = <strong>${formatMoney(subtotalBasico)}</strong></p>
-        <p style="margin:4px 0 0; color:#E5E7EB; font-size:13px;">Plus: ${resumen.plus} × ${formatMoney(tarifas.plus)} = <strong>${formatMoney(subtotalPlus)}</strong></p>
-        <p style="margin:4px 0 0; color:#E5E7EB; font-size:13px;">Total: ${resumen.total} × ${formatMoney(tarifas.total)} = <strong>${formatMoney(subtotalTotal)}</strong></p>
+        <p style="margin:0; color:#E5E7EB; font-size:13px;">
+          ${totalVisitas} × ${formatMoney(tarifa)} = <strong>${formatMoney(totalNegocio)}</strong>
+        </p>
+        ${desglosePlanesHtml}
         <p style="margin:10px 0 0; color:#FFFFFF; font-weight:900;">TOTAL A PAGAR: ${formatMoney(totalNegocio)}</p>
         ${stripeWarning}
       </div>
