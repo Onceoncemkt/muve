@@ -54,7 +54,7 @@ const TARIFA_NEGOCIO_CLASES_ZONA1_POR_PLAN: Record<PlanMembresia, number> = {
 }
 const TARIFA_NEGOCIO_FIJA_ZONA1_POR_CATEGORIA: Record<Exclude<Categoria, 'clases'>, number> = {
   gimnasio: 40,
-  estetica: 60,
+  estetica: 50,
   restaurante: 60,
 }
 const TARIFA_NEGOCIO_CLASES_ZONA2_POR_PLAN: Record<PlanMembresia, number> = {

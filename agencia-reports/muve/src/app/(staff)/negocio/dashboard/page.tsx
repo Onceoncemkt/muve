@@ -201,13 +201,6 @@ function inicialesNegocio(nombre: string) {
     .map(fragmento => fragmento[0]?.toUpperCase() ?? '')
     .join('')
 }
-const PLAN_LABELS: Record<PlanMembresia, string> = {
-  basico: 'Básico',
-  plus: 'Plus',
-  total: 'Total',
-}
-
-
 const PLANES_MEMBRESIA: PlanMembresia[] = ['basico', 'plus', 'total']
 
 function gananciasIniciales(): GananciasPayload {
@@ -594,8 +587,8 @@ export default function NegocioDashboardPage() {
     (acumulado, plan) => acumulado + (ganancias.semana.visitas_por_plan[plan] ?? 0),
     0
   )
-  const tarifaFijaPorCheckin = ganancias.tarifas_por_plan.basico ?? 0
-  const gananciasSemanaTarifaFija = totalVisitasSemana * tarifaFijaPorCheckin
+  const tarifaFijaPorCheckin = tarifaMiCheckin
+  const gananciasSemanaTarifaFija = totalVisitasSemana * tarifaMiCheckin
   const fechaProximoPago = useMemo(() => {
     const fechaBase = new Date(`${fechaHoy}T00:00:00`)
     const inicioSemana = inicioSemanaLocal(fechaBase)
@@ -604,32 +597,13 @@ export default function NegocioDashboardPage() {
     return proximoLunes
   }, [fechaHoy])
   const desglosePagoActual = useMemo(() => {
-    if (esClases) {
-      return PLANES_MEMBRESIA.map((plan) => {
-        const visitas = ganancias.semana.visitas_por_plan[plan] ?? 0
-        const tarifa = ganancias.tarifas_por_plan[plan] ?? 0
-        return {
-          id: plan,
-          etiqueta: `clases ${PLAN_LABELS[plan].toLowerCase()}`,
-          formula: `${visitas} × ${formatMonedaMXN(tarifa)}`,
-          total: visitas * tarifa,
-        }
-      })
-    }
-
-    const etiqueta = esGimnasio
-      ? 'gimnasio'
-      : esEstetica
-        ? 'estetica'
-        : 'restaurante'
-
     return [{
-      id: etiqueta,
-      etiqueta,
-      formula: `${totalVisitasSemana} × ${formatMonedaMXN(tarifaFijaPorCheckin)}`,
-      total: totalVisitasSemana * tarifaFijaPorCheckin,
+      id: 'tarifa-unica',
+      etiqueta: etiquetaCategoriaTarifa,
+      formula: `${totalVisitasSemana} × ${formatMonedaMXN(tarifaMiCheckin)}`,
+      total: totalVisitasSemana * tarifaMiCheckin,
     }]
-  }, [esClases, esEstetica, esGimnasio, ganancias.semana.visitas_por_plan, ganancias.tarifas_por_plan, tarifaFijaPorCheckin, totalVisitasSemana])
+  }, [etiquetaCategoriaTarifa, tarifaMiCheckin, totalVisitasSemana])
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-10">
@@ -989,7 +963,7 @@ export default function NegocioDashboardPage() {
                   ))}
                 </div>
                 <p className="mt-4 text-3xl font-black tracking-tight">
-                  A cobrar este lunes: {formatMonedaMXN(ganancias.semana.total_a_cobrar)}
+                  A cobrar este lunes: {formatMonedaMXN(gananciasSemanaTarifaFija)}
                 </p>
                 <p className="mt-1 text-sm font-semibold text-[#0A0A0A]/70">
                   Próximo pago: lunes {fechaProximoPago.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
