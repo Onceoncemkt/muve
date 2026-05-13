@@ -14,6 +14,7 @@ import AdminInvitarNegocioForm from '@/components/admin/AdminInvitarNegocioForm'
 import AdminReservacionesSection from '@/components/admin/AdminReservacionesSection'
 import type { Ciudad, Categoria, NivelNegocio, Rol, ZonaNegocio } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
+import { obtenerStripeStatus, type StripeConnectStatus } from '@/lib/stripe-connect'
 
 type UsuarioAdmin = {
   id: string
@@ -271,6 +272,14 @@ export default async function AdminPage({
   const creditosOtorgados = consultaCreditosOtorgados.error
     ? []
     : (consultaCreditosOtorgados.data ?? []) as unknown as CreditoOtorgadoRow[]
+
+  const stripeStatusEntries = await Promise.all(
+    negociosAfiliados.map(async (negocio) => {
+      const status = await obtenerStripeStatus(negocio.stripe_account_id)
+      return [negocio.id, status] as const
+    })
+  )
+  const stripeStatusPorNegocio = new Map<string, StripeConnectStatus>(stripeStatusEntries)
 
   const negociosPorId = new Map(negociosAfiliados.map(negocio => [negocio.id, negocio]))
   const negociosOpciones = negociosAfiliados.map(negocio => ({
@@ -564,6 +573,7 @@ export default async function AdminPage({
                       <th className="px-2 py-2">Zona</th>
                       <th className="px-2 py-2">Nivel</th>
                       <th className="px-2 py-2">Activo</th>
+                      <th className="px-2 py-2">Pagos</th>
                       <th className="px-2 py-2">Staff asignado</th>
                       <th className="px-2 py-2">Acciones</th>
                     </tr>
@@ -599,6 +609,30 @@ export default async function AdminPage({
                             >
                               {negocio.activo ? 'Activo' : 'Inactivo'}
                             </span>
+                          </td>
+                          <td className="px-2 py-2">
+                            {(() => {
+                              const stripeStatus = stripeStatusPorNegocio.get(negocio.id) ?? 'no_account'
+                              if (stripeStatus === 'active') {
+                                return (
+                                  <span className="rounded-md bg-green-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-green-800 ring-1 ring-green-300">
+                                    Activo
+                                  </span>
+                                )
+                              }
+                              if (stripeStatus === 'pending') {
+                                return (
+                                  <span className="rounded-md bg-yellow-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-yellow-800 ring-1 ring-yellow-300">
+                                    Pendiente
+                                  </span>
+                                )
+                              }
+                              return (
+                                <span className="rounded-md bg-white/10 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white/60">
+                                  Sin conectar
+                                </span>
+                              )
+                            })()}
                           </td>
                           <td className="px-2 py-2">
                             {staffAsignado.length === 0 ? (
