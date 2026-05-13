@@ -71,29 +71,19 @@ async function obtenerPerfilAcceso(userId: string): Promise<PerfilAcceso | null>
   }
 }
 
-export async function GET(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+type ResolverNegocioResult =
+  | { ok: true; negocio: NegocioStripe }
+  | { ok: false; error: string; status: number }
 
-  const perfil = await obtenerPerfilAcceso(user.id)
-  if (!perfil || !['staff', 'admin'].includes(perfil.rol)) {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
-
+async function resolverNegocio(request: NextRequest, perfil: PerfilAcceso): Promise<ResolverNegocioResult> {
   const { searchParams } = new URL(request.url)
   const negocioIdParam = searchParams.get('negocio_id')
-  const modo = searchParams.get('modo')
   const negocioIdObjetivo = perfil.rol === 'staff'
     ? perfil.negocio_id
     : (negocioIdParam ?? perfil.negocio_id)
 
   if (!negocioIdObjetivo) {
-    return redireccionDashboard(
-      request,
-      'error',
-      'Tu cuenta no tiene un negocio asignado para conectar Stripe.'
-    )
+    return { ok: false, error: 'Tu cuenta no tiene un negocio asignado para conectar Stripe.', status: 400 }
   }
 
   const db = createServiceClient()
@@ -104,46 +94,30 @@ export async function GET(request: NextRequest) {
     .maybeSingle<NegocioStripe>()
 
   if (faltaColumna(consultaNegocio.error, 'stripe_account_id')) {
-    return redireccionDashboard(
-      request,
-      'error',
-      'Falta la columna stripe_account_id en negocios. Ejecuta la migración 016 en Supabase.'
-    )
+    return {
+      ok: false,
+      error: 'Falta la columna stripe_account_id en negocios. Ejecuta la migración 016 en Supabase.',
+      status: 500,
+    }
   }
 
   if (consultaNegocio.error || !consultaNegocio.data) {
-    return redireccionDashboard(
-      request,
-      'error',
-      'No se encontró el negocio para conectar Stripe.'
-    )
+    return { ok: false, error: 'No se encontró el negocio para conectar Stripe.', status: 404 }
   }
 
-  const negocio = consultaNegocio.data
+  return { ok: true, negocio: consultaNegocio.data }
+}
 
-  if (modo === 'gestionar') {
-    if (!negocio.stripe_account_id) {
-      return redireccionDashboard(
-        request,
-        'error',
-        'Primero conecta tu cuenta Stripe para gestionar pagos.'
-      )
-    }
+type GenerarAccountLinkResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string; status: number }
 
-    try {
-      const loginLink = await stripe.accounts.createLoginLink(negocio.stripe_account_id)
-
-      return NextResponse.redirect(loginLink.url, 303)
-    } catch (error) {
-      const errorMessage = mensajeErrorStripe(error)
-      console.error('[GET /api/negocio/stripe-connect] createLoginLink error:', errorMessage)
-      return redireccionDashboard(
-        request,
-        'error',
-        'No se pudo abrir tu cuenta Stripe Express. Intenta de nuevo.'
-      )
-    }
-  }
+async function generarAccountLink(
+  request: NextRequest,
+  negocio: NegocioStripe,
+  rol: Rol
+): Promise<GenerarAccountLinkResult> {
+  const db = createServiceClient()
 
   try {
     let stripeAccountId = negocio.stripe_account_id
@@ -152,7 +126,9 @@ export async function GET(request: NextRequest) {
       const cuentaStripe = await stripe.accounts.create({
         type: 'express',
         country: 'MX',
+        default_currency: 'mxn',
         capabilities: {
+          card_payments: { requested: true },
           transfers: { requested: true },
         },
         metadata: {
@@ -169,32 +145,22 @@ export async function GET(request: NextRequest) {
         .eq('id', negocio.id)
 
       if (updateError) {
-        console.error('[GET /api/negocio/stripe-connect] update stripe_account_id error:', updateError.message)
-        return redireccionDashboard(
-          request,
-          'error',
-          'Se creó la cuenta Stripe pero no se pudo guardar en tu negocio.'
-        )
+        console.error('[stripe-connect] update stripe_account_id error:', updateError.message)
+        return {
+          ok: false,
+          error: 'Se creó la cuenta Stripe pero no se pudo guardar en tu negocio.',
+          status: 500,
+        }
       }
     }
 
-    if (!stripeAccountId) {
-      return redireccionDashboard(
-        request,
-        'error',
-        'No se pudo obtener la cuenta Stripe del negocio.'
-      )
-    }
+    const refreshUrl = new URL('/negocio/perfil', request.url)
+    refreshUrl.searchParams.set('stripe', 'refresh')
+    if (rol === 'admin') refreshUrl.searchParams.set('negocio_id', negocio.id)
 
-    const refreshUrl = new URL('/api/negocio/stripe-connect', request.url)
-    if (perfil.rol === 'admin') {
-      refreshUrl.searchParams.set('negocio_id', negocio.id)
-    }
-
-    const returnUrl = new URL('/api/negocio/stripe-connect/return', request.url)
-    if (perfil.rol === 'admin') {
-      returnUrl.searchParams.set('negocio_id', negocio.id)
-    }
+    const returnUrl = new URL('/negocio/perfil', request.url)
+    returnUrl.searchParams.set('stripe', 'success')
+    if (rol === 'admin') returnUrl.searchParams.set('negocio_id', negocio.id)
 
     const onboardingLink = await stripe.accountLinks.create({
       account: stripeAccountId,
@@ -203,14 +169,88 @@ export async function GET(request: NextRequest) {
       type: 'account_onboarding',
     })
 
-    return NextResponse.redirect(onboardingLink.url, 303)
+    return { ok: true, url: onboardingLink.url }
   } catch (error) {
     const errorMessage = mensajeErrorStripe(error)
-    console.error('[GET /api/negocio/stripe-connect] stripe error:', errorMessage)
-    return redireccionDashboard(
-      request,
-      'error',
-      'No se pudo iniciar el onboarding de Stripe. Revisa tu configuración e intenta de nuevo.'
-    )
+    console.error('[stripe-connect] stripe error:', errorMessage)
+    return {
+      ok: false,
+      error: 'No se pudo iniciar el onboarding de Stripe. Revisa tu configuración e intenta de nuevo.',
+      status: 500,
+    }
   }
+}
+
+export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+  const perfil = await obtenerPerfilAcceso(user.id)
+  if (!perfil || !['staff', 'admin'].includes(perfil.rol)) {
+    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+  }
+
+  const negocioResult = await resolverNegocio(request, perfil)
+  if (!negocioResult.ok) {
+    return NextResponse.json({ error: negocioResult.error }, { status: negocioResult.status })
+  }
+
+  const linkResult = await generarAccountLink(request, negocioResult.negocio, perfil.rol)
+  if (!linkResult.ok) {
+    return NextResponse.json({ error: linkResult.error }, { status: linkResult.status })
+  }
+
+  return NextResponse.json({ url: linkResult.url })
+}
+
+export async function GET(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+  const perfil = await obtenerPerfilAcceso(user.id)
+  if (!perfil || !['staff', 'admin'].includes(perfil.rol)) {
+    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const modo = searchParams.get('modo')
+
+  const negocioResult = await resolverNegocio(request, perfil)
+  if (!negocioResult.ok) {
+    return redireccionDashboard(request, 'error', negocioResult.error)
+  }
+
+  const negocio = negocioResult.negocio
+
+  if (modo === 'gestionar') {
+    if (!negocio.stripe_account_id) {
+      return redireccionDashboard(
+        request,
+        'error',
+        'Primero conecta tu cuenta Stripe para gestionar pagos.'
+      )
+    }
+
+    try {
+      const loginLink = await stripe.accounts.createLoginLink(negocio.stripe_account_id)
+      return NextResponse.redirect(loginLink.url, 303)
+    } catch (error) {
+      const errorMessage = mensajeErrorStripe(error)
+      console.error('[GET /api/negocio/stripe-connect] createLoginLink error:', errorMessage)
+      return redireccionDashboard(
+        request,
+        'error',
+        'No se pudo abrir tu cuenta Stripe Express. Intenta de nuevo.'
+      )
+    }
+  }
+
+  const linkResult = await generarAccountLink(request, negocio, perfil.rol)
+  if (!linkResult.ok) {
+    return redireccionDashboard(request, 'error', linkResult.error)
+  }
+
+  return NextResponse.redirect(linkResult.url, 303)
 }

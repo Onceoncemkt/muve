@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import { CATEGORIA_LABELS, CIUDAD_LABELS, type Categoria, type Ciudad } from '@/types'
 
+type StripeConnectStatus = 'no_account' | 'pending' | 'active'
+
 type NegocioPerfil = {
   id: string
   nombre: string
@@ -88,6 +90,35 @@ export default function NegocioPerfilPageClient() {
     descripcion: '',
   })
   const [edicionServicio, setEdicionServicio] = useState<ServicioDraft | null>(null)
+  const [stripeStatus, setStripeStatus] = useState<StripeConnectStatus | 'loading'>('loading')
+  const [conectandoStripe, setConectandoStripe] = useState(false)
+  const [intentoOnboardingStripe, setIntentoOnboardingStripe] = useState(0)
+
+  async function iniciarOnboardingStripe() {
+    setConectandoStripe(true)
+    setMensaje(null)
+    try {
+      const res = await fetch('/api/negocio/stripe-connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json().catch(() => ({})) as { url?: string; error?: string }
+      if (!res.ok || !data.url) {
+        setMensaje({
+          tipo: 'error',
+          texto: typeof data.error === 'string'
+            ? data.error
+            : 'No se pudo iniciar el onboarding de Stripe',
+        })
+        setConectandoStripe(false)
+        return
+      }
+      window.location.assign(data.url)
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al iniciar el onboarding de Stripe' })
+      setConectandoStripe(false)
+    }
+  }
 
   const cargarServicios = useCallback(async (negocioId: string) => {
     setCargandoServicios(true)
@@ -228,6 +259,60 @@ export default function NegocioPerfilPageClient() {
     }, 0)
     return () => window.clearTimeout(timeoutId)
   }, [cargarServicios, perfil])
+
+  useEffect(() => {
+    if (!perfil) return
+    let activo = true
+
+    async function cargarStripeStatus() {
+      try {
+        const res = await fetch('/api/negocio/stripe-connect/status', { cache: 'no-store' })
+        const data = await res.json().catch(() => ({})) as { status?: StripeConnectStatus }
+        if (!activo) return
+        if (res.ok && (data.status === 'no_account' || data.status === 'pending' || data.status === 'active')) {
+          setStripeStatus(data.status)
+        } else {
+          setStripeStatus('no_account')
+        }
+      } catch {
+        if (!activo) return
+        setStripeStatus('no_account')
+      }
+    }
+
+    void cargarStripeStatus()
+    return () => {
+      activo = false
+    }
+  }, [perfil, intentoOnboardingStripe])
+
+  useEffect(() => {
+    if (!perfil) return
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    const stripeParam = params.get('stripe')
+    if (!stripeParam) return
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('stripe')
+    window.history.replaceState({}, '', url.toString())
+
+    async function manejarRetorno() {
+      if (stripeParam === 'success') {
+        setMensaje({ tipo: 'ok', texto: 'Cuenta Stripe conectada. Validando estado...' })
+        setIntentoOnboardingStripe((prev) => prev + 1)
+      } else if (stripeParam === 'refresh') {
+        setMensaje({
+          tipo: 'error',
+          texto: 'El enlace de Stripe expiró. Generando uno nuevo...',
+        })
+        await iniciarOnboardingStripe()
+      }
+    }
+
+    void manejarRetorno()
+  }, [perfil])
 
   function actualizarCampo<K extends keyof NegocioPerfil>(campo: K, valor: NegocioPerfil[K]) {
     setPerfil((prev) => (prev ? { ...prev, [campo]: valor } : prev))
@@ -500,10 +585,6 @@ export default function NegocioPerfilPageClient() {
     )
   }
 
-  const stripeConectado = Boolean(perfil.stripe_account_id)
-  const enlaceStripe = stripeConectado
-    ? '/api/negocio/stripe-connect?modo=gestionar'
-    : '/api/negocio/stripe-connect'
   const esWellness = perfil.categoria === 'estetica'
 
   return (
@@ -739,18 +820,60 @@ export default function NegocioPerfilPageClient() {
 
             <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
               <p className="text-[10px] font-bold uppercase tracking-widest text-[#666]">
-                Cuenta Stripe conectada (solo lectura)
+                Cuenta bancaria (Stripe Connect)
               </p>
               <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm font-semibold text-[#0A0A0A]">
-                  {stripeConectado ? 'Conectada' : 'No conectada'}
-                </p>
-                <a
-                  href={enlaceStripe}
-                  className="inline-flex rounded-lg border border-[#6B4FE8] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white"
-                >
-                  {stripeConectado ? 'Gestionar cuenta' : 'Conectar cuenta'}
-                </a>
+                {stripeStatus === 'loading' && (
+                  <p className="text-sm font-semibold text-[#666]">Cargando estado...</p>
+                )}
+                {stripeStatus === 'no_account' && (
+                  <>
+                    <p className="text-sm font-semibold text-[#0A0A0A]">
+                      Sin cuenta bancaria conectada
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void iniciarOnboardingStripe()}
+                      disabled={conectandoStripe}
+                      className="inline-flex rounded-lg border border-[#6B4FE8] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {conectandoStripe ? 'Conectando...' : 'Conectar cuenta bancaria'}
+                    </button>
+                  </>
+                )}
+                {stripeStatus === 'pending' && (
+                  <>
+                    <div>
+                      <span className="inline-flex rounded-md bg-yellow-100 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-yellow-800 ring-1 ring-yellow-300">
+                        Información pendiente
+                      </span>
+                      <p className="mt-1 text-xs text-[#666]">
+                        Termina de configurar tu cuenta en Stripe para activar los pagos.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void iniciarOnboardingStripe()}
+                      disabled={conectandoStripe}
+                      className="inline-flex rounded-lg border border-yellow-500 bg-yellow-50 px-3 py-2 text-[11px] font-black uppercase tracking-widest text-yellow-800 transition-colors hover:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {conectandoStripe ? 'Generando enlace...' : 'Completar información'}
+                    </button>
+                  </>
+                )}
+                {stripeStatus === 'active' && (
+                  <>
+                    <span className="inline-flex rounded-md bg-green-100 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-green-800 ring-1 ring-green-300">
+                      Pagos activos
+                    </span>
+                    <a
+                      href="/api/negocio/stripe-connect?modo=gestionar"
+                      className="inline-flex rounded-lg border border-[#6B4FE8] bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[#6B4FE8] transition-colors hover:bg-[#6B4FE8] hover:text-white"
+                    >
+                      Gestionar cuenta
+                    </a>
+                  </>
+                )}
               </div>
             </div>
           </div>
