@@ -63,6 +63,22 @@ function formatFechaCorta(fecha: string) {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function formatFechaAmigable(fecha: string) {
+  const f = new Date(`${fecha}T00:00:00`)
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  const mañana = new Date(hoy)
+  mañana.setDate(hoy.getDate() + 1)
+
+  const isoF = f.toISOString().slice(0, 10)
+  if (isoF === hoy.toISOString().slice(0, 10)) return 'Hoy'
+  if (isoF === mañana.toISOString().slice(0, 10)) return 'Mañana'
+
+  const diaSemana = f.toLocaleDateString('es-MX', { weekday: 'long' })
+  const diaMes = f.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+  return `${diaSemana[0].toUpperCase() + diaSemana.slice(1)} ${diaMes}`
+}
+
 function inicialesDe(nombre: string) {
   return nombre
     .split(/\s+/)
@@ -95,7 +111,12 @@ function clasesEstadoBadge(estado: string) {
 }
 
 export default function NegocioReservacionesPanel() {
-  const [tab, setTab] = useState<'hoy' | 'historial'>('hoy')
+  const [tab, setTab] = useState<'proximas' | 'hoy' | 'historial'>('proximas')
+
+  // Próximas
+  const [proximas, setProximas] = useState<Reservacion[]>([])
+  const [proximasCargando, setProximasCargando] = useState(true)
+  const [proximasError, setProximasError] = useState<string | null>(null)
 
   // Hoy
   const [hoyReservaciones, setHoyReservaciones] = useState<Reservacion[]>([])
@@ -138,6 +159,33 @@ export default function NegocioReservacionesPanel() {
         setHoyReservaciones([])
       } finally {
         if (activo) setHoyCargando(false)
+      }
+    }
+    void cargar()
+    return () => {
+      activo = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let activo = true
+    async function cargar() {
+      try {
+        const res = await fetch('/api/negocio/reservaciones?periodo=proximas&page_size=10', { cache: 'no-store' })
+        const data = await res.json().catch(() => ({})) as { reservaciones?: Reservacion[]; error?: string }
+        if (!activo) return
+        if (!res.ok) {
+          setProximasError(typeof data.error === 'string' ? data.error : 'No se pudieron cargar las próximas reservaciones')
+          setProximas([])
+          return
+        }
+        setProximas(data.reservaciones ?? [])
+      } catch {
+        if (!activo) return
+        setProximasError('Error de conexión al cargar próximas reservaciones')
+        setProximas([])
+      } finally {
+        if (activo) setProximasCargando(false)
       }
     }
     void cargar()
@@ -226,9 +274,14 @@ export default function NegocioReservacionesPanel() {
     setPerfilError(null)
   }
 
-  const filaReservacion = useCallback((r: Reservacion, columnas: 'hoy' | 'historial') => {
+  const filaReservacion = useCallback((r: Reservacion, columnas: 'proximas' | 'hoy' | 'historial') => {
     const usuario = r.usuario
     const horaTxt = r.hora_inicio ? formatHora(r.hora_inicio) : '—'
+    const encabezado = columnas === 'hoy'
+      ? horaTxt
+      : columnas === 'proximas'
+        ? `${formatFechaAmigable(r.fecha)} · ${horaTxt}`
+        : `${formatFechaCorta(r.fecha)} · ${horaTxt}`
     return (
       <div
         key={r.id}
@@ -237,7 +290,7 @@ export default function NegocioReservacionesPanel() {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-[#0A0A0A]">
-              {columnas === 'hoy' ? horaTxt : `${formatFechaCorta(r.fecha)} · ${horaTxt}`}
+              {encabezado}
             </span>
             {r.tipo_clase && (
               <span className="text-xs font-semibold text-[#666]">· {r.tipo_clase}</span>
@@ -287,6 +340,19 @@ export default function NegocioReservacionesPanel() {
     )
   }, [])
 
+  const cuerpoProximas = useMemo(() => {
+    if (proximasCargando) return <p className="text-sm text-[#666]">Cargando próximas reservaciones...</p>
+    if (proximasError) return <p className="text-sm text-red-700">{proximasError}</p>
+    if (proximas.length === 0) {
+      return <p className="text-sm text-[#666]">No tienes próximas reservaciones confirmadas.</p>
+    }
+    return (
+      <div className="space-y-2">
+        {proximas.map(r => filaReservacion(r, 'proximas'))}
+      </div>
+    )
+  }, [proximasCargando, proximasError, proximas, filaReservacion])
+
   const cuerpoHoy = useMemo(() => {
     if (hoyCargando) return <p className="text-sm text-[#666]">Cargando reservaciones...</p>
     if (hoyError) return <p className="text-sm text-red-700">{hoyError}</p>
@@ -319,10 +385,21 @@ export default function NegocioReservacionesPanel() {
         <div>
           <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Reservaciones</p>
           <p className="mt-1 text-base font-bold text-[#0A0A0A]">
-            {tab === 'hoy' ? 'Reservaciones de hoy' : 'Historial completo'}
+            {tab === 'proximas'
+              ? 'Próximas reservaciones'
+              : tab === 'hoy'
+                ? 'Reservaciones de hoy'
+                : 'Historial completo'}
           </p>
         </div>
         <div className="inline-flex rounded-lg bg-[#F3F4F6] p-1 text-xs font-bold uppercase tracking-wider">
+          <button
+            type="button"
+            onClick={() => setTab('proximas')}
+            className={`rounded-md px-3 py-1.5 transition-colors ${tab === 'proximas' ? 'bg-[#0A0A0A] text-[#E8FF47]' : 'text-[#555]'}`}
+          >
+            Próximas
+          </button>
           <button
             type="button"
             onClick={() => setTab('hoy')}
@@ -408,7 +485,9 @@ export default function NegocioReservacionesPanel() {
       )}
 
       <div className="mt-4">
-        {tab === 'hoy' ? cuerpoHoy : cuerpoHistorial}
+        {tab === 'proximas' && cuerpoProximas}
+        {tab === 'hoy' && cuerpoHoy}
+        {tab === 'historial' && cuerpoHistorial}
       </div>
 
       {tab === 'historial' && historial.length > 0 && (

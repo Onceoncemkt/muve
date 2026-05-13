@@ -48,6 +48,12 @@ function rangoFechasDesdePeriodo(periodo: string, desde: string | null, hasta: s
     return { desde: f, hasta: f }
   }
 
+  if (periodo === 'proximas') {
+    const manana = new Date(hoy)
+    manana.setDate(hoy.getDate() + 1)
+    return { desde: isoFecha(manana), hasta: null }
+  }
+
   if (periodo === 'semana') {
     const dia = hoy.getDay()
     const offsetLunes = (dia + 6) % 7
@@ -133,9 +139,12 @@ export async function GET(request: NextRequest) {
   const pageSize = Number.isFinite(pageSizeParam) && pageSizeParam > 0
     ? Math.min(pageSizeParam, MAX_PAGE_SIZE)
     : PAGE_SIZE
-  const estado = ESTADOS_VALIDOS.includes(estadoParam as EstadoReservacion)
-    ? (estadoParam as EstadoReservacion)
-    : null
+  const esProximas = periodo === 'proximas'
+  const estado = esProximas
+    ? 'confirmada' as const
+    : ESTADOS_VALIDOS.includes(estadoParam as EstadoReservacion)
+      ? (estadoParam as EstadoReservacion)
+      : null
 
   const { desde, hasta } = rangoFechasDesdePeriodo(periodo, desdeParam, hastaParam)
 
@@ -185,9 +194,17 @@ export async function GET(request: NextRequest) {
   if (hasta) query = query.lte('fecha', hasta)
   if (estado) query = query.eq('estado', estado)
 
-  query = query
-    .order('fecha', { ascending: false })
-    .range((page - 1) * pageSize, page * pageSize - 1)
+  if (esProximas) {
+    const limite = Math.min(pageSize, 10)
+    query = query
+      .order('fecha', { ascending: true })
+      .order('hora_inicio', { ascending: true, foreignTable: 'horarios' })
+      .limit(limite)
+  } else {
+    query = query
+      .order('fecha', { ascending: false })
+      .range((page - 1) * pageSize, page * pageSize - 1)
+  }
 
   const resultado = await query.returns<ReservacionDB[]>()
 
