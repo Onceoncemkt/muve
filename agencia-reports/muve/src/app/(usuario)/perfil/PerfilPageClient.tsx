@@ -14,6 +14,42 @@ const GENERO_OPTIONS: Array<{ value: GeneroPerfil; label: string }> = [
   { value: 'prefiero_no_decir', label: 'Prefiero no decir' },
 ]
 
+type ObjetivoEntrenamiento =
+  | 'perder_peso'
+  | 'ganar_musculo'
+  | 'resistencia'
+  | 'flexibilidad'
+  | 'rehabilitacion'
+  | 'mantenimiento'
+  | 'rendimiento'
+type NivelCondicion = 'principiante' | 'intermedio' | 'avanzado'
+
+const OBJETIVO_ENTRENAMIENTO_OPTIONS: Array<{ value: ObjetivoEntrenamiento; label: string }> = [
+  { value: 'perder_peso', label: 'Perder peso' },
+  { value: 'ganar_musculo', label: 'Ganar músculo' },
+  { value: 'resistencia', label: 'Mejorar resistencia' },
+  { value: 'flexibilidad', label: 'Flexibilidad y movilidad' },
+  { value: 'rehabilitacion', label: 'Rehabilitación' },
+  { value: 'mantenimiento', label: 'Mantenimiento' },
+  { value: 'rendimiento', label: 'Rendimiento deportivo' },
+]
+const NIVEL_CONDICION_OPTIONS: Array<{ value: NivelCondicion; label: string }> = [
+  { value: 'principiante', label: 'Principiante' },
+  { value: 'intermedio', label: 'Intermedio' },
+  { value: 'avanzado', label: 'Avanzado' },
+]
+const DISCIPLINAS_OPTIONS = [
+  'Gym / Pesas',
+  'Cycling',
+  'Pilates',
+  'Yoga',
+  'HIIT',
+  'Funcional',
+  'Barre',
+  'Natación',
+  'Otro',
+] as const
+
 type PerfilFormState = {
   nombre: string
   email: string
@@ -23,6 +59,11 @@ type PerfilFormState = {
   fecha_nacimiento: string
   genero: GeneroPerfil | ''
   objetivo: ObjetivoFitness | ''
+  lesiones: string
+  objetivo_entrenamiento: ObjetivoEntrenamiento | ''
+  nivel_condicion: NivelCondicion | ''
+  disciplinas: string[]
+  notas_negocio: string
 }
 type ObjetivoOption = {
   value: ObjetivoFitness
@@ -229,6 +270,7 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
     setGuardando(true)
     try {
       const supabase = createClient()
+      const disciplinasLimpias = form.disciplinas.filter(d => DISCIPLINAS_OPTIONS.includes(d as typeof DISCIPLINAS_OPTIONS[number]))
       const { error } = await supabase
         .from('users')
         .update({
@@ -239,6 +281,11 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
           genero: form.genero || null,
           objetivo: form.objetivo || null,
           foto_url: form.foto_url || null,
+          lesiones: form.lesiones.trim() || null,
+          objetivo_entrenamiento: form.objetivo_entrenamiento || null,
+          nivel_condicion: form.nivel_condicion || null,
+          disciplinas: disciplinasLimpias.length > 0 ? disciplinasLimpias : null,
+          notas_negocio: form.notas_negocio.trim() || null,
         })
         .eq('id', userId)
 
@@ -254,6 +301,15 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
     } finally {
       setGuardando(false)
     }
+  }
+
+  function toggleDisciplina(disciplina: string) {
+    setForm((prev) => ({
+      ...prev,
+      disciplinas: prev.disciplinas.includes(disciplina)
+        ? prev.disciplinas.filter(d => d !== disciplina)
+        : [...prev.disciplinas, disciplina],
+    }))
   }
 
   async function actualizarPassword(event: FormEvent<HTMLFormElement>) {
@@ -471,6 +527,104 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
                     </button>
                   )
                 })}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#0A0A0A]">
+                Mi información de entrenamiento
+              </p>
+              <p className="mt-1 text-xs text-[#666]">
+                Esta información es opcional y solo la verán los negocios donde tienes reservaciones activas.
+              </p>
+
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                    Lesiones o condiciones físicas
+                  </label>
+                  <textarea
+                    value={form.lesiones}
+                    onChange={(event) => actualizarCampo('lesiones', event.target.value)}
+                    placeholder="Ej: rodilla derecha, hernia lumbar"
+                    rows={3}
+                    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                    Objetivo de entrenamiento
+                  </label>
+                  <select
+                    value={form.objetivo_entrenamiento}
+                    onChange={(event) => actualizarCampo('objetivo_entrenamiento', event.target.value as ObjetivoEntrenamiento | '')}
+                    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                  >
+                    <option value="">Selecciona una opción</option>
+                    {OBJETIVO_ENTRENAMIENTO_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                    Nivel de condición física
+                  </label>
+                  <select
+                    value={form.nivel_condicion}
+                    onChange={(event) => actualizarCampo('nivel_condicion', event.target.value as NivelCondicion | '')}
+                    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                  >
+                    <option value="">Selecciona una opción</option>
+                    {NIVEL_CONDICION_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <p className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                    Disciplinas favoritas
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {DISCIPLINAS_OPTIONS.map((disciplina) => {
+                      const activa = form.disciplinas.includes(disciplina)
+                      return (
+                        <button
+                          key={disciplina}
+                          type="button"
+                          onClick={() => toggleDisciplina(disciplina)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+                            activa
+                              ? 'border-[#6B4FE8] bg-[#6B4FE8] text-white'
+                              : 'border-[#E5E5E5] bg-white text-[#555] hover:border-[#6B4FE8]/60 hover:text-[#6B4FE8]'
+                          }`}
+                        >
+                          {disciplina}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                    Notas para los negocios
+                  </label>
+                  <textarea
+                    value={form.notas_negocio}
+                    onChange={(event) => actualizarCampo('notas_negocio', event.target.value)}
+                    placeholder="Ej: prefiero clase sin música muy fuerte"
+                    rows={3}
+                    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                  />
+                </div>
               </div>
             </div>
           </div>

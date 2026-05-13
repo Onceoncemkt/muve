@@ -20,6 +20,11 @@ type PerfilUsuarioCompleto = {
   fecha_fin_plan: string | null
   creditos_extra: number | null
   qr_code: string | null
+  lesiones: string | null
+  objetivo_entrenamiento: string | null
+  nivel_condicion: string | null
+  disciplinas: string[] | null
+  notas_negocio: string | null
 }
 type PerfilUsuarioMinimo = {
   nombre: string | null
@@ -36,6 +41,32 @@ const OBJETIVOS_VALIDOS: ObjetivoFitness[] = [
   'energia',
   'social',
 ]
+const OBJETIVOS_ENTRENAMIENTO_VALIDOS = [
+  'perder_peso',
+  'ganar_musculo',
+  'resistencia',
+  'flexibilidad',
+  'rehabilitacion',
+  'mantenimiento',
+  'rendimiento',
+] as const
+const NIVELES_CONDICION_VALIDOS = ['principiante', 'intermedio', 'avanzado'] as const
+
+type ObjetivoEntrenamientoValido = typeof OBJETIVOS_ENTRENAMIENTO_VALIDOS[number]
+type NivelCondicionValido = typeof NIVELES_CONDICION_VALIDOS[number]
+
+function normalizarObjetivoEntrenamiento(value: string | null | undefined): ObjetivoEntrenamientoValido | '' {
+  if (!value) return ''
+  return OBJETIVOS_ENTRENAMIENTO_VALIDOS.includes(value as ObjetivoEntrenamientoValido)
+    ? (value as ObjetivoEntrenamientoValido)
+    : ''
+}
+function normalizarNivelCondicion(value: string | null | undefined): NivelCondicionValido | '' {
+  if (!value) return ''
+  return NIVELES_CONDICION_VALIDOS.includes(value as NivelCondicionValido)
+    ? (value as NivelCondicionValido)
+    : ''
+}
 
 function esCiudad(value: string | null | undefined): value is Ciudad {
   return normalizarCiudadOperativa(value) !== null
@@ -73,13 +104,31 @@ export default async function PerfilPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const consultaCompleta = await supabase
+  const consultaConEntrenamiento = await supabase
     .from('users')
-    .select('nombre, email, ciudad, foto_url, telefono, fecha_nacimiento, genero, objetivo, plan, plan_activo, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code')
+    .select('nombre, email, ciudad, foto_url, telefono, fecha_nacimiento, genero, objetivo, plan, plan_activo, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code, lesiones, objetivo_entrenamiento, nivel_condicion, disciplinas, notas_negocio')
     .eq('id', user.id)
     .maybeSingle<PerfilUsuarioCompleto>()
 
-  let perfil: PerfilUsuarioCompleto | null = consultaCompleta.data ?? null
+  let perfil: PerfilUsuarioCompleto | null = consultaConEntrenamiento.data ?? null
+
+  if (!perfil) {
+    const consultaCompleta = await supabase
+      .from('users')
+      .select('nombre, email, ciudad, foto_url, telefono, fecha_nacimiento, genero, objetivo, plan, plan_activo, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code')
+      .eq('id', user.id)
+      .maybeSingle<Omit<PerfilUsuarioCompleto, 'lesiones' | 'objetivo_entrenamiento' | 'nivel_condicion' | 'disciplinas' | 'notas_negocio'>>()
+    if (consultaCompleta.data) {
+      perfil = {
+        ...consultaCompleta.data,
+        lesiones: null,
+        objetivo_entrenamiento: null,
+        nivel_condicion: null,
+        disciplinas: null,
+        notas_negocio: null,
+      }
+    }
+  }
 
   if (!perfil) {
     const fallbackMinimo = await supabase
@@ -102,6 +151,11 @@ export default async function PerfilPage() {
         fecha_fin_plan: null,
         creditos_extra: 0,
         qr_code: null,
+        lesiones: null,
+        objetivo_entrenamiento: null,
+        nivel_condicion: null,
+        disciplinas: null,
+        notas_negocio: null,
       }
     }
   }
@@ -154,6 +208,11 @@ export default async function PerfilPage() {
         fecha_nacimiento: normalizarFechaNacimiento(perfil?.fecha_nacimiento),
         genero: esGenero(generoRaw) ? generoRaw : '',
         objetivo: esObjetivo(objetivoRaw) ? objetivoRaw : '',
+        lesiones: perfil?.lesiones ?? '',
+        objetivo_entrenamiento: normalizarObjetivoEntrenamiento(perfil?.objetivo_entrenamiento),
+        nivel_condicion: normalizarNivelCondicion(perfil?.nivel_condicion),
+        disciplinas: Array.isArray(perfil?.disciplinas) ? perfil.disciplinas : [],
+        notas_negocio: perfil?.notas_negocio ?? '',
       }}
       initialWalletData={{
         plan: planWallet,
