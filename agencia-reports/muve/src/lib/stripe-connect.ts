@@ -107,67 +107,66 @@ export async function crearOReutilizarCuentaYAccountLink(
   negocio: NegocioStripe,
   rol: Rol
 ): Promise<AccountLinkResult> {
-  try {
-    let stripeAccountId = negocio.stripe_account_id
+  console.log('[stripe-connect] negocio:', { id: negocio.id, nombre: negocio.nombre, tiene_stripe_id: Boolean(negocio.stripe_account_id) })
+  console.log('[stripe-connect] rol:', rol, 'origin:', origin)
 
-    if (!stripeAccountId) {
-      const cuenta = await stripe.accounts.create({
-        type: 'express',
-        country: 'MX',
-        default_currency: 'mxn',
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        metadata: {
-          negocio_id: negocio.id,
-          negocio_nombre: negocio.nombre,
-        },
-      })
+  let stripeAccountId = negocio.stripe_account_id
 
-      stripeAccountId = cuenta.id
+  if (!stripeAccountId) {
+    console.log('[stripe-connect] creating Express account (country=MX, currency=mxn)')
+    const cuenta = await stripe.accounts.create({
+      type: 'express',
+      country: 'MX',
+      default_currency: 'mxn',
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      metadata: {
+        negocio_id: negocio.id,
+        negocio_nombre: negocio.nombre,
+      },
+    })
+    console.log('[stripe-connect] account created:', cuenta.id)
 
-      const db = createServiceClient()
-      const { error: updateError } = await db
-        .from('negocios')
-        .update({ stripe_account_id: stripeAccountId })
-        .eq('id', negocio.id)
+    stripeAccountId = cuenta.id
 
-      if (updateError) {
-        console.error('[stripe-connect] update stripe_account_id error:', updateError.message)
-        return {
-          ok: false,
-          error: 'Se creó la cuenta Stripe pero no se pudo guardar en tu negocio.',
-          status: 500,
-        }
+    const db = createServiceClient()
+    const { error: updateError } = await db
+      .from('negocios')
+      .update({ stripe_account_id: stripeAccountId })
+      .eq('id', negocio.id)
+
+    if (updateError) {
+      console.error('[stripe-connect] update stripe_account_id error:', updateError.message)
+      return {
+        ok: false,
+        error: 'Se creó la cuenta Stripe pero no se pudo guardar en tu negocio.',
+        status: 500,
       }
     }
-
-    const refreshUrl = new URL('/negocio/perfil', origin)
-    refreshUrl.searchParams.set('stripe', 'refresh')
-    if (rol === 'admin') refreshUrl.searchParams.set('negocio_id', negocio.id)
-
-    const returnUrl = new URL('/negocio/perfil', origin)
-    returnUrl.searchParams.set('stripe', 'success')
-    if (rol === 'admin') returnUrl.searchParams.set('negocio_id', negocio.id)
-
-    const link = await stripe.accountLinks.create({
-      account: stripeAccountId,
-      refresh_url: refreshUrl.toString(),
-      return_url: returnUrl.toString(),
-      type: 'account_onboarding',
-    })
-
-    return { ok: true, url: link.url }
-  } catch (error) {
-    const errorMessage = mensajeErrorStripe(error)
-    console.error('[stripe-connect] stripe error:', errorMessage)
-    return {
-      ok: false,
-      error: 'No se pudo iniciar el onboarding de Stripe. Revisa tu configuración e intenta de nuevo.',
-      status: 500,
-    }
+  } else {
+    console.log('[stripe-connect] reusing existing stripe_account_id:', stripeAccountId)
   }
+
+  const refreshUrl = new URL('/negocio/perfil', origin)
+  refreshUrl.searchParams.set('stripe', 'refresh')
+  if (rol === 'admin') refreshUrl.searchParams.set('negocio_id', negocio.id)
+
+  const returnUrl = new URL('/negocio/perfil', origin)
+  returnUrl.searchParams.set('stripe', 'success')
+  if (rol === 'admin') returnUrl.searchParams.set('negocio_id', negocio.id)
+
+  console.log('[stripe-connect] creating account link', { refresh: refreshUrl.toString(), return: returnUrl.toString() })
+  const link = await stripe.accountLinks.create({
+    account: stripeAccountId,
+    refresh_url: refreshUrl.toString(),
+    return_url: returnUrl.toString(),
+    type: 'account_onboarding',
+  })
+  console.log('[stripe-connect] account link created')
+
+  return { ok: true, url: link.url }
 }
 
 export async function obtenerStripeStatus(stripeAccountId: string | null): Promise<StripeConnectStatus> {

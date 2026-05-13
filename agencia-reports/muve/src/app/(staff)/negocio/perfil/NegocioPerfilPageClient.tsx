@@ -102,14 +102,21 @@ export default function NegocioPerfilPageClient() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
-      const data = await res.json().catch(() => ({})) as { url?: string; error?: string }
+      const data = await res.json().catch(() => ({})) as {
+        url?: string
+        error?: string
+        code?: string | null
+        type?: string | null
+        statusCode?: number | null
+      }
       if (!res.ok || !data.url) {
-        setMensaje({
-          tipo: 'error',
-          texto: typeof data.error === 'string'
-            ? data.error
-            : 'No se pudo iniciar el onboarding de Stripe',
-        })
+        console.error('[stripe onboarding] response', { status: res.status, data })
+        const partes = [
+          typeof data.error === 'string' ? data.error : 'No se pudo iniciar el onboarding de Stripe',
+          data.code ? `code=${data.code}` : null,
+          data.type ? `type=${data.type}` : null,
+        ].filter(Boolean)
+        setMensaje({ tipo: 'error', texto: partes.join(' · ') })
         setConectandoStripe(false)
         return
       }
