@@ -1,7 +1,6 @@
 import { readFile } from 'fs/promises'
 import path from 'path'
 import sharp from 'sharp'
-import { APPLE_LOGO_PNG_BASE64, APPLE_LOGO_2X_PNG_BASE64 } from './apple-logo-data'
 
 const BG = '#6B4FE8'
 const BG_DARK = '#4A3DB8'
@@ -9,6 +8,8 @@ const BG_DARK = '#4A3DB8'
 let cacheAssets: {
   iconPng: Buffer
   icon2xPng: Buffer
+  logoPng: Buffer
+  logo2xPng: Buffer
   thumbnailPng: Buffer
   thumbnail2xPng: Buffer
 } | null = null
@@ -41,37 +42,30 @@ async function renderSvg(svg: string): Promise<Buffer> {
   return sharp(Buffer.from(svg)).png().toBuffer()
 }
 
-// Para regenerar el logo (transparente, MUVET amarillo bold, fontSize 32/64):
-//   node --experimental-strip-types -e "
-//     import('sharp').then(async ({ default: sharp }) => {
-//       async function gen(w,h,f) {
-//         const svg = \`<svg xmlns='http://www.w3.org/2000/svg' width='\${w}' height='\${h}'>
-//           <text x='\${w/2}' y='\${h/2}' fill='#E8FF47' font-family='Helvetica, sans-serif'
-//                 font-size='\${f}' font-weight='900' letter-spacing='\${Math.round(f*0.05)}'
-//                 text-anchor='middle' dominant-baseline='central'>MUVET</text>
-//         </svg>\`;
-//         return (await sharp(Buffer.from(svg)).png().toBuffer()).toString('base64');
-//       }
-//       console.log(await gen(160,50,32));
-//       console.log(await gen(320,100,64));
-//     });
-//   "
-// Y pegar los strings en apple-logo-data.ts.
-export async function obtenerAssetsApplePass() {
-  if (!cacheAssets) {
-    const iconSource = await loadIconSource()
-    const [iconPng, icon2xPng, thumbnailPng, thumbnail2xPng] = await Promise.all([
-      generarIcono(iconSource, 29),
-      generarIcono(iconSource, 58),
-      renderSvg(svgThumbnail(90)),
-      renderSvg(svgThumbnail(180)),
-    ])
-    cacheAssets = { iconPng, icon2xPng, thumbnailPng, thumbnail2xPng }
-  }
+async function generarTransparente(size: number): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .png()
+    .toBuffer()
+}
 
-  return {
-    ...cacheAssets,
-    logoPng: Buffer.from(APPLE_LOGO_PNG_BASE64, 'base64'),
-    logo2xPng: Buffer.from(APPLE_LOGO_2X_PNG_BASE64, 'base64'),
-  }
+export async function obtenerAssetsApplePass() {
+  if (cacheAssets) return cacheAssets
+  const iconSource = await loadIconSource()
+  const [iconPng, icon2xPng, logoPng, logo2xPng, thumbnailPng, thumbnail2xPng] = await Promise.all([
+    generarIcono(iconSource, 29),
+    generarIcono(iconSource, 58),
+    generarTransparente(1),
+    generarTransparente(1),
+    renderSvg(svgThumbnail(90)),
+    renderSvg(svgThumbnail(180)),
+  ])
+  cacheAssets = { iconPng, icon2xPng, logoPng, logo2xPng, thumbnailPng, thumbnail2xPng }
+  return cacheAssets
 }

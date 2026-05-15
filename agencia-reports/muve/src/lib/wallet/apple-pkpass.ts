@@ -50,6 +50,7 @@ function buildPassJson(fields: ApplePassFields): Record<string, unknown> {
     foregroundColor: fields.foregroundColor,
     backgroundColor: fields.backgroundColor,
     labelColor: fields.labelColor,
+    logoText: 'MUVET',
     ...(fields.webServiceURL && fields.authenticationToken
       ? {
         webServiceURL: fields.webServiceURL,
