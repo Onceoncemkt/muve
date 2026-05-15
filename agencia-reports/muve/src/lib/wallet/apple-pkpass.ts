@@ -22,6 +22,7 @@ export type ApplePassFields = {
   authenticationToken?: string | null
   infoComoUsar: string
   contacto: string
+  headerMarca?: string
 }
 
 export type ApplePassAssets = {
@@ -29,6 +30,8 @@ export type ApplePassAssets = {
   icon2xPng: Buffer
   logoPng?: Buffer | null
   logo2xPng?: Buffer | null
+  thumbnailPng?: Buffer | null
+  thumbnail2xPng?: Buffer | null
 }
 
 export type AppleCertConfig = {
@@ -47,7 +50,6 @@ function buildPassJson(fields: ApplePassFields): Record<string, unknown> {
     foregroundColor: fields.foregroundColor,
     backgroundColor: fields.backgroundColor,
     labelColor: fields.labelColor,
-    logoText: 'MUVET',
     ...(fields.webServiceURL && fields.authenticationToken
       ? {
         webServiceURL: fields.webServiceURL,
@@ -69,6 +71,13 @@ function buildPassJson(fields: ApplePassFields): Record<string, unknown> {
       },
     ],
     generic: {
+      headerFields: [
+        {
+          key: 'marca',
+          label: '',
+          value: fields.headerMarca ?? 'WELLNESS CLUB',
+        },
+      ],
       primaryFields: [
         {
           key: 'nombre',
@@ -202,6 +211,8 @@ export async function generarPkpass(
   }
   if (assets.logoPng) files['logo.png'] = assets.logoPng
   if (assets.logo2xPng) files['logo@2x.png'] = assets.logo2xPng
+  if (assets.thumbnailPng) files['thumbnail.png'] = assets.thumbnailPng
+  if (assets.thumbnail2xPng) files['thumbnail@2x.png'] = assets.thumbnail2xPng
 
   const manifest: Record<string, string> = {}
   for (const [name, buffer] of Object.entries(files)) {
