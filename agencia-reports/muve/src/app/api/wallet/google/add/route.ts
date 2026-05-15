@@ -8,21 +8,27 @@ import { CIUDAD_LABELS, type Ciudad } from '@/types'
 
 export const runtime = 'nodejs'
 
-const ISSUER_ID =
-  process.env.NEXT_PUBLIC_GOOGLE_WALLET_ISSUER_ID
-  ?? process.env.GOOGLE_WALLET_ISSUER_ID
-  ?? ''
+function obtenerEnv(...names: string[]): string {
+  for (const name of names) {
+    const value = process.env[name]
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value
+    }
+  }
+  return ''
+}
+
+const ISSUER_ID = obtenerEnv('NEXT_PUBLIC_GOOGLE_WALLET_ISSUER_ID', 'GOOGLE_WALLET_ISSUER_ID')
 const CLASS_SUFFIX = 'muvet_generic_v1'
-const SERVICE_ACCOUNT_EMAIL =
-  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-  ?? process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL
-  ?? process.env.GOOGLE_WALLET_CLIENT_EMAIL
-  ?? ''
-const PRIVATE_KEY = (
-  process.env.GOOGLE_SERVICE_ACCOUNT_KEY
-  ?? process.env.GOOGLE_WALLET_PRIVATE_KEY
-  ?? ''
-).replace(/\\n/g, '\n')
+const SERVICE_ACCOUNT_EMAIL = obtenerEnv(
+  'GOOGLE_SERVICE_ACCOUNT_EMAIL',
+  'GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL',
+  'GOOGLE_WALLET_CLIENT_EMAIL',
+)
+const PRIVATE_KEY = obtenerEnv('GOOGLE_SERVICE_ACCOUNT_KEY', 'GOOGLE_WALLET_PRIVATE_KEY')
+  .replace(/\\n/g, '\n')
+const WALLET_ORIGIN = obtenerEnv('GOOGLE_WALLET_ORIGIN') || 'https://www.muvet.mx'
+const LOGO_URL = obtenerEnv('GOOGLE_WALLET_LOGO_URL') || `${WALLET_ORIGIN}/icon-512.png`
 
 type AddWalletBody = { user_id?: string; userId?: string }
 
@@ -137,7 +143,7 @@ function buildGenericObject(payload: GenericPassPayload) {
     hexBackgroundColor: '#6B4FE8',
     logo: {
       sourceUri: {
-        uri: 'https://muvet.mx/logo-wallet.png',
+        uri: LOGO_URL,
       },
       contentDescription: {
         defaultValue: { language: 'es-MX', value: 'MUVET' },
@@ -153,26 +159,10 @@ function buildGenericObject(payload: GenericPassPayload) {
       defaultValue: { language: 'es-MX', value: payload.nombre },
     },
     textModulesData: [
-      {
-        id: 'plan',
-        header: 'PLAN',
-        body: payload.plan,
-      },
-      {
-        id: 'ciudad',
-        header: 'CIUDAD',
-        body: payload.ciudad,
-      },
-      {
-        id: 'creditos',
-        header: 'CRÉDITOS',
-        body: `${payload.creditosDisponibles} disponibles`,
-      },
-      {
-        id: 'vigencia',
-        header: 'VÁLIDO HASTA',
-        body: payload.fechaVencimiento,
-      },
+      { id: 'plan', header: 'PLAN', body: payload.plan },
+      { id: 'ciudad', header: 'CIUDAD', body: payload.ciudad },
+      { id: 'creditos', header: 'CRÉDITOS', body: `${payload.creditosDisponibles} disponibles` },
+      { id: 'vigencia', header: 'VÁLIDO HASTA', body: payload.fechaVencimiento },
     ],
     barcode: {
       type: 'QR_CODE',
@@ -182,16 +172,18 @@ function buildGenericObject(payload: GenericPassPayload) {
   }
 }
 
-function generateAddToWalletLink(genericObject: ReturnType<typeof buildGenericObject>, genericClass: ReturnType<typeof buildGenericClass>) {
+function generateAddToWalletLink(
+  genericObject: ReturnType<typeof buildGenericObject>,
+  genericClass: ReturnType<typeof buildGenericClass>,
+) {
   const email = requireEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL', SERVICE_ACCOUNT_EMAIL)
-  const origin = process.env.GOOGLE_WALLET_ORIGIN || 'https://muvet.mx'
   const now = Math.floor(Date.now() / 1000)
 
   const jwtPayload = {
     iss: email,
     aud: 'google',
     typ: 'savetowallet',
-    origins: [origin],
+    origins: [WALLET_ORIGIN],
     iat: now,
     payload: {
       genericClasses: [genericClass],
@@ -200,10 +192,35 @@ function generateAddToWalletLink(genericObject: ReturnType<typeof buildGenericOb
   }
 
   const jwt = signJwt(jwtPayload)
-  return `https://pay.google.com/gp/v/save/${jwt}`
+  return { walletUrl: `https://pay.google.com/gp/v/save/${jwt}`, jwtPayload, jwt }
+}
+
+function serializarError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause,
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(error))
+  } catch {
+    return String(error)
+  }
 }
 
 export async function POST(request: NextRequest) {
+  console.log('[wallet/google/add] env diagnostics:', {
+    issuerId: ISSUER_ID || '(unset)',
+    serviceAccountEmail: SERVICE_ACCOUNT_EMAIL || '(unset)',
+    privateKeyPresent: PRIVATE_KEY.length > 0,
+    privateKeyLength: PRIVATE_KEY.length,
+    walletOrigin: WALLET_ORIGIN,
+    logoUrl: LOGO_URL,
+  })
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
@@ -234,12 +251,12 @@ export async function POST(request: NextRequest) {
       .eq('id', userId)
       .maybeSingle<SocioRow>()
     if (fallbackSinQr.error) {
-      console.error('[POST /api/wallet/google/add] error cargando socio:', fallbackSinQr.error)
+      console.error('[wallet/google/add] error cargando socio:', JSON.stringify(serializarError(fallbackSinQr.error), null, 2))
       return NextResponse.json({ error: 'No se pudo cargar el socio' }, { status: 500 })
     }
     socio = fallbackSinQr.data ?? null
   } else {
-    console.error('[POST /api/wallet/google/add] error cargando socio:', consultaConQr.error)
+    console.error('[wallet/google/add] error cargando socio:', JSON.stringify(serializarError(consultaConQr.error), null, 2))
     return NextResponse.json({ error: 'No se pudo cargar el socio' }, { status: 500 })
   }
 
@@ -275,6 +292,7 @@ export async function POST(request: NextRequest) {
 
   const issuerId = ISSUER_ID || (process.env.GOOGLE_WALLET_CLASS_ID?.split('.')[0] ?? '')
   if (!issuerId) {
+    console.error('[wallet/google/add] issuer ID no configurado')
     return NextResponse.json({ error: 'Falta NEXT_PUBLIC_GOOGLE_WALLET_ISSUER_ID' }, { status: 500 })
   }
   const classId = `${issuerId}.${CLASS_SUFFIX}`
@@ -296,14 +314,30 @@ export async function POST(request: NextRequest) {
     qrValue,
   })
 
-  let walletUrl = ''
   try {
-    walletUrl = generateAddToWalletLink(genericObject, genericClass)
+    const { walletUrl, jwtPayload, jwt } = generateAddToWalletLink(genericObject, genericClass)
+    console.log('[wallet/google/add] JWT generado', {
+      classId,
+      objectId,
+      issuer: jwtPayload.iss,
+      origins: jwtPayload.origins,
+      jwtLength: jwt.length,
+      walletUrlLength: walletUrl.length,
+    })
+    await db.from('users').update({ wallet_google_agregado: true }).eq('id', userId)
+    return NextResponse.json({ walletUrl, objectId })
   } catch (error) {
-    console.error('[POST /api/wallet/google/add] error generando JWT/link:', error)
-    return NextResponse.json({ error: 'No se pudo generar walletUrl' }, { status: 500 })
+    console.error('Google Wallet error:', JSON.stringify(serializarError(error), null, 2))
+    console.error('[wallet/google/add] payload inputs:', {
+      issuerId,
+      classId,
+      objectId,
+      logoUrl: LOGO_URL,
+      origin: WALLET_ORIGIN,
+      serviceAccountEmail: SERVICE_ACCOUNT_EMAIL,
+      privateKeyLen: PRIVATE_KEY.length,
+    })
+    const message = error instanceof Error ? error.message : 'No se pudo generar walletUrl'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  await db.from('users').update({ wallet_google_agregado: true }).eq('id', userId)
-  return NextResponse.json({ walletUrl, objectId })
 }

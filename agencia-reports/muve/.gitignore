@@ -23,6 +23,11 @@
 # misc
 .DS_Store
 *.pem
+*.key
+*.csr
+*.p12
+*.cer
+/wallet-certs/
 
 # debug
 npm-debug.log*
