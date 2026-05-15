@@ -28,10 +28,6 @@ export type ApplePassFields = {
 export type ApplePassAssets = {
   iconPng: Buffer
   icon2xPng: Buffer
-  logoPng?: Buffer | null
-  logo2xPng?: Buffer | null
-  thumbnailPng?: Buffer | null
-  thumbnail2xPng?: Buffer | null
 }
 
 export type AppleCertConfig = {
@@ -210,10 +206,6 @@ export async function generarPkpass(
     'icon.png': assets.iconPng,
     'icon@2x.png': assets.icon2xPng,
   }
-  if (assets.logoPng) files['logo.png'] = assets.logoPng
-  if (assets.logo2xPng) files['logo@2x.png'] = assets.logo2xPng
-  if (assets.thumbnailPng) files['thumbnail.png'] = assets.thumbnailPng
-  if (assets.thumbnail2xPng) files['thumbnail@2x.png'] = assets.thumbnail2xPng
 
   const manifest: Record<string, string> = {}
   for (const [name, buffer] of Object.entries(files)) {
