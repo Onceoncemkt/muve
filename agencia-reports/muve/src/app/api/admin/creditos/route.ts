@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { enviarPushAUsuarios } from '@/lib/push/server'
+import { notificarActualizacionWallet } from '@/lib/wallet/notificar-actualizacion'
 import type { Rol } from '@/types'
 
 type CreditosBody = {
@@ -120,6 +121,10 @@ export async function POST(request: NextRequest) {
       url: '/dashboard',
     }
   )
+
+  void notificarActualizacionWallet(userId).catch((err) => {
+    console.warn('[POST /api/admin/creditos] wallet update failed:', err)
+  })
 
   return NextResponse.json({
     ok: true,

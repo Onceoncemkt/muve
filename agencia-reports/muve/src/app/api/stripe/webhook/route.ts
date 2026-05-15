@@ -5,6 +5,7 @@ import type Stripe from 'stripe'
 import { planDesdePriceId } from '@/lib/planes'
 import type { PlanMembresia } from '@/types'
 import { sumarUnMes } from '@/lib/ciclos'
+import { notificarActualizacionWallet } from '@/lib/wallet/notificar-actualizacion'
 export const runtime = 'nodejs'
 
 // Service role para saltarse RLS — solo en server, nunca exponer al cliente
@@ -109,6 +110,17 @@ async function activarMembresia(
   }
 
   if (error) throw new Error(`activarMembresia: ${error.message}`)
+
+  for (const fila of data ?? []) {
+    const userId = typeof (fila as { id?: unknown }).id === 'string'
+      ? (fila as { id: string }).id
+      : null
+    if (userId) {
+      void notificarActualizacionWallet(userId).catch((err) => {
+        console.warn('[activarMembresia] wallet update failed:', err)
+      })
+    }
+  }
 }
 
 async function desactivarMembresia(customerId: string) {

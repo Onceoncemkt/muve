@@ -1,15 +1,23 @@
-import { createHash, createHmac } from 'crypto'
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createHash } from 'crypto'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { PLAN_LABELS, CREDITOS_POR_PLAN, normalizarPlan } from '@/lib/planes'
 import { calcularVisitasRestantes } from '@/lib/creditos'
 import { CIUDAD_LABELS, type Ciudad } from '@/types'
 import { generarPkpass } from '@/lib/wallet/apple-pkpass'
 import { obtenerAssetsApplePass } from '@/lib/wallet/apple-assets'
+import {
+  generarAuthenticationToken,
+  userIdDesdeSerial,
+  verificarApplePassAuth,
+} from '@/lib/wallet/apple-webservice-auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+type RouteContext = {
+  params: Promise<{ passTypeId: string; serialNumber: string }>
+}
 
 type SocioRow = {
   id: string
@@ -20,6 +28,7 @@ type SocioRow = {
   fecha_fin_plan: string | null
   creditos_extra: number | null
   qr_code?: string | null
+  email?: string | null
 }
 
 function columnaNoExiste(error: { message?: string } | null | undefined, columna: string) {
@@ -39,74 +48,50 @@ function ciudadSegura(ciudad: Ciudad | null | undefined): Ciudad {
   return 'tulancingo'
 }
 
-function generarAuthenticationToken(userId: string): string | null {
-  const secret = process.env.WALLET_SECRET
-  if (!secret) return null
-  return createHmac('sha256', secret).update(userId).digest('hex')
-}
+export async function GET(request: NextRequest, { params }: RouteContext) {
+  const { passTypeId, serialNumber } = await params
+  const auth = verificarApplePassAuth(request.headers.get('authorization'), serialNumber)
+  if (!auth.ok) return new NextResponse(null, { status: 401 })
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ user_id: string }> }
-) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  const expectedPassType = process.env.APPLE_PASS_TYPE_ID?.trim()
+  if (expectedPassType && passTypeId !== expectedPassType) {
+    return new NextResponse(null, { status: 401 })
   }
 
-  const { user_id: userId } = await params
-  if (user.id !== userId) {
-    return NextResponse.json({ error: 'Sin permisos para este usuario' }, { status: 403 })
-  }
-
-  const passTypeIdentifier = process.env.APPLE_PASS_TYPE_ID?.trim()
-  const teamIdentifier = process.env.APPLE_TEAM_ID?.trim()
+  const userId = userIdDesdeSerial(serialNumber)
   const signerP12Base64 = process.env.APPLE_CERT_P12_BASE64?.trim()
   const signerP12Password = process.env.APPLE_CERT_PASSWORD ?? ''
-
-  if (!passTypeIdentifier || !teamIdentifier || !signerP12Base64) {
-    return NextResponse.json(
-      { error: 'Apple Wallet no está configurado. Faltan APPLE_PASS_TYPE_ID / APPLE_TEAM_ID / APPLE_CERT_P12_BASE64.' },
-      { status: 503 },
-    )
+  const teamIdentifier = process.env.APPLE_TEAM_ID?.trim() ?? ''
+  if (!signerP12Base64 || !teamIdentifier) {
+    return new NextResponse(null, { status: 500 })
   }
 
   const db = createServiceClient()
-  const consultaConQr = await db
+  const consulta = await db
     .from('users')
-    .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code')
+    .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code, email')
     .eq('id', userId)
     .maybeSingle<SocioRow>()
 
   let socio: SocioRow | null = null
-  if (!consultaConQr.error) {
-    socio = consultaConQr.data ?? null
-  } else if (columnaNoExiste(consultaConQr.error, 'qr_code')) {
-    const fallbackSinQr = await db
+  if (!consulta.error) {
+    socio = consulta.data ?? null
+  } else if (columnaNoExiste(consulta.error, 'qr_code')) {
+    const fallback = await db
       .from('users')
-      .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
+      .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, email')
       .eq('id', userId)
       .maybeSingle<SocioRow>()
-    if (fallbackSinQr.error) {
-      console.error('[GET /api/wallet/apple/[user_id]] error cargando socio:', fallbackSinQr.error)
-      return NextResponse.json({ error: 'No se pudo cargar el socio' }, { status: 500 })
-    }
-    socio = fallbackSinQr.data ?? null
-  } else {
-    console.error('[GET /api/wallet/apple/[user_id]] error cargando socio:', consultaConQr.error)
-    return NextResponse.json({ error: 'No se pudo cargar el socio' }, { status: 500 })
+    socio = fallback.data ?? null
   }
 
-  if (!socio) {
-    return NextResponse.json({ error: 'Socio no encontrado' }, { status: 404 })
-  }
+  if (!socio) return new NextResponse(null, { status: 404 })
 
   const planNormalizado = normalizarPlan(socio.plan) ?? 'basico'
   const plan = PLAN_LABELS[planNormalizado]
   const ciudad = ciudadSegura(socio.ciudad)
   const creditosExtra = Math.max(Math.trunc(socio.creditos_extra ?? 0), 0)
-  const visitasIncluidasPlan = CREDITOS_POR_PLAN[planNormalizado] ?? 0
+  const visitasIncluidas = CREDITOS_POR_PLAN[planNormalizado] ?? 0
 
   let visitasUsadas = 0
   if (socio.fecha_inicio_ciclo && socio.fecha_fin_plan) {
@@ -124,19 +109,30 @@ export async function GET(
     creditosExtra,
     visitasUsadasCiclo: visitasUsadas,
   })
-  const totalDisponibles = visitasIncluidasPlan + creditosExtra
+  const totalDisponibles = visitasIncluidas + creditosExtra
   const creditos = creditosDisponibles || Math.max(totalDisponibles - visitasUsadas, 0)
 
   const qrValue = (socio.qr_code && socio.qr_code.trim().length > 0)
     ? socio.qr_code.trim()
     : createHash('sha256').update(userId).digest('hex')
 
-  const nombre = (socio.nombre ?? user.email?.split('@')[0] ?? 'Socio MUVET').trim()
+  const nombre = (socio.nombre ?? socio.email?.split('@')[0] ?? 'Socio MUVET').trim()
   const authenticationToken = generarAuthenticationToken(userId)
   const webServiceURL = authenticationToken
     ? (process.env.APPLE_WALLET_WEB_SERVICE_URL?.trim().replace(/\/$/, '')
        || 'https://www.muvet.mx/api/wallet/apple')
     : null
+
+  const ifModifiedSince = request.headers.get('if-modified-since')
+  const lastUpdated = socio.fecha_inicio_ciclo
+    ? new Date(socio.fecha_inicio_ciclo)
+    : new Date()
+  if (ifModifiedSince) {
+    const since = new Date(ifModifiedSince)
+    if (!Number.isNaN(since.getTime()) && lastUpdated.getTime() <= since.getTime()) {
+      return new NextResponse(null, { status: 304 })
+    }
+  }
 
   let pkpass: Buffer
   try {
@@ -145,9 +141,9 @@ export async function GET(
       {
         organizationName: 'MUVET',
         description: 'Pase MUVET Wellness Club',
-        passTypeIdentifier,
+        passTypeIdentifier: passTypeId,
         teamIdentifier,
-        serialNumber: `muvet-${userId}`,
+        serialNumber,
         foregroundColor: 'rgb(232, 255, 71)',
         backgroundColor: 'rgb(107, 79, 232)',
         labelColor: 'rgb(255, 255, 255)',
@@ -166,21 +162,15 @@ export async function GET(
       { signerP12Base64, signerP12Password },
     )
   } catch (error) {
-    console.error('[GET /api/wallet/apple/[user_id]] error generando .pkpass:', error)
-    const message = error instanceof Error ? error.message : 'No se pudo generar Apple Wallet'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[apple webservice GET pass] error generando .pkpass:', error)
+    return new NextResponse(null, { status: 500 })
   }
-
-  await db
-    .from('users')
-    .update({ wallet_apple_agregado: true })
-    .eq('id', userId)
 
   return new NextResponse(new Uint8Array(pkpass), {
     status: 200,
     headers: {
       'Content-Type': 'application/vnd.apple.pkpass',
-      'Content-Disposition': 'attachment; filename="muvet.pkpass"',
+      'Last-Modified': lastUpdated.toUTCString(),
       'Cache-Control': 'no-store',
     },
   })

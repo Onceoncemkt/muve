@@ -11,6 +11,7 @@ import {
 } from '@/lib/planes'
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 import { getValidadorSession } from '@/lib/validador-auth'
+import { notificarActualizacionWallet } from '@/lib/wallet/notificar-actualizacion'
 
 export async function POST(request: NextRequest) {
   const authClient = await createClient()
@@ -604,6 +605,10 @@ export async function POST(request: NextRequest) {
       .update({ ultima_actividad: new Date().toISOString() })
       .eq('id', validadorId)
   }
+
+  void notificarActualizacionWallet(usuarioId).catch((err) => {
+    console.warn('[POST /api/validar] wallet update failed:', err)
+  })
 
   const visitasUsadasCiclo = (visitasCiclo ?? 0) + creditosServicio
   const visitasRestantesCiclo = Math.max(visitasDisponibles - visitasUsadasCiclo, 0)
