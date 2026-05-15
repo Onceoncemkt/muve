@@ -6,7 +6,7 @@ import { CIUDADES_OPERATIVAS, type Ciudad } from '@/types'
 import { PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION, PRECIOS_MEMBRESIA_POR_REGION, regionPreciosPorCiudad, type RegionPrecios } from '@/lib/planes'
 type PlanId = 'basico' | 'plus' | 'total'
 const ZONAS_PLANES: Array<{ value: RegionPrecios; label: string; ciudadCheckout: Ciudad }> = [
-  { value: 'zona1', label: 'Hidalgo (Tulancingo, Pachuca)', ciudadCheckout: 'tulancingo' },
+  { value: 'zona1', label: 'Hidalgo → Tulancingo / Pachuca', ciudadCheckout: 'tulancingo' },
   { value: 'zona1_5', label: 'Ensenada / Tecate', ciudadCheckout: 'ensenada' },
   { value: 'zona2', label: 'Tijuana', ciudadCheckout: 'tijuana' },
 ]
@@ -159,7 +159,7 @@ export default function PlanesPrecios({
           </p>
           <div className="mx-auto mt-5 max-w-sm rounded-lg border border-[#E5E5E5] bg-white p-3 text-left">
             <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#555]">
-              ¿En qué zona estás?
+              Selecciona tu ciudad
             </label>
             <select
               value={regionActiva}

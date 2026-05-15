@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import type { Ciudad } from '@/types'
 import { CIUDAD_LABELS, CIUDADES_OPERATIVAS } from '@/types'
+import { zonaPorCiudad } from '@/lib/planes'
 
 const CIUDADES: Ciudad[] = CIUDADES_OPERATIVAS
 
@@ -69,7 +70,7 @@ export default function RegistroPage() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { nombre, ciudad: ciudadSeleccionada } },
+        options: { data: { nombre, ciudad: ciudadSeleccionada, zona: zonaPorCiudad(ciudadSeleccionada) } },
       })
 
       if (error) {

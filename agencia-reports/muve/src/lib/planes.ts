@@ -24,9 +24,9 @@ export const PRECIOS_MEMBRESIA_POR_REGION: Record<RegionPrecios, Record<PlanMemb
     total: 1999,
   },
   zona1_5: {
-    basico: 899,
-    plus: 1799,
-    total: 2799,
+    basico: 1060,
+    plus: 2210,
+    total: 3590,
   },
   zona2: {
     basico: 1380,
@@ -40,7 +40,11 @@ export const PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION: Record<RegionPrecios, Part
     plus: 1499,
     total: 2349,
   },
-  zona1_5: {},
+  zona1_5: {
+    basico: 1250,
+    plus: 2600,
+    total: 4225,
+  },
   zona2: {
     basico: 1899,
     plus: 3749,
