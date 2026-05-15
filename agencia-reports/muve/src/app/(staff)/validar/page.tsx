@@ -8,6 +8,7 @@ type ValidadorSession = {
   negocio_id: string
   nombre: string
   negocio_nombre: string | null
+  tipo?: 'validador' | 'staff'
 }
 
 type ResultadoValidacion = {
@@ -132,6 +133,10 @@ export default function ValidarPage() {
   }
 
   async function logoutValidador() {
+    if (sesion?.tipo === 'staff') {
+      window.location.href = '/negocio/dashboard'
+      return
+    }
     await fetch('/api/validador/logout', { method: 'POST' })
     setSesion(null)
     setUsuarios([])
@@ -278,7 +283,7 @@ export default function ValidarPage() {
               onClick={logoutValidador}
               className="rounded-lg border border-white/40 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-white/10"
             >
-              Cambiar usuario
+              {sesion.tipo === 'staff' ? 'Volver al panel' : 'Cambiar usuario'}
             </button>
           </div>
           <p className="mt-4 text-lg font-black text-[#E8FF47]">Total del día: {totalDia} visitas</p>
