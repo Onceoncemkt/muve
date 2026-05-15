@@ -18,15 +18,33 @@ function obtenerEnv(...names: string[]): string {
   return ''
 }
 
+function parseServiceAccountKey(raw: string): { privateKey: string; clientEmail: string | null } {
+  if (!raw) return { privateKey: '', clientEmail: null }
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('{')) {
+    try {
+      const json = JSON.parse(trimmed) as { private_key?: string; client_email?: string }
+      return {
+        privateKey: (json.private_key ?? '').replace(/\\n/g, '\n'),
+        clientEmail: typeof json.client_email === 'string' ? json.client_email : null,
+      }
+    } catch {
+      return { privateKey: '', clientEmail: null }
+    }
+  }
+  return { privateKey: trimmed.replace(/\\n/g, '\n'), clientEmail: null }
+}
+
 const ISSUER_ID = obtenerEnv('NEXT_PUBLIC_GOOGLE_WALLET_ISSUER_ID', 'GOOGLE_WALLET_ISSUER_ID')
 const CLASS_SUFFIX = 'muvet_generic_v1'
+const SERVICE_ACCOUNT_RAW = obtenerEnv('GOOGLE_SERVICE_ACCOUNT_KEY', 'GOOGLE_WALLET_PRIVATE_KEY')
+const PARSED_KEY = parseServiceAccountKey(SERVICE_ACCOUNT_RAW)
+const PRIVATE_KEY = PARSED_KEY.privateKey
 const SERVICE_ACCOUNT_EMAIL = obtenerEnv(
   'GOOGLE_SERVICE_ACCOUNT_EMAIL',
   'GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL',
   'GOOGLE_WALLET_CLIENT_EMAIL',
-)
-const PRIVATE_KEY = obtenerEnv('GOOGLE_SERVICE_ACCOUNT_KEY', 'GOOGLE_WALLET_PRIVATE_KEY')
-  .replace(/\\n/g, '\n')
+) || (PARSED_KEY.clientEmail ?? '')
 const WALLET_ORIGIN = obtenerEnv('GOOGLE_WALLET_ORIGIN') || 'https://www.muvet.mx'
 const LOGO_URL = obtenerEnv('GOOGLE_WALLET_LOGO_URL') || `${WALLET_ORIGIN}/icon-512.png`
 
