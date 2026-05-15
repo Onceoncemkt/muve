@@ -1,17 +1,28 @@
-import { createSign } from 'crypto'
+import { createHash, createSign } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { PLAN_LABELS, PLAN_VISITAS_MENSUALES, normalizarPlan } from '@/lib/planes'
+import { PLAN_LABELS, CREDITOS_POR_PLAN, normalizarPlan } from '@/lib/planes'
+import { calcularVisitasRestantes } from '@/lib/creditos'
 import { CIUDAD_LABELS, type Ciudad } from '@/types'
 
 export const runtime = 'nodejs'
 
-const ISSUER_ID = process.env.GOOGLE_WALLET_ISSUER_ID ?? ''
-const CLASS_ID = process.env.GOOGLE_WALLET_CLASS_ID ?? '3388000000023124514.muvetmembershipv1'
+const ISSUER_ID =
+  process.env.NEXT_PUBLIC_GOOGLE_WALLET_ISSUER_ID
+  ?? process.env.GOOGLE_WALLET_ISSUER_ID
+  ?? ''
+const CLASS_SUFFIX = 'muvet_generic_v1'
 const SERVICE_ACCOUNT_EMAIL =
-  process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL ?? process.env.GOOGLE_WALLET_CLIENT_EMAIL ?? ''
-const PRIVATE_KEY = (process.env.GOOGLE_WALLET_PRIVATE_KEY ?? '').replace(/\\n/g, '\n')
+  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+  ?? process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL
+  ?? process.env.GOOGLE_WALLET_CLIENT_EMAIL
+  ?? ''
+const PRIVATE_KEY = (
+  process.env.GOOGLE_SERVICE_ACCOUNT_KEY
+  ?? process.env.GOOGLE_WALLET_PRIVATE_KEY
+  ?? ''
+).replace(/\\n/g, '\n')
 
 type AddWalletBody = { user_id?: string; userId?: string }
 
@@ -26,16 +37,16 @@ type SocioRow = {
   qr_code?: string | null
 }
 
-type LoyaltyObjectPayload = {
+type GenericPassPayload = {
   objectId: string
   classId: string
   userId: string
   nombre: string
   plan: 'BÁSICO' | 'PLUS' | 'TOTAL'
   ciudad: string
-  visitasUsadas: number
-  visitasTotales: number
+  creditosDisponibles: number
   fechaVencimiento: string
+  qrValue: string
 }
 
 function columnaNoExiste(error: { message?: string } | null | undefined, columna: string) {
@@ -55,8 +66,7 @@ function ciudadSegura(ciudad: Ciudad | null | undefined): Ciudad {
   return 'tulancingo'
 }
 
-function requireEnv(name: string) {
-  const value = process.env[name]
+function requireEnv(name: string, value: string) {
   if (!value) throw new Error(`Missing environment variable: ${name}`)
   return value
 }
@@ -74,41 +84,106 @@ function signJwt(payload: Record<string, unknown>) {
   const encodedHeader = base64UrlEncode(JSON.stringify(header))
   const encodedPayload = base64UrlEncode(JSON.stringify(payload))
   const unsignedToken = `${encodedHeader}.${encodedPayload}`
-  const key = PRIVATE_KEY || requireEnv('GOOGLE_WALLET_PRIVATE_KEY').replace(/\\n/g, '\n')
+  const key = requireEnv('GOOGLE_SERVICE_ACCOUNT_KEY', PRIVATE_KEY)
   const signature = createSign('RSA-SHA256').update(unsignedToken).end().sign(key)
-  const signatureB64 = base64UrlEncode(signature)
-  return `${unsignedToken}.${signatureB64}`
+  return `${unsignedToken}.${base64UrlEncode(signature)}`
 }
 
-function loyaltyObjectFromMember(payload: LoyaltyObjectPayload) {
+function buildGenericClass(classId: string) {
+  return {
+    id: classId,
+    classTemplateInfo: {
+      cardTemplateOverride: {
+        cardRowTemplateInfos: [
+          {
+            twoItems: {
+              startItem: {
+                firstValue: {
+                  fields: [{ fieldPath: "object.textModulesData['plan']" }],
+                },
+              },
+              endItem: {
+                firstValue: {
+                  fields: [{ fieldPath: "object.textModulesData['ciudad']" }],
+                },
+              },
+            },
+          },
+          {
+            twoItems: {
+              startItem: {
+                firstValue: {
+                  fields: [{ fieldPath: "object.textModulesData['creditos']" }],
+                },
+              },
+              endItem: {
+                firstValue: {
+                  fields: [{ fieldPath: "object.textModulesData['vigencia']" }],
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+  }
+}
+
+function buildGenericObject(payload: GenericPassPayload) {
   return {
     id: payload.objectId,
     classId: payload.classId,
     state: 'ACTIVE',
-    accountId: payload.userId,
-    accountName: payload.nombre || 'Socio MUVET',
-    loyaltyPoints: {
-      label: 'VISITAS',
-      balance: {
-        string: `${payload.visitasUsadas}/${payload.visitasTotales}`,
+    hexBackgroundColor: '#6B4FE8',
+    logo: {
+      sourceUri: {
+        uri: 'https://muvet.mx/logo-wallet.png',
+      },
+      contentDescription: {
+        defaultValue: { language: 'es-MX', value: 'MUVET' },
       },
     },
-    barcode: {
-      type: 'QR_CODE',
-      value: payload.userId,
-      alternateText: `MUVET-${String(payload.userId).substring(0, 8)}`,
+    cardTitle: {
+      defaultValue: { language: 'es-MX', value: 'MUVET' },
+    },
+    subheader: {
+      defaultValue: { language: 'es-MX', value: 'Wellness Club' },
+    },
+    header: {
+      defaultValue: { language: 'es-MX', value: payload.nombre },
     },
     textModulesData: [
-      { id: 'plan', header: 'PLAN', body: payload.plan },
-      { id: 'ciudad', header: 'CIUDAD', body: payload.ciudad },
-      { id: 'vigencia', header: 'VÁLIDO HASTA', body: payload.fechaVencimiento },
+      {
+        id: 'plan',
+        header: 'PLAN',
+        body: payload.plan,
+      },
+      {
+        id: 'ciudad',
+        header: 'CIUDAD',
+        body: payload.ciudad,
+      },
+      {
+        id: 'creditos',
+        header: 'CRÉDITOS',
+        body: `${payload.creditosDisponibles} disponibles`,
+      },
+      {
+        id: 'vigencia',
+        header: 'VÁLIDO HASTA',
+        body: payload.fechaVencimiento,
+      },
     ],
-    hexBackgroundColor: process.env.GOOGLE_WALLET_BG_COLOR || '#0A0A0A',
+    barcode: {
+      type: 'QR_CODE',
+      value: payload.qrValue,
+      alternateText: 'Pase MUVET',
+    },
   }
 }
 
-function generateAddToWalletLink(loyaltyObject: ReturnType<typeof loyaltyObjectFromMember>) {
-  const email = SERVICE_ACCOUNT_EMAIL || requireEnv('GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL')
+function generateAddToWalletLink(genericObject: ReturnType<typeof buildGenericObject>, genericClass: ReturnType<typeof buildGenericClass>) {
+  const email = requireEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL', SERVICE_ACCOUNT_EMAIL)
   const origin = process.env.GOOGLE_WALLET_ORIGIN || 'https://muvet.mx'
   const now = Math.floor(Date.now() / 1000)
 
@@ -119,7 +194,8 @@ function generateAddToWalletLink(loyaltyObject: ReturnType<typeof loyaltyObjectF
     origins: [origin],
     iat: now,
     payload: {
-      loyaltyObjects: [loyaltyObject],
+      genericClasses: [genericClass],
+      genericObjects: [genericObject],
     },
   }
 
@@ -174,7 +250,8 @@ export async function POST(request: NextRequest) {
   const planNormalizado = normalizarPlan(socio.plan) ?? 'basico'
   const plan = PLAN_LABELS[planNormalizado]
   const ciudad = ciudadSegura(socio.ciudad)
-  const visitasTotales = PLAN_VISITAS_MENSUALES[planNormalizado] + Math.max(Math.trunc(socio.creditos_extra ?? 0), 0)
+  const creditosExtra = Math.max(Math.trunc(socio.creditos_extra ?? 0), 0)
+  const visitasIncluidasPlan = CREDITOS_POR_PLAN[planNormalizado] ?? 0
 
   let visitasUsadas = 0
   if (socio.fecha_inicio_ciclo && socio.fecha_fin_plan) {
@@ -185,32 +262,43 @@ export async function POST(request: NextRequest) {
       .gte('fecha', socio.fecha_inicio_ciclo)
       .lt('fecha', socio.fecha_fin_plan)
     visitasUsadas = count ?? 0
-  } else {
-    const { count } = await db
-      .from('visitas')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', socio.id)
-    visitasUsadas = count ?? 0
   }
 
-  const issuerId = ISSUER_ID || CLASS_ID.split('.')[0]
-  const objectId = `${issuerId}.muvet-${userId}`
+  const creditosDisponibles = calcularVisitasRestantes({
+    plan: planNormalizado,
+    creditosExtra,
+    visitasUsadasCiclo: visitasUsadas,
+  })
+  const visitasTotales = visitasIncluidasPlan + creditosExtra
+  const fallbackDisponibles = Math.max(visitasTotales - visitasUsadas, 0)
+  const creditos = creditosDisponibles || fallbackDisponibles
 
-  const loyaltyObject = loyaltyObjectFromMember({
+  const issuerId = ISSUER_ID || (process.env.GOOGLE_WALLET_CLASS_ID?.split('.')[0] ?? '')
+  if (!issuerId) {
+    return NextResponse.json({ error: 'Falta NEXT_PUBLIC_GOOGLE_WALLET_ISSUER_ID' }, { status: 500 })
+  }
+  const classId = `${issuerId}.${CLASS_SUFFIX}`
+  const objectId = `${issuerId}.muvet-${userId}`
+  const qrValue = (socio.qr_code && socio.qr_code.trim().length > 0)
+    ? socio.qr_code.trim()
+    : createHash('sha256').update(userId).digest('hex')
+
+  const genericClass = buildGenericClass(classId)
+  const genericObject = buildGenericObject({
     objectId,
-    classId: CLASS_ID,
+    classId,
     userId,
     nombre: (socio.nombre ?? user.email?.split('@')[0] ?? 'Socio MUVET').trim(),
     plan: plan as 'BÁSICO' | 'PLUS' | 'TOTAL',
     ciudad: CIUDAD_LABELS[ciudad],
-    visitasUsadas,
-    visitasTotales,
+    creditosDisponibles: creditos,
     fechaVencimiento: formatearFecha(socio.fecha_fin_plan),
+    qrValue,
   })
 
   let walletUrl = ''
   try {
-    walletUrl = generateAddToWalletLink(loyaltyObject)
+    walletUrl = generateAddToWalletLink(genericObject, genericClass)
   } catch (error) {
     console.error('[POST /api/wallet/google/add] error generando JWT/link:', error)
     return NextResponse.json({ error: 'No se pudo generar walletUrl' }, { status: 500 })
