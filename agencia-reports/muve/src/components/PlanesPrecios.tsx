@@ -2,13 +2,15 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, type Ciudad } from '@/types'
-import { esCiudadBC, PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION, PRECIOS_MEMBRESIA_POR_REGION, type RegionPrecios } from '@/lib/planes'
+import { CIUDADES_OPERATIVAS, type Ciudad } from '@/types'
+import { PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION, PRECIOS_MEMBRESIA_POR_REGION, regionPreciosPorCiudad, type RegionPrecios } from '@/lib/planes'
 type PlanId = 'basico' | 'plus' | 'total'
-
-const CIUDADES: Array<{ value: Ciudad; label: string }> = CIUDADES_OPERATIVAS
-  .map((ciudad) => ({ value: ciudad, label: CIUDAD_LABELS[ciudad] }))
-const TEXTO_CIUDADES_PLAN = `Las ${CIUDADES.length} ciudades`
+const ZONAS_PLANES: Array<{ value: RegionPrecios; label: string; ciudadCheckout: Ciudad }> = [
+  { value: 'zona1', label: 'Hidalgo (Tulancingo, Pachuca)', ciudadCheckout: 'tulancingo' },
+  { value: 'zona1_5', label: 'Ensenada / Tecate', ciudadCheckout: 'ensenada' },
+  { value: 'zona2', label: 'Tijuana', ciudadCheckout: 'tijuana' },
+]
+const TEXTO_CIUDADES_PLAN = `Las ${CIUDADES_OPERATIVAS.length} ciudades`
 
 const PLANES = [
   {
@@ -118,7 +120,9 @@ export default function PlanesPrecios({
   codigoDescuentoInicial?: string | null
   mostrarCampoDescuento?: boolean
 }) {
-  const [ciudadSeleccionada, setCiudadSeleccionada] = useState<Ciudad>(ciudadInicial)
+  const [zonaSeleccionada, setZonaSeleccionada] = useState<RegionPrecios>(
+    regionPreciosPorCiudad(ciudadInicial)
+  )
   const [codigoDescuento, setCodigoDescuento] = useState(() => {
     const inicial = normalizarCodigoDescuento(codigoDescuentoInicial)
     if (inicial) return inicial
@@ -138,8 +142,9 @@ export default function PlanesPrecios({
     }
   }
 
-  const ciudadActiva = ciudadSeleccionada
-  const regionActiva: RegionPrecios = esCiudadBC(ciudadActiva) ? 'bc' : 'centro'
+  const regionActiva: RegionPrecios = zonaSeleccionada
+  const configuracionZonaActiva = ZONAS_PLANES.find((zona) => zona.value === regionActiva) ?? ZONAS_PLANES[0]
+  const ciudadActiva = configuracionZonaActiva.ciudadCheckout
   const preciosActivos = PRECIOS_MEMBRESIA_POR_REGION[regionActiva] as Record<PlanId, number>
   const preciosAnterioresActivos = PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION[regionActiva] as Partial<Record<PlanId, number>>
   return (
@@ -154,16 +159,16 @@ export default function PlanesPrecios({
           </p>
           <div className="mx-auto mt-5 max-w-sm rounded-lg border border-[#E5E5E5] bg-white p-3 text-left">
             <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#555]">
-              ¿En qué ciudad estás?
+              ¿En qué zona estás?
             </label>
             <select
-              value={ciudadActiva}
-              onChange={(event) => setCiudadSeleccionada(event.target.value as Ciudad)}
+              value={regionActiva}
+              onChange={(event) => setZonaSeleccionada(event.target.value as RegionPrecios)}
               className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
             >
-              {CIUDADES.map((ciudad) => (
-                <option key={ciudad.value} value={ciudad.value}>
-                  {ciudad.label}
+              {ZONAS_PLANES.map((zona) => (
+                <option key={zona.value} value={zona.value}>
+                  {zona.label}
                 </option>
               ))}
             </select>
@@ -183,7 +188,7 @@ export default function PlanesPrecios({
             </div>
           )}
           <p className="mx-auto mt-3 max-w-2xl text-center text-xs text-[#888]">
-            Los precios pueden variar según tu ciudad.
+            Los precios pueden variar según tu zona.
           </p>
         </div>
 

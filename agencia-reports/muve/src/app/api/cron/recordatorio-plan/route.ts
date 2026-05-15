@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
 import { enviarPushAUsuarios } from '@/lib/push/server'
 import { getEmailFrom } from '@/lib/email'
-import { esCiudadBC, normalizarPlan, obtenerStripePriceIdsPorRegion } from '@/lib/planes'
+import { normalizarPlan, obtenerStripePriceIdsPorRegion, regionPreciosPorCiudad } from '@/lib/planes'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,7 +18,7 @@ type UsuarioRecordatorio = {
   fecha_fin_plan: string
 }
 
-const { centro: PRICE_IDS_CENTRO, bc: PRICE_IDS_BC } = obtenerStripePriceIdsPorRegion()
+const PRICE_IDS_POR_REGION = obtenerStripePriceIdsPorRegion()
 
 function esRequestAutorizado(request: NextRequest) {
   const esCronVercel = request.headers.get('x-vercel-cron') === '1'
@@ -159,7 +159,8 @@ async function enviarEmailRecordatorio({
 function obtenerPriceIdParaRenovacion(usuario: UsuarioRecordatorio) {
   const plan = normalizarPlan(usuario.plan)
   if (!plan) return null
-  const priceIds = esCiudadBC(usuario.ciudad) ? PRICE_IDS_BC : PRICE_IDS_CENTRO
+  const region = regionPreciosPorCiudad(usuario.ciudad)
+  const priceIds = PRICE_IDS_POR_REGION[region]
   return priceIds[plan] ?? null
 }
 

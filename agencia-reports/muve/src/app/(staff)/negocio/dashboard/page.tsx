@@ -574,9 +574,11 @@ export default function NegocioDashboardPage() {
   )
   const tarifaMiCheckin = useMemo(() => {
     if (!negocio) return 0
-    const tarifas = obtenerTarifasNegocioPorPlan(negocio.categoria, negocio.zona)
+    const tarifaCalculada = ganancias.tarifas_por_plan?.[planNegocio]
+    if (typeof tarifaCalculada === 'number') return tarifaCalculada
+    const tarifas = obtenerTarifasNegocioPorPlan(negocio.categoria, negocio.zona ?? negocio.ciudad)
     return tarifas[planNegocio] ?? 0
-  }, [negocio, planNegocio])
+  }, [negocio, planNegocio, ganancias.tarifas_por_plan])
   const etiquetaCategoriaTarifa = esGimnasio
     ? 'Gym'
     : esClases

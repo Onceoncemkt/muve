@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, CATEGORIA_LABELS } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, CATEGORIA_LABELS, ZONA_NEGOCIO_LABELS } from '@/types'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import StaffNegocioAsignadoSelect from '@/components/admin/StaffNegocioAsignadoSelect'
 import NegocioStaffAsignarSelect from '@/components/admin/NegocioStaffAsignarSelect'
@@ -63,12 +63,9 @@ type CreditoOtorgadoRow = {
 
 const CIUDADES: Ciudad[] = CIUDADES_OPERATIVAS
 const CATEGORIAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
-const ZONAS: ZonaNegocio[] = ['zona1', 'zona2']
+const ZONAS: ZonaNegocio[] = ['zona1', 'zona1_5', 'zona2']
 const NIVELES: NivelNegocio[] = ['basico', 'plus', 'total']
-const ZONA_LABELS: Record<ZonaNegocio, string> = {
-  zona1: 'Zona 1',
-  zona2: 'Zona 2',
-}
+const ZONA_LABELS: Record<ZonaNegocio, string> = ZONA_NEGOCIO_LABELS
 const NIVEL_LABELS: Record<NivelNegocio, string> = {
   basico: 'Básico',
   plus: 'Plus',

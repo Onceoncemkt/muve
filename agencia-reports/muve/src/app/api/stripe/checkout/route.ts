@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
-import { esCiudadBC, normalizarPlan, obtenerStripePriceIdsCandidatos, obtenerStripePriceIdsPorRegion, planDesdePriceId } from '@/lib/planes'
+import { normalizarPlan, obtenerStripePriceIdsCandidatos, obtenerStripePriceIdsPorRegion, planDesdePriceId, regionPreciosPorCiudad, type RegionPrecios } from '@/lib/planes'
 import { normalizarCiudadOperativa } from '@/types'
 
 type PerfilCheckout = {
@@ -134,12 +134,12 @@ export async function POST(request: NextRequest) {
     }
 
     let priceIdsCiudad: Record<'basico' | 'plus' | 'total', string>
-    let regionActiva: 'centro' | 'bc' = 'centro'
+    let regionActiva: RegionPrecios = 'zona1'
     try {
-      const { centro, bc } = obtenerStripePriceIdsPorRegion()
+      const priceIdsPorRegion = obtenerStripePriceIdsPorRegion()
       const ciudadReferencia = ciudadSolicitada ?? perfil?.ciudad
-      regionActiva = esCiudadBC(ciudadReferencia) ? 'bc' : 'centro'
-      priceIdsCiudad = regionActiva === 'bc' ? bc : centro
+      regionActiva = regionPreciosPorCiudad(ciudadReferencia)
+      priceIdsCiudad = priceIdsPorRegion[regionActiva]
     } catch (error) {
       return NextResponse.json(
         {

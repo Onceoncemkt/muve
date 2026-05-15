@@ -5,7 +5,7 @@
 create extension if not exists pgcrypto;
 
 -- Enums
-create type ciudad_enum as enum ('tulancingo', 'pachuca', 'ensenada', 'tijuana');
+create type ciudad_enum as enum ('tulancingo', 'pachuca', 'ensenada', 'tijuana', 'tecate');
 create type categoria_enum as enum ('gimnasio', 'estetica', 'clases', 'restaurante');
 create type rol_enum as enum ('usuario', 'staff', 'admin');
 

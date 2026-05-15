@@ -23,7 +23,7 @@ export default function ConfirmarCheckoutClient({
   planId: PlanMembresia
   ciudadLabel: string
   ciudadValue: Ciudad
-  zonaLabel: 'zona1' | 'zona2'
+  zonaLabel: string
   planLabel: string
   creditos: number
   precioMensual: number
@@ -79,7 +79,7 @@ export default function ConfirmarCheckoutClient({
         </p>
         <p className="flex items-center justify-between gap-3">
           <span className="text-[#666]">Zona:</span>
-          <span className="font-bold uppercase text-[#6B4FE8]">{zonaLabel}</span>
+          <span className="font-bold text-[#6B4FE8]">{zonaLabel}</span>
         </p>
         <p className="flex items-center justify-between gap-3">
           <span className="text-[#666]">Créditos:</span>

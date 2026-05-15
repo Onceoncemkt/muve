@@ -1,5 +1,5 @@
 export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana' | 'tecate'
-export type ZonaNegocio = 'zona1' | 'zona2'
+export type ZonaNegocio = 'zona1' | 'zona1_5' | 'zona2'
 export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante'
 export type Rol = 'usuario' | 'staff' | 'admin'
 export type PlanMembresia = 'basico' | 'plus' | 'total'
@@ -11,6 +11,11 @@ export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada' | 'no_show
 export type EstadoVisita = 'asistio' | 'no_show' | 'cancelado'
 export type EstadoPreregistro = 'pendiente' | 'convertido' | 'cancelado'
 export const CIUDADES_OPERATIVAS: Ciudad[] = ['tulancingo', 'pachuca', 'ensenada', 'tijuana', 'tecate']
+export const ZONA_NEGOCIO_LABELS: Record<ZonaNegocio, string> = {
+  zona1: 'Zona 1',
+  zona1_5: 'Zona 1.5',
+  zona2: 'Zona 2',
+}
 export function normalizarCiudadOperativa(value: unknown): Ciudad | null {
   if (typeof value !== 'string') return null
   const ciudadNormalizada = value.trim().toLowerCase()

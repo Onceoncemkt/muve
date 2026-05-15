@@ -15,25 +15,33 @@ export const CREDITOS_POR_PLAN: Record<PlanMembresia, number> = {
   plus: 16,
   total: 25,
 }
-export const PRECIOS_MEMBRESIA_POR_REGION: Record<'centro' | 'bc', Record<PlanMembresia, number>> = {
-  centro: {
+export type RegionPrecios = 'zona1' | 'zona1_5' | 'zona2'
+
+export const PRECIOS_MEMBRESIA_POR_REGION: Record<RegionPrecios, Record<PlanMembresia, number>> = {
+  zona1: {
     basico: 649,
     plus: 1299,
     total: 1999,
   },
-  bc: {
+  zona1_5: {
+    basico: 899,
+    plus: 1799,
+    total: 2799,
+  },
+  zona2: {
     basico: 1380,
     plus: 2720,
     total: 4499,
   },
 }
-export const PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION: Record<'centro' | 'bc', Partial<Record<PlanMembresia, number>>> = {
-  centro: {
+export const PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION: Record<RegionPrecios, Partial<Record<PlanMembresia, number>>> = {
+  zona1: {
     basico: 749,
     plus: 1499,
     total: 2349,
   },
-  bc: {
+  zona1_5: {},
+  zona2: {
     basico: 1899,
     plus: 3749,
     total: 5799,
@@ -57,6 +65,16 @@ const TARIFA_NEGOCIO_FIJA_ZONA1_POR_CATEGORIA: Record<Exclude<Categoria, 'clases
   estetica: 60,
   restaurante: 60,
 }
+const TARIFA_NEGOCIO_CLASES_ZONA1_5_POR_PLAN: Record<PlanMembresia, number> = {
+  basico: 120,
+  plus: 125,
+  total: 130,
+}
+const TARIFA_NEGOCIO_FIJA_ZONA1_5_POR_CATEGORIA: Record<Exclude<Categoria, 'clases'>, number> = {
+  gimnasio: 50,
+  estetica: 85,
+  restaurante: 85,
+}
 const TARIFA_NEGOCIO_CLASES_ZONA2_POR_PLAN: Record<PlanMembresia, number> = {
   basico: 100,
   plus: 130,
@@ -73,17 +91,21 @@ export const CATEGORIAS_VISIBLES_POR_PLAN: Record<PlanMembresia, Categoria[]> = 
   plus: ['clases', 'gimnasio', 'estetica'],
   total: ['clases', 'gimnasio', 'estetica', 'restaurante'],
 }
-export type RegionPrecios = 'centro' | 'bc'
 export type StripePriceIdsPorRegion = Record<RegionPrecios, Record<PlanMembresia, string>>
 type StripePriceEnvKeysPorRegion = Record<RegionPrecios, Record<PlanMembresia, string[]>>
 
 const STRIPE_PRICE_ENV_POR_REGION: StripePriceEnvKeysPorRegion = {
-  centro: {
+  zona1: {
     basico: ['STRIPE_PRICE_ID_BASICO', 'STRIPE_PRICE_ID_MUVET_BASICO'],
     plus: ['STRIPE_PRICE_ID_PLUS', 'STRIPE_PRICE_ID_MUVET_PLUS'],
     total: ['STRIPE_PRICE_ID_TOTAL', 'STRIPE_PRICE_ID_MUVET_TOTAL'],
   },
-  bc: {
+  zona1_5: {
+    basico: ['STRIPE_PRICE_ID_BASICO_Z15'],
+    plus: ['STRIPE_PRICE_ID_PLUS_Z15'],
+    total: ['STRIPE_PRICE_ID_TOTAL_Z15'],
+  },
+  zona2: {
     basico: ['STRIPE_PRICE_ID_BASICO_BC', 'STRIPE_PRICE_ID_MUVET_TJ_BASICO'],
     plus: ['STRIPE_PRICE_ID_PLUS_BC', 'STRIPE_PRICE_ID_MUVET_TJ_PLUS', 'STRIPE_PRICE_ID_MUVET_TJ_PLUS_'],
     total: ['STRIPE_PRICE_ID_TOTAL_BC', 'STRIPE_PRICE_ID_MUVET_TJ_TOTAL'],
@@ -97,6 +119,14 @@ function obtenerEnvStripePriceId(envKeys: string[]) {
   }
   return null
 }
+export function esCiudadZona15(ciudad: unknown): boolean {
+  const ciudadNormalizada = normalizarCiudadTexto(ciudad)
+  return ciudadNormalizada ? CIUDADES_ZONA_1_5.has(ciudadNormalizada) : false
+}
+export function esCiudadZona2(ciudad: unknown): boolean {
+  const ciudadNormalizada = normalizarCiudadTexto(ciudad)
+  return ciudadNormalizada ? CIUDADES_ZONA_2.has(ciudadNormalizada) : false
+}
 function obtenerEnvStripePriceIds(envKeys: string[]) {
   const values = envKeys
     .map((envKey) => process.env[envKey]?.trim())
@@ -106,8 +136,9 @@ function obtenerEnvStripePriceIds(envKeys: string[]) {
 
 function obtenerStripePriceIdsParcialesDesdeEnv() {
   const resultado: Record<RegionPrecios, Partial<Record<PlanMembresia, string>>> = {
-    centro: {},
-    bc: {},
+    zona1: {},
+    zona1_5: {},
+    zona2: {},
   }
 
   for (const [region, envPorPlan] of Object.entries(STRIPE_PRICE_ENV_POR_REGION) as Array<[RegionPrecios, Record<PlanMembresia, string[]>]>) {
@@ -134,15 +165,20 @@ export function obtenerStripePriceIdsPorRegion(): StripePriceIdsPorRegion {
   }
 
   return {
-    centro: {
-      basico: priceIdsParciales.centro.basico as string,
-      plus: priceIdsParciales.centro.plus as string,
-      total: priceIdsParciales.centro.total as string,
+    zona1: {
+      basico: priceIdsParciales.zona1.basico as string,
+      plus: priceIdsParciales.zona1.plus as string,
+      total: priceIdsParciales.zona1.total as string,
     },
-    bc: {
-      basico: priceIdsParciales.bc.basico as string,
-      plus: priceIdsParciales.bc.plus as string,
-      total: priceIdsParciales.bc.total as string,
+    zona1_5: {
+      basico: priceIdsParciales.zona1_5.basico as string,
+      plus: priceIdsParciales.zona1_5.plus as string,
+      total: priceIdsParciales.zona1_5.total as string,
+    },
+    zona2: {
+      basico: priceIdsParciales.zona2.basico as string,
+      plus: priceIdsParciales.zona2.plus as string,
+      total: priceIdsParciales.zona2.total as string,
     },
   }
 }
@@ -165,16 +201,19 @@ export function planDesdePriceId(priceId: string | null | undefined): PlanMembre
   const priceIdsParciales = obtenerStripePriceIdsParcialesDesdeEnv()
   const priceIdsConfiguradosPorPlan: Record<PlanMembresia, Array<string | undefined>> = {
     basico: [
-      priceIdsParciales.centro.basico,
-      priceIdsParciales.bc.basico,
+      priceIdsParciales.zona1.basico,
+      priceIdsParciales.zona1_5.basico,
+      priceIdsParciales.zona2.basico,
     ],
     plus: [
-      priceIdsParciales.centro.plus,
-      priceIdsParciales.bc.plus,
+      priceIdsParciales.zona1.plus,
+      priceIdsParciales.zona1_5.plus,
+      priceIdsParciales.zona2.plus,
     ],
     total: [
-      priceIdsParciales.centro.total,
-      priceIdsParciales.bc.total,
+      priceIdsParciales.zona1.total,
+      priceIdsParciales.zona1_5.total,
+      priceIdsParciales.zona2.total,
     ],
   }
   for (const [plan, priceIds] of Object.entries(priceIdsConfiguradosPorPlan) as Array<[PlanMembresia, Array<string | undefined>]>) {
@@ -183,7 +222,7 @@ export function planDesdePriceId(priceId: string | null | undefined): PlanMembre
   return null
 }
 export function priceIdDesdePlanYCiudad(plan: 'basico' | 'plus' | 'total', ciudad: Ciudad): string | null {
-  const region = esCiudadBC(ciudad) ? 'bc' : 'centro'
+  const region = regionPreciosPorCiudad(ciudad)
   const priceIds = obtenerStripePriceIdsPorRegion()
   const priceId = priceIds[region]?.[plan]
   if (!priceId) {
@@ -205,21 +244,47 @@ export function normalizarCategoriaNegocio(categoria: unknown): Categoria | null
   if (normalizada.includes('clases') || normalizada.includes('clase')) return 'clases'
   return null
 }
+
+const CIUDADES_ZONA_1 = new Set<Ciudad>(['tulancingo', 'pachuca'])
+const CIUDADES_ZONA_1_5 = new Set<Ciudad>(['ensenada', 'tecate'])
+const CIUDADES_ZONA_2 = new Set<Ciudad>(['tijuana'])
+
+function normalizarCiudadTexto(ciudad: unknown): Ciudad | null {
+  if (typeof ciudad !== 'string') return null
+  const ciudadNormalizada = ciudad.trim().toLowerCase()
+  if (
+    ciudadNormalizada === 'tulancingo'
+    || ciudadNormalizada === 'pachuca'
+    || ciudadNormalizada === 'ensenada'
+    || ciudadNormalizada === 'tijuana'
+    || ciudadNormalizada === 'tecate'
+  ) {
+    return ciudadNormalizada as Ciudad
+  }
+  return null
+}
 export function normalizarZonaNegocio(zona: unknown): ZonaNegocio | null {
   if (typeof zona !== 'string') return null
-  const normalizada = zona.trim().toLowerCase()
+  const normalizada = zona.trim().toLowerCase().replace(/\s+/g, '')
   if (!normalizada) return null
-  if (normalizada === 'zona1' || normalizada === 'zona 1') return 'zona1'
-  if (normalizada === 'zona2' || normalizada === 'zona 2') return 'zona2'
+  if (normalizada === 'zona1') return 'zona1'
+  if (normalizada === 'zona1.5' || normalizada === 'zona1_5' || normalizada === 'zona15') return 'zona1_5'
+  if (normalizada === 'zona2') return 'zona2'
   return null
 }
 export function esCiudadBC(ciudad: unknown): boolean {
-  if (typeof ciudad !== 'string') return false
-  const ciudadNormalizada = ciudad.trim().toLowerCase()
-  return ciudadNormalizada === 'ensenada' || ciudadNormalizada === 'tijuana' || ciudadNormalizada === 'tecate'
+  return esCiudadZona15(ciudad) || esCiudadZona2(ciudad)
 }
 export function zonaPorCiudad(ciudad: unknown): ZonaNegocio {
-  return esCiudadBC(ciudad) ? 'zona2' : 'zona1'
+  const ciudadNormalizada = normalizarCiudadTexto(ciudad)
+  if (!ciudadNormalizada) return 'zona1'
+  if (CIUDADES_ZONA_2.has(ciudadNormalizada)) return 'zona2'
+  if (CIUDADES_ZONA_1_5.has(ciudadNormalizada)) return 'zona1_5'
+  if (CIUDADES_ZONA_1.has(ciudadNormalizada)) return 'zona1'
+  return 'zona1'
+}
+export function regionPreciosPorCiudad(ciudad: unknown): RegionPrecios {
+  return zonaPorCiudad(ciudad)
 }
 export function resolverZonaNegocio({ zona, ciudad }: { zona?: unknown; ciudad?: unknown }): ZonaNegocio {
   return normalizarZonaNegocio(zona) ?? zonaPorCiudad(ciudad)
@@ -230,6 +295,14 @@ export function obtenerTarifasNegocioPorPlan(
 ): Record<PlanMembresia, number> {
   const categoriaNormalizada = normalizarCategoriaNegocio(categoria)
   const zonaNormalizada = normalizarZonaNegocio(zona) ?? 'zona1'
+  if (zonaNormalizada === 'zona1_5') {
+    if (!categoriaNormalizada) return { ...TARIFA_NEGOCIO_CLASES_ZONA1_5_POR_PLAN }
+    if (categoriaNormalizada === 'clases') {
+      return { ...TARIFA_NEGOCIO_CLASES_ZONA1_5_POR_PLAN }
+    }
+    const tarifaFijaZona15 = TARIFA_NEGOCIO_FIJA_ZONA1_5_POR_CATEGORIA[categoriaNormalizada]
+    return { basico: tarifaFijaZona15, plus: tarifaFijaZona15, total: tarifaFijaZona15 }
+  }
 
   if (zonaNormalizada === 'zona2') {
     if (!categoriaNormalizada) return { ...TARIFA_NEGOCIO_CLASES_ZONA2_POR_PLAN }

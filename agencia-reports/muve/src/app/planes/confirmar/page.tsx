@@ -1,12 +1,8 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { CREDITOS_POR_PLAN, PLAN_LABELS, PRECIOS_MEMBRESIA_POR_REGION, esCiudadBC, normalizarPlan } from '@/lib/planes'
-import { CIUDAD_LABELS, normalizarCiudadOperativa, type Ciudad, type PlanMembresia } from '@/types'
+import { CREDITOS_POR_PLAN, PLAN_LABELS, PRECIOS_MEMBRESIA_POR_REGION, normalizarPlan, zonaPorCiudad } from '@/lib/planes'
+import { CIUDAD_LABELS, ZONA_NEGOCIO_LABELS, normalizarCiudadOperativa, type Ciudad, type PlanMembresia } from '@/types'
 import ConfirmarCheckoutClient from './ConfirmarCheckoutClient'
-
-function zonaDesdeCiudad(ciudad: Ciudad): 'zona1' | 'zona2' {
-  return esCiudadBC(ciudad) ? 'zona2' : 'zona1'
-}
 
 export default async function ConfirmarPlanPage({
   searchParams,
@@ -31,8 +27,8 @@ export default async function ConfirmarPlanPage({
     ciudad = ciudadDesdeQuery ?? ciudadPerfil ?? 'tulancingo'
   }
 
-  const zona = zonaDesdeCiudad(ciudad)
-  const region = zona === 'zona2' ? 'bc' : 'centro'
+  const zona = zonaPorCiudad(ciudad)
+  const region = zona
   const precioMensual = PRECIOS_MEMBRESIA_POR_REGION[region][plan]
   const codigoDescuento = typeof params.codigo_descuento === 'string' ? params.codigo_descuento : null
   const backHref = user
@@ -49,11 +45,11 @@ export default async function ConfirmarPlanPage({
           planId={plan}
           ciudadLabel={CIUDAD_LABELS[ciudad]}
           ciudadValue={ciudad}
-          zonaLabel={zona}
           planLabel={PLAN_LABELS[plan]}
           creditos={CREDITOS_POR_PLAN[plan]}
           precioMensual={precioMensual}
           backHref={backHref}
+          zonaLabel={ZONA_NEGOCIO_LABELS[zona]}
           codigoDescuento={codigoDescuento}
         />
       </div>

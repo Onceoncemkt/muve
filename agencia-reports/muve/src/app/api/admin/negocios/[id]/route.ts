@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { normalizarCiudadOperativa, type Categoria, type Ciudad, type NivelNegocio, type Rol, type ZonaNegocio } from '@/types'
 const CATEGORIAS_VALIDAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
-const ZONAS_VALIDAS: ZonaNegocio[] = ['zona1', 'zona2']
+const ZONAS_VALIDAS: ZonaNegocio[] = ['zona1', 'zona1_5', 'zona2']
 const NIVELES_VALIDOS: NivelNegocio[] = ['basico', 'plus', 'total']
 const COLUMNAS_OPCIONALES_NEGOCIO = [
   'zona',
