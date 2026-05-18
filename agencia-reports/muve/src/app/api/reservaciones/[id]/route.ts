@@ -2,9 +2,116 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import type { EstadoReserva } from '@/types'
+import { formatHora } from '@/types'
+import { getEmailFrom } from '@/lib/email'
 import { enviarPushAUsuarios, obtenerStaffIdsPorNegocio } from '@/lib/push/server'
 import { normalizarPlan, puedeReservarConPlan } from '@/lib/planes'
 import { planExpirado } from '@/lib/ciclos'
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function plantillaCancelacionReservaNegocio({
+  nombreUsuario,
+  fecha,
+  hora,
+  tipoServicio,
+  creditoDevuelto,
+}: {
+  nombreUsuario: string
+  fecha: string
+  hora: string
+  tipoServicio: string
+  creditoDevuelto: boolean
+}) {
+  const nombreSeguro = escapeHtml(nombreUsuario)
+  const fechaSegura = escapeHtml(fecha)
+  const horaSegura = escapeHtml(hora)
+  const tipoServicioSeguro = escapeHtml(tipoServicio)
+  const estatusCredito = creditoDevuelto
+    ? 'El crédito fue devuelto al usuario'
+    : 'Cancelación tardía — el crédito NO fue devuelto'
+
+  return `
+    <div style="font-family: Inter, Arial, sans-serif; background: #0A0A0A; color: #ffffff; padding: 24px;">
+      <div style="max-width: 560px; margin: 0 auto; border: 1px solid #1f1f1f; border-radius: 12px; overflow: hidden;">
+        <div style="padding: 20px 24px; border-bottom: 1px solid #1f1f1f;">
+          <p style="font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #E8FF47; margin: 0;">MUVET</p>
+          <h1 style="font-size: 24px; line-height: 1.2; margin: 10px 0 0;">Reservación cancelada</h1>
+        </div>
+        <div style="padding: 20px 24px;">
+          <p style="margin: 0 0 12px; color: #d1d5db;">Un usuario canceló una reservación en tu negocio:</p>
+          <p style="margin: 0 0 8px;"><strong>Usuario:</strong> ${nombreSeguro}</p>
+          <p style="margin: 0 0 8px;"><strong>Fecha:</strong> ${fechaSegura}</p>
+          <p style="margin: 0 0 8px;"><strong>Hora:</strong> ${horaSegura}</p>
+          <p style="margin: 0 0 8px;"><strong>Clase / servicio:</strong> ${tipoServicioSeguro}</p>
+          <p style="margin: 12px 0 0; color: ${creditoDevuelto ? '#E8FF47' : '#fca5a5'}; font-weight: 700;">${estatusCredito}</p>
+          <div style="margin-top: 18px;">
+            <a href="https://muvet.mx/negocio/dashboard" style="display: inline-block; background: #E8FF47; color: #0A0A0A; text-decoration: none; font-weight: 800; padding: 10px 14px; border-radius: 8px;">
+              Ir al panel del negocio
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+async function enviarEmailCancelacionReservaNegocio({
+  email,
+  nombreUsuario,
+  fecha,
+  hora,
+  tipoServicio,
+  creditoDevuelto,
+}: {
+  email: string | null
+  nombreUsuario: string
+  fecha: string
+  hora: string
+  tipoServicio: string
+  creditoDevuelto: boolean
+}) {
+  if (!email) return
+
+  const resendApiKey = process.env.RESEND_API_KEY
+  const fromEmail = getEmailFrom()
+  if (!resendApiKey) return
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [email],
+        subject: `Reservación cancelada — ${nombreUsuario} — ${hora}`,
+        html: plantillaCancelacionReservaNegocio({
+          nombreUsuario,
+          fecha,
+          hora,
+          tipoServicio,
+          creditoDevuelto,
+        }),
+      }),
+    })
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      console.warn('[PATCH /api/reservaciones/[id]] No se pudo enviar email de cancelación al negocio', payload)
+    }
+  } catch (error) {
+    console.warn('[PATCH /api/reservaciones/[id]] Error enviando email de cancelación al negocio', error)
+  }
+}
 
 function admin() {
   return createAdmin(
@@ -68,9 +175,16 @@ export async function PATCH(
   // Obtener reservación
   const { data: reserva, error: fetchError } = await db
     .from('reservaciones')
-    .select('id, user_id, estado, fecha, horario_id')
+    .select('id, user_id, estado, fecha, horario_id, servicio_nombre')
     .eq('id', id)
-    .single<{ id: string; user_id: string; estado: EstadoReserva; fecha: string; horario_id: string }>()
+    .single<{
+      id: string
+      user_id: string
+      estado: EstadoReserva
+      fecha: string
+      horario_id: string
+      servicio_nombre: string | null
+    }>()
 
   if (fetchError || !reserva) {
     return NextResponse.json({ error: 'Reservación no encontrada' }, { status: 404 })
@@ -80,32 +194,69 @@ export async function PATCH(
   const esPropia = reserva.user_id === user.id
   let negocioId: string | null = null
   let negocioNombre = 'negocio'
+  let negocioEmail: string | null = null
+  let horaReserva = ''
+  let tipoServicio = reserva.servicio_nombre ?? 'Clase'
+  let creditoDevuelto = false
 
   if (estado === 'cancelada') {
     if (!esPropia) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { data: horario, error: horarioError } = await db
       .from('horarios')
-      .select('hora_inicio, negocio_id')
+      .select('hora_inicio, negocio_id, tipo_clase')
       .eq('id', reserva.horario_id)
-      .maybeSingle<{ hora_inicio: string; negocio_id: string | null }>()
+      .maybeSingle<{ hora_inicio: string; negocio_id: string | null; tipo_clase: string | null }>()
 
     if (horarioError || !horario) {
       return NextResponse.json({ error: 'Horario no encontrado para esta reservación' }, { status: 400 })
     }
+    horaReserva = formatHora(horario.hora_inicio)
+    tipoServicio = reserva.servicio_nombre ?? horario.tipo_clase ?? 'Clase'
 
     negocioId = typeof horario.negocio_id === 'string' ? horario.negocio_id : null
     if (negocioId) {
-      const { data: negocio } = await db
-        .from('negocios')
-        .select('nombre, nivel, plan_requerido')
-        .eq('id', negocioId)
-        .maybeSingle<{
+      const consultasNegocio = [
+        'nombre, nivel, plan_requerido, email',
+        'nombre, nivel, plan_requerido, contacto_email',
+        'nombre, nivel, plan_requerido, email_contacto',
+        'nombre, nivel, plan_requerido',
+      ] as const
+      let negocio:
+        | {
           nombre: string
           nivel?: 'basico' | 'plus' | 'total' | null
           plan_requerido?: 'basico' | 'plus' | 'total' | null
-        }>()
+          email?: string | null
+          contacto_email?: string | null
+          email_contacto?: string | null
+        }
+        | null = null
+
+      for (const select of consultasNegocio) {
+        const { data, error } = await db
+          .from('negocios')
+          .select(select)
+          .eq('id', negocioId)
+          .maybeSingle<{
+            nombre: string
+            nivel?: 'basico' | 'plus' | 'total' | null
+            plan_requerido?: 'basico' | 'plus' | 'total' | null
+            email?: string | null
+            contacto_email?: string | null
+            email_contacto?: string | null
+          }>()
+        if (error) continue
+        if (data) {
+          negocio = data
+          break
+        }
+      }
       negocioNombre = negocio?.nombre ?? 'negocio'
+      const emailNegocio = typeof negocio?.email === 'string' ? negocio.email.trim() : ''
+      const contactoEmail = typeof negocio?.contacto_email === 'string' ? negocio.contacto_email.trim() : ''
+      const emailContacto = typeof negocio?.email_contacto === 'string' ? negocio.email_contacto.trim() : ''
+      negocioEmail = emailNegocio || contactoEmail || emailContacto || null
 
       const planUsuario = normalizarPlan(perfilActual.plan ?? null) ?? 'basico'
       const nivelNegocio = negocio?.nivel === 'plus' || negocio?.nivel === 'total'
@@ -124,6 +275,7 @@ export async function PATCH(
     // Solo se puede cancelar con más de 2h de anticipación
     const fechaHora = new Date(`${reserva.fecha}T${horario.hora_inicio}`)
     const diffMs = fechaHora.getTime() - Date.now()
+    creditoDevuelto = diffMs >= 3 * 60 * 60 * 1000
     if (diffMs < 2 * 60 * 60 * 1000) {
       return NextResponse.json(
         { error: 'Solo se puede cancelar con más de 2 horas de anticipación' },
@@ -180,6 +332,15 @@ export async function PATCH(
         )
       }
     }
+
+    await enviarEmailCancelacionReservaNegocio({
+      email: negocioEmail,
+      nombreUsuario: usuarioNombre,
+      fecha: reserva.fecha,
+      hora: horaReserva,
+      tipoServicio,
+      creditoDevuelto,
+    })
   }
 
   return NextResponse.json({ success: true })
