@@ -21,12 +21,12 @@ export async function POST(request: NextRequest) {
     .from('users')
     .select('rol')
     .eq('id', user.id)
-    .maybeSingle<{ rol: 'usuario' | 'staff' | 'admin' }>()
+    .maybeSingle<{ rol: string }>()
 
   if (perfilError || !perfil) {
     return NextResponse.json({ error: 'No se pudo validar el rol del usuario' }, { status: 500 })
   }
-  if (!['staff', 'admin'].includes(perfil.rol)) {
+  if (!['staff', 'admin', 'validador'].includes(perfil.rol)) {
     return NextResponse.json({ error: 'Sin permisos para registrar push de staff' }, { status: 403 })
   }
 

@@ -782,29 +782,14 @@ export async function POST(request: NextRequest) {
   const hora = formatHora(horario.hora_inicio)
   const nombreCoach = normalizarTextoOpcional((horario as { nombre_coach?: unknown }).nombre_coach)
   const tipoClase = normalizarTextoOpcional((horario as { tipo_clase?: unknown }).tipo_clase)
-  const detalle = detalleHorario(tipoClase, nombreCoach)
   const tipoServicio = servicioReservado?.nombre ?? tipoClase ?? 'Clase'
-  const payloadUsuario = {
-    title: 'MUVET',
-    body: `Reservación confirmada en ${negocioNombre} — ${fecha} a las ${hora}${detalle ? ` · ${detalle}` : ''}`,
-    url: '/historial',
-  }
-  console.log('[POST /api/reservaciones] Preparando push usuario', {
-    userId: user.id,
-    payload: payloadUsuario,
-  })
-
-  await enviarPushAUsuarios(
-    [user.id],
-    payloadUsuario
-  )
 
   if (typeof horario.negocio_id === 'string') {
     const staffIds = await obtenerStaffIdsPorNegocio(horario.negocio_id)
     if (staffIds.length > 0) {
       const payloadStaff = {
-        title: 'MUVET',
-        body: `Nueva reservación: ${usuarioNombre} — ${hora} — ${tipoServicio}`,
+        title: 'Nueva reservación',
+        body: `${usuarioNombre} · ${hora} · ${tipoServicio}`,
         url: '/negocio/dashboard',
       }
       console.log('[POST /api/reservaciones] Preparando push staff', {

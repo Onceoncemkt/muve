@@ -97,7 +97,7 @@ export default function StaffPushNotificationBanner() {
   return (
     <div className="rounded-xl border border-[#E8FF47] bg-[#0A0A0A] p-4">
       <p className="text-sm font-bold text-white">
-        Activa las notificaciones para recibir alertas de reservaciones
+        Activa las notificaciones para recibir alertas de reservaciones y cancelaciones
       </p>
       {error && (
         <p className="mt-2 text-xs text-red-300">{error}</p>

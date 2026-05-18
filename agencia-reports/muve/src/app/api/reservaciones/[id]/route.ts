@@ -309,27 +309,13 @@ export async function PATCH(
       .maybeSingle<{ nombre: string }>()
 
     const usuarioNombre = usuario?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
-    const payloadUsuario = {
-      title: 'MUVET',
-      body: `Reservación cancelada en ${negocioNombre}`,
-      url: '/historial',
-    }
-    console.log('[PATCH /api/reservaciones/[id]] Preparando push usuario', {
-      userId: reserva.user_id,
-      payload: payloadUsuario,
-    })
-
-    await enviarPushAUsuarios(
-      [reserva.user_id],
-      payloadUsuario
-    )
 
     if (negocioId) {
       const staffIds = await obtenerStaffIdsPorNegocio(negocioId)
       if (staffIds.length > 0) {
         const payloadStaff = {
-          title: 'MUVET',
-          body: `${usuarioNombre} canceló su reservación del ${reserva.fecha}`,
+          title: 'Reservación cancelada',
+          body: `${usuarioNombre} · ${horaReserva} · ${tipoServicio}`,
           url: '/negocio/dashboard',
         }
         console.log('[PATCH /api/reservaciones/[id]] Preparando push staff', {

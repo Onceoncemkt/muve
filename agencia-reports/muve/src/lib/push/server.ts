@@ -119,7 +119,7 @@ export async function obtenerStaffIdsPorNegocio(negocioId: string) {
   const { data, error } = await db
     .from('users')
     .select('id')
-    .eq('rol', 'staff')
+    .in('rol', ['staff', 'validador'])
     .eq('negocio_id', negocioId)
 
   if (!error) {
