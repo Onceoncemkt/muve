@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, ZONA_NEGOCIO_LABELS } from '@/types'
-import { normalizarCategoriasNegocio } from '@/lib/planes'
+import { normalizarCategoriasNegocio, tarifaNegocioPorCheckin } from '@/lib/planes'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import StaffNegocioAsignadoSelect from '@/components/admin/StaffNegocioAsignadoSelect'
 import NegocioStaffAsignarSelect from '@/components/admin/NegocioStaffAsignarSelect'
@@ -81,6 +81,13 @@ const NIVEL_LABELS: Record<NivelNegocio, string> = {
   plus: 'Plus',
   total: 'Total',
 }
+const CATEGORIA_TARIFA_LABELS: Record<Categoria, string> = {
+  gimnasio: 'Gym',
+  clases: 'Clases',
+  estetica: 'Wellness',
+  restaurante: 'Restaurante',
+  clinica: 'Clínica',
+}
 
 function admin() {
   return createAdminClient(
@@ -138,6 +145,13 @@ function calcularEdadDesdeFecha(fecha: unknown): number | null {
     edad -= 1
   }
   return edad > 0 ? edad : null
+}
+function formatearMonto(valor: number) {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 0,
+  }).format(valor)
 }
 
 export default async function AdminPage({
@@ -608,6 +622,21 @@ export default async function AdminPage({
                     const planActual = (negocio.plan_negocio ?? 'basico') as NivelNegocio
                     const categoriasNegocio = normalizarCategoriasNegocio(negocio.categorias, negocio.categoria)
                     const stripeStatus = stripeStatusPorNegocio.get(negocio.id) ?? 'no_account'
+                    const categoriasCosto = categoriasNegocio.length > 0 ? categoriasNegocio : [negocio.categoria]
+                    const creditosPorCategoria = categoriasCosto.map((categoria) => ({
+                      categoria,
+                      label: CATEGORIA_TARIFA_LABELS[categoria],
+                      creditos: categoria === 'gimnasio' ? '0.5' : '1',
+                    }))
+                    const tarifasPorCategoria = categoriasCosto.map((categoria) => {
+                      const monto = tarifaNegocioPorCheckin({
+                        categoria,
+                        planNegocio: planActual,
+                        zona: negocio.zona ?? 'zona1',
+                        ciudad: negocio.ciudad,
+                      })
+                      return `${CATEGORIA_TARIFA_LABELS[categoria]} ${formatearMonto(monto)}`
+                    })
 
                     return (
                       <article
@@ -941,6 +970,20 @@ export default async function AdminPage({
                             </span>
                           )}
                         </div>
+                        <div className="mt-2 rounded-lg border border-white/10 bg-[#1A1A1A] p-2.5">
+                          {creditosPorCategoria.map(({ categoria, label, creditos }) => (
+                            <div key={`${negocio.id}-credito-${categoria}`} className="flex items-center justify-between text-xs">
+                              <span className="text-white/60">{label}</span>
+                              <span>
+                                <span className="font-black text-[#E8FF47]">{creditos}</span>
+                                <span className="ml-1 text-white/50">crédito/s / visita</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-1 text-[11px] text-white/45">
+                          {tarifasPorCategoria.join(' · ')}
+                        </p>
 
 
                         {staffAsignado.length > 0 && (
