@@ -52,7 +52,7 @@ function ensureVapidConfigured() {
   }
 
   webpush.setVapidDetails(
-    'mailto:soporte@muvet.app',
+    'mailto:hola@muvet.mx',
     publicKey,
     privateKey
   )
@@ -153,7 +153,7 @@ export async function enviarPushAUsuarios(
         JSON.stringify({
           title: payload.title,
           body: payload.body,
-          url: payload.url ?? '/dashboard',
+          url: payload.url ?? '/negocio/dashboard',
         })
       )
       sent += 1
