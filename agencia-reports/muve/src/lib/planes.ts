@@ -68,6 +68,7 @@ const TARIFA_NEGOCIO_FIJA_ZONA1_POR_CATEGORIA: Record<Exclude<Categoria, 'clases
   gimnasio: 40,
   estetica: 60,
   restaurante: 60,
+  clinica: 60,
 }
 const TARIFA_NEGOCIO_CLASES_ZONA1_5_POR_PLAN: Record<PlanMembresia, number> = {
   basico: 120,
@@ -75,19 +76,21 @@ const TARIFA_NEGOCIO_CLASES_ZONA1_5_POR_PLAN: Record<PlanMembresia, number> = {
   total: 130,
 }
 const TARIFA_NEGOCIO_FIJA_ZONA1_5_POR_CATEGORIA: Record<Exclude<Categoria, 'clases'>, number> = {
-  gimnasio: 50,
+  gimnasio: 85,
   estetica: 85,
   restaurante: 85,
+  clinica: 85,
 }
 const TARIFA_NEGOCIO_CLASES_ZONA2_POR_PLAN: Record<PlanMembresia, number> = {
-  basico: 100,
-  plus: 130,
-  total: 150,
+  basico: 180,
+  plus: 185,
+  total: 190,
 }
 const TARIFA_NEGOCIO_FIJA_ZONA2_POR_CATEGORIA: Record<Exclude<Categoria, 'clases'>, number> = {
-  gimnasio: 80,
+  gimnasio: 95,
   estetica: 150,
   restaurante: 150,
+  clinica: 150,
 }
 
 export const CATEGORIAS_VISIBLES_POR_PLAN: Record<PlanMembresia, Categoria[]> = {
@@ -242,11 +245,23 @@ export function normalizarCategoriaNegocio(categoria: unknown): Categoria | null
   if (typeof categoria !== 'string') return null
   const normalizada = categoria.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   if (!normalizada) return null
-  if (normalizada.includes('gimnasio')) return 'gimnasio'
+  if (normalizada === 'gym' || normalizada.includes('gimnasio')) return 'gimnasio'
   if (normalizada.includes('estetica') || normalizada.includes('wellness')) return 'estetica'
   if (normalizada.includes('restaurante')) return 'restaurante'
+  if (normalizada.includes('clinica')) return 'clinica'
   if (normalizada.includes('clases') || normalizada.includes('clase')) return 'clases'
   return null
+}
+export function normalizarCategoriasNegocio(categorias: unknown, categoriaPrincipal?: unknown): Categoria[] {
+  const fuente = Array.isArray(categorias) ? categorias : []
+  const normalizadas = fuente
+    .map((categoria) => normalizarCategoriaNegocio(categoria))
+    .filter((categoria): categoria is Categoria => Boolean(categoria))
+  if (normalizadas.length > 0) {
+    return Array.from(new Set(normalizadas))
+  }
+  const principal = normalizarCategoriaNegocio(categoriaPrincipal)
+  return principal ? [principal] : []
 }
 
 const CIUDADES_ZONA_1 = new Set<Ciudad>(['tulancingo', 'pachuca'])

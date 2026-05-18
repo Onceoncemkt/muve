@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
-import { normalizarCategoriaNegocio } from '@/lib/planes'
+import { normalizarCategoriaNegocio, normalizarCategoriasNegocio } from '@/lib/planes'
 import type { Categoria, DiaSemana, Rol, ServicioNegocio } from '@/types'
 import { CATEGORIA_LABELS, DIA_LABELS, formatHora } from '@/types'
 
@@ -40,6 +40,7 @@ interface NegocioOption {
   nombre: string
   ciudad: string | null
   categoria?: Categoria | null
+  categorias?: string[] | null
   monto_maximo_visita?: number | null
   servicios_incluidos?: string | null
 }
@@ -162,6 +163,7 @@ export default function NegocioHorariosPage() {
 
   const [gymDraft, setGymDraft] = useState<HorarioGeneralGym>({ apertura: '06:00', cierre: '22:00' })
   const [guardandoGym, setGuardandoGym] = useState(false)
+  const [tipoServicioSeleccionado, setTipoServicioSeleccionado] = useState<'clase' | 'gym'>('clase')
 
   const [formClases, setFormClases] = useState({
     fecha: hoyISO(),
@@ -195,8 +197,10 @@ export default function NegocioHorariosPage() {
 
   const negocioSeleccionado = negocios.find((negocio) => negocio.id === negocioId) ?? null
   const categoriaNegocio = normalizarCategoriaNegocio(negocioSeleccionado?.categoria)
-  const esGimnasio = categoriaNegocio === 'gimnasio'
-  const esClases = categoriaNegocio === 'clases'
+  const categoriasNegocio = normalizarCategoriasNegocio(negocioSeleccionado?.categorias, categoriaNegocio)
+  const tieneGymYClases = categoriasNegocio.includes('gimnasio') && categoriasNegocio.includes('clases')
+  const esGimnasio = categoriaNegocio === 'gimnasio' || (tieneGymYClases && tipoServicioSeleccionado === 'gym')
+  const esClases = categoriaNegocio === 'clases' || (tieneGymYClases && tipoServicioSeleccionado === 'clase')
   const esRestaurante = categoriaNegocio === 'restaurante'
   const esWellness = categoriaNegocio === 'estetica'
 
@@ -231,7 +235,7 @@ export default function NegocioHorariosPage() {
   }, [])
 
 
-  const cargarHorarios = useCallback(async () => {
+  async function cargarHorarios() {
     if (!negocioId || categoriaNegocio === 'gimnasio') {
       setHorarios([])
       return
@@ -256,14 +260,14 @@ export default function NegocioHorariosPage() {
     } finally {
       setCargandoHorarios(false)
     }
-  }, [categoriaNegocio, negocioId])
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void cargarHorarios()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [cargarHorarios])
+  }, [categoriaNegocio, negocioId])
 
   const horariosOrdenados = useMemo(() => {
     return horarios.slice().sort((a, b) => {
@@ -349,7 +353,7 @@ export default function NegocioHorariosPage() {
       setMensaje({ tipo: 'error', texto: 'Selecciona un negocio' })
       return
     }
-    if (categoriaNegocio === 'gimnasio') {
+    if (esGimnasio) {
       setMensaje({ tipo: 'error', texto: 'Los gimnasios no requieren horarios reservables' })
       return
     }
@@ -382,6 +386,7 @@ export default function NegocioHorariosPage() {
           nombre_coach: formClases.nombre_coach,
           capacidad_total: formClases.capacidad_total,
           activo: formClases.activo,
+          tipo_servicio: tieneGymYClases ? 'clase' : undefined,
         })
       }
     }
@@ -693,6 +698,7 @@ export default function NegocioHorariosPage() {
                 setMostrarForm(false)
                 setEdicionId(null)
                 setEdicionDraft(null)
+                setTipoServicioSeleccionado('clase')
               }}
               className={inputCls}
             >
@@ -740,8 +746,31 @@ export default function NegocioHorariosPage() {
             <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-xs text-[#555]">
               <p>
                 <span className="font-bold text-[#0A0A0A]">Categoría:</span>{' '}
-                {categoriaNegocio ? CATEGORIA_LABELS[categoriaNegocio] : 'Sin categoría'}
+                {categoriasNegocio.length > 1
+                  ? categoriasNegocio.map((categoria) => CATEGORIA_LABELS[categoria]).join(' · ')
+                  : (categoriaNegocio ? CATEGORIA_LABELS[categoriaNegocio] : 'Sin categoría')}
               </p>
+            </div>
+          )}
+          {tieneGymYClases && (
+            <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">¿Qué tipo de servicio es este horario?</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setTipoServicioSeleccionado('clase')}
+                  className={`rounded-lg border px-3 py-2 text-xs font-black uppercase tracking-widest ${tipoServicioSeleccionado === 'clase' ? 'border-[#6B4FE8] bg-[#6B4FE8] text-white' : 'border-[#E5E5E5] bg-white text-[#666]'}`}
+                >
+                  Clase boutique
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTipoServicioSeleccionado('gym')}
+                  className={`rounded-lg border px-3 py-2 text-xs font-black uppercase tracking-widest ${tipoServicioSeleccionado === 'gym' ? 'border-[#6B4FE8] bg-[#6B4FE8] text-white' : 'border-[#E5E5E5] bg-white text-[#666]'}`}
+                >
+                  Acceso gym
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import QRScanner from '@/components/QRScanner'
 
 type ValidadorSession = {
@@ -63,6 +63,8 @@ export default function ValidarPage() {
   const [buscando, setBuscando] = useState(false)
   const [historial, setHistorial] = useState<HistorialItem[]>([])
   const [totalDia, setTotalDia] = useState(0)
+  const [negocioTieneGymYClases, setNegocioTieneGymYClases] = useState(false)
+  const [tipoServicioSeleccionado, setTipoServicioSeleccionado] = useState<'gym' | 'clase'>('clase')
 
   async function cargarSesion() {
     setCargandoSesion(true)
@@ -77,6 +79,18 @@ export default function ValidarPage() {
     setCargandoSesion(false)
   }
 
+  const cargarCategoriasNegocio = useCallback(async (negocioIdActual: string | null | undefined) => {
+    const res = await fetch('/api/negocio/negocios', { cache: 'no-store' })
+    if (!res.ok) {
+      setNegocioTieneGymYClases(false)
+      return
+    }
+    const data = await res.json().catch(() => ({})) as { negocios?: Array<{ id: string; categorias?: string[] }> }
+    const negocioSesion = (data.negocios ?? []).find((negocio) => negocio.id === negocioIdActual)
+    const categorias = Array.isArray(negocioSesion?.categorias) ? negocioSesion.categorias : []
+    setNegocioTieneGymYClases(categorias.includes('gimnasio') && categorias.includes('clases'))
+  }, [])
+
   async function cargarHistorial() {
     const res = await fetch('/api/validar/historial', { cache: 'no-store' })
     if (!res.ok) {
@@ -90,13 +104,20 @@ export default function ValidarPage() {
   }
 
   useEffect(() => {
-    void cargarSesion()
+    const id = window.setTimeout(() => {
+      void cargarSesion()
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [])
 
   useEffect(() => {
     if (!sesion) return
-    void cargarHistorial()
-  }, [sesion])
+    const id = window.setTimeout(() => {
+      void cargarHistorial()
+      void cargarCategoriasNegocio(sesion.negocio_id)
+    }, 0)
+    return () => window.clearTimeout(id)
+  }, [cargarCategoriasNegocio, sesion])
 
   useEffect(() => {
     if (!resultado) return
@@ -151,7 +172,11 @@ export default function ValidarPage() {
     const res = await fetch('/api/validar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: token.trim(), solo_cotizar: false }),
+      body: JSON.stringify({
+        token: token.trim(),
+        solo_cotizar: false,
+        tipo_servicio: negocioTieneGymYClases ? tipoServicioSeleccionado : undefined,
+      }),
     })
     const data = await res.json().catch(() => ({})) as ResultadoValidacion
     if (!res.ok || !data.valido) {
@@ -192,7 +217,11 @@ export default function ValidarPage() {
     const res = await fetch('/api/validar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, solo_cotizar: false }),
+      body: JSON.stringify({
+        user_id: userId,
+        solo_cotizar: false,
+        tipo_servicio: negocioTieneGymYClases ? tipoServicioSeleccionado : undefined,
+      }),
     })
     const data = await res.json().catch(() => ({})) as ResultadoValidacion
     if (!res.ok || !data.valido) {
@@ -296,6 +325,27 @@ export default function ValidarPage() {
         )}
 
         <div className="rounded-xl border border-[#E5E5E5] bg-white p-5">
+          {negocioTieneGymYClases && (
+            <div className="mb-4 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+              <p className="text-xs font-black uppercase tracking-[0.15em] text-[#666]">¿Qué servicio usó el cliente?</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTipoServicioSeleccionado('clase')}
+                  className={`rounded-lg border px-3 py-2 text-sm font-black ${tipoServicioSeleccionado === 'clase' ? 'border-[#6B4FE8] bg-[#6B4FE8] text-white' : 'border-[#D7D7D7] bg-white text-[#333]'}`}
+                >
+                  Clase
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTipoServicioSeleccionado('gym')}
+                  className={`rounded-lg border px-3 py-2 text-sm font-black ${tipoServicioSeleccionado === 'gym' ? 'border-[#6B4FE8] bg-[#6B4FE8] text-white' : 'border-[#D7D7D7] bg-white text-[#333]'}`}
+                >
+                  Gym
+                </button>
+              </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setScannerAbierto((prev) => !prev)}

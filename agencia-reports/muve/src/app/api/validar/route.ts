@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 import {
   PLAN_MAX_VISITAS_POR_LUGAR,
   PLAN_VISITAS_MENSUALES,
+  calcularMontoNegocioPorVisita,
+  normalizarCategoriasNegocio,
   normalizarPlan,
   resolverZonaNegocio,
   tarifaNegocioPorCheckin,
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
+
   if (!perfil || !['staff', 'admin', 'validador'].includes(perfil.rol)) {
     return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   }
@@ -81,6 +84,9 @@ export async function POST(request: NextRequest) {
   const userIdBody = typeof body.user_id === 'string' ? body.user_id.trim() : ''
   const negocioIdBody = typeof body.negocio_id === 'string' ? body.negocio_id : ''
   const soloCotizar = body.solo_cotizar === true
+  const tipoServicioBody: 'gym' | 'clase' | null = body.tipo_servicio === 'gym' || body.tipo_servicio === 'clase'
+    ? body.tipo_servicio
+    : null
   if (!token && !userIdBody) {
     return NextResponse.json({ error: 'Falta token o user_id' }, { status: 400 })
   }
@@ -273,6 +279,7 @@ export async function POST(request: NextRequest) {
   let negocio: {
     nombre: string
     categoria: string | null
+    categorias?: string[] | null
     nivel: 'basico' | 'plus' | 'total'
     plan_negocio: 'basico' | 'plus' | 'total'
     ciudad: string | null
@@ -282,11 +289,12 @@ export async function POST(request: NextRequest) {
   } | null = null
   const consultaNegocio = await db
     .from('negocios')
-    .select('nombre, categoria, nivel, plan_negocio, ciudad, zona, monto_maximo_visita, requiere_reserva')
+    .select('nombre, categoria, categorias, nivel, plan_negocio, ciudad, zona, monto_maximo_visita, requiere_reserva')
     .eq('id', negocioIdObjetivo)
     .maybeSingle<{
       nombre: string
       categoria: string | null
+      categorias?: string[] | null
       nivel?: 'basico' | 'plus' | 'total' | null
       plan_negocio?: 'basico' | 'plus' | 'total' | null
       ciudad: string | null
@@ -316,6 +324,9 @@ export async function POST(request: NextRequest) {
     const faltaRequiereReserva = faltaColumna(consultaNegocio.error, 'requiere_reserva')
     const faltaPlanNegocio = faltaColumna(consultaNegocio.error, 'plan_negocio')
     const columnasFallback = ['nombre', 'categoria', 'ciudad']
+    if (!faltaColumna(consultaNegocio.error, 'categorias')) {
+      columnasFallback.push('categorias')
+    }
     if (!faltaColumna(consultaNegocio.error, 'zona')) {
       columnasFallback.push('zona')
     }
@@ -335,6 +346,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle<{
         nombre: string
         categoria: string | null
+        categorias?: string[] | null
         nivel?: 'basico' | 'plus' | 'total' | null
         plan_negocio?: 'basico' | 'plus' | 'total' | null
         ciudad?: string | null
@@ -374,53 +386,61 @@ export async function POST(request: NextRequest) {
   }
 
   const categoriaNegocio = typeof negocio.categoria === 'string' ? negocio.categoria : null
+  const categoriasNegocio = normalizarCategoriasNegocio(negocio.categorias, categoriaNegocio)
+  const tieneGymYClases = categoriasNegocio.includes('gimnasio') && categoriasNegocio.includes('clases')
   const zonaNegocio = resolverZonaNegocio({ zona: negocio.zona, ciudad: negocio.ciudad })
-  const creditosNormalesServicio = 1
-  const costoDobleZonaPremium = zonaUsuario === 'zona1' && zonaNegocio === 'zona2'
-  const creditosServicio = costoDobleZonaPremium
-    ? (creditosNormalesServicio * 2)
-    : creditosNormalesServicio
-  if (((visitasCiclo ?? 0) + creditosServicio) > visitasDisponibles) {
-    return NextResponse.json({ valido: false, error: 'Usuario agotó sus créditos del ciclo actual' })
-  }
-  if (((visitasLugarCiclo ?? 0) + creditosServicio) > limitePorLugar) {
-    return NextResponse.json({
-      valido: false,
-      error: 'Límite de créditos en este lugar alcanzado',
-    })
-  }
-  const montoNegocioMxn = tarifaNegocioPorCheckin({
+  const montoMaximoAutorizadoMxn = categoriaNegocio === 'restaurante'
+    ? Math.max(Math.trunc(negocio.monto_maximo_visita ?? 0), 0)
+    : null
+  const hoy = new Date().toISOString().split('T')[0]
+  let tipoServicioDetectado: 'gym' | 'clase' | null = null
+  let tipoServicioEfectivo: 'gym' | 'clase' | null = tieneGymYClases
+    ? null
+    : (categoriasNegocio.includes('gimnasio') ? 'gym' : 'clase')
+  let categoriaEfectiva: string | null = categoriaNegocio
+  let montoNegocioMxn = tarifaNegocioPorCheckin({
     categoria: categoriaNegocio,
     planNegocio: negocio.plan_negocio,
     zona: negocio.zona,
     ciudad: negocio.ciudad,
   })
-  const montoMaximoAutorizadoMxn = categoriaNegocio === 'restaurante'
-    ? Math.max(Math.trunc(negocio.monto_maximo_visita ?? 0), 0)
-    : null
-  const hoy = new Date().toISOString().split('T')[0]
-  const permiteVisitaDirecta = categoriaNegocio === 'restaurante' && !negocio.requiere_reserva
+  let creditosServicio = 1
+  let costoDobleZonaPremium = false
+  let permiteVisitaDirecta = categoriaNegocio === 'restaurante' && !negocio.requiere_reserva
   let reservacionACompletarId: string | null = null
 
   let servicioReservado: { id: string; nombre: string; precio_normal_mxn: number | null; fecha: string } | null = null
   const { data: horariosNegocio, error: horariosError } = await db
     .from('horarios')
-    .select('id')
+    .select('id, tipo_servicio')
     .eq('negocio_id', negocioIdObjetivo)
 
   if (horariosError) {
     return NextResponse.json({ error: 'No se pudieron validar los horarios del negocio' }, { status: 500 })
   }
 
-  const horarioIds = Array.isArray(horariosNegocio)
-    ? horariosNegocio.map((item) => item.id).filter((id): id is string => typeof id === 'string' && id.length > 0)
+  const horarios = Array.isArray(horariosNegocio)
+    ? horariosNegocio
     : []
+  const horarioIds = horarios
+    .map((item) => item.id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  const tipoServicioPorHorario = new Map<string, 'gym' | 'clase'>(
+    horarios
+      .map((horario) => {
+        const id = typeof horario.id === 'string' ? horario.id : null
+        if (!id) return null
+        const tipo = horario.tipo_servicio === 'gym' ? 'gym' : 'clase'
+        return [id, tipo] as const
+      })
+      .filter((entry): entry is readonly [string, 'gym' | 'clase'] => Boolean(entry))
+  )
 
   if (horarioIds.length === 0 && !permiteVisitaDirecta) {
     return NextResponse.json(
       {
         valido: false,
-        error: categoriaNegocio === 'estetica'
+        error: categoriaEfectiva === 'estetica'
           ? 'Este negocio wellness no tiene horarios configurados'
           : 'Este negocio requiere reservación para validar créditos',
       },
@@ -475,14 +495,14 @@ export async function POST(request: NextRequest) {
     } else {
       const { data: reservacionConfirmada, error: reservacionConfirmadaError } = await db
         .from('reservaciones')
-        .select('id, fecha, created_at')
+        .select('id, fecha, created_at, horario_id')
         .eq('user_id', usuarioId)
         .eq('estado', 'confirmada')
         .eq('fecha', hoy)
         .in('horario_id', horarioIds)
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle<{ id: string; fecha: string; created_at: string }>()
+        .maybeSingle<{ id: string; fecha: string; created_at: string; horario_id: string | null }>()
 
       if (reservacionConfirmadaError) {
         return NextResponse.json({ error: 'No se pudo validar la reservación del usuario' }, { status: 500 })
@@ -490,10 +510,27 @@ export async function POST(request: NextRequest) {
 
       if (reservacionConfirmada) {
         reservacionACompletarId = reservacionConfirmada.id
+        if (typeof reservacionConfirmada.horario_id === 'string') {
+          tipoServicioDetectado = tipoServicioPorHorario.get(reservacionConfirmada.horario_id) ?? null
+        }
       }
     }
   }
+  tipoServicioEfectivo = tipoServicioDetectado ?? tipoServicioBody ?? tipoServicioEfectivo
+  if (tieneGymYClases && !tipoServicioEfectivo) {
+    return NextResponse.json({ valido: false, error: 'Selecciona el servicio usado: Gym o Clase.' }, { status: 400 })
+  }
+  categoriaEfectiva = tipoServicioEfectivo === 'gym'
+    ? 'gimnasio'
+    : (tipoServicioEfectivo === 'clase' ? 'clases' : categoriaNegocio)
+  permiteVisitaDirecta = (
+    (categoriaEfectiva === 'restaurante' && !negocio.requiere_reserva)
+    || categoriaEfectiva === 'gimnasio'
+  )
 
+  if (!reservacionACompletarId && categoriaEfectiva === 'clases' && tieneGymYClases) {
+    return NextResponse.json({ valido: false, error: 'Para validar Clase necesitas una reservación confirmada para hoy.' }, { status: 400 })
+  }
   if (!reservacionACompletarId && !permiteVisitaDirecta) {
     return NextResponse.json(
       {
@@ -505,6 +542,33 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   }
+  creditosServicio = categoriaEfectiva === 'gimnasio' ? 0.5 : 1
+  costoDobleZonaPremium = categoriaEfectiva !== 'gimnasio' && zonaUsuario === 'zona1' && zonaNegocio === 'zona2'
+  if (costoDobleZonaPremium) {
+    creditosServicio = creditosServicio * 2
+  }
+  if (((visitasCiclo ?? 0) + creditosServicio) > visitasDisponibles) {
+    return NextResponse.json({ valido: false, error: 'Usuario agotó sus créditos del ciclo actual' })
+  }
+  if (((visitasLugarCiclo ?? 0) + creditosServicio) > limitePorLugar) {
+    return NextResponse.json({
+      valido: false,
+      error: 'Límite de créditos en este lugar alcanzado',
+    })
+  }
+  montoNegocioMxn = categoriaEfectiva === 'clases' && tieneGymYClases
+    ? calcularMontoNegocioPorVisita({
+      categoria: 'clases',
+      planUsuario,
+      zona: negocio.zona,
+      ciudad: negocio.ciudad,
+    })
+    : tarifaNegocioPorCheckin({
+      categoria: categoriaEfectiva,
+      planNegocio: negocio.plan_negocio,
+      zona: negocio.zona,
+      ciudad: negocio.ciudad,
+    })
 
   if (soloCotizar) {
     return NextResponse.json({
@@ -512,7 +576,8 @@ export async function POST(request: NextRequest) {
       requiere_confirmacion: true,
       usuario: usuario.nombre,
       negocio: negocio.nombre,
-      categoria_negocio: categoriaNegocio,
+      categoria_negocio: categoriaEfectiva,
+      tipo_servicio: tipoServicioEfectivo,
       servicio_reservado: servicioReservado,
       monto_negocio_mxn: montoNegocioMxn,
       monto_maximo_autorizado_mxn: montoMaximoAutorizadoMxn,
@@ -617,7 +682,8 @@ export async function POST(request: NextRequest) {
     valido: true,
     usuario: usuario.nombre,
     negocio: negocio.nombre,
-    categoria_negocio: categoriaNegocio,
+    categoria_negocio: categoriaEfectiva,
+    tipo_servicio: tipoServicioEfectivo,
     servicio_reservado: servicioReservado,
     monto_negocio_mxn: montoNegocioMxn,
     monto_maximo_autorizado_mxn: montoMaximoAutorizadoMxn,

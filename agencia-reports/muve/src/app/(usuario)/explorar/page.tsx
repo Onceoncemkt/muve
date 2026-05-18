@@ -20,6 +20,7 @@ import {
   MAX_VISITAS_POR_LUGAR,
   PLAN_LABELS,
   normalizarCategoriaNegocio,
+  normalizarCategoriasNegocio,
   normalizarPlan,
   puedeReservarConPlan,
 } from '@/lib/planes'
@@ -601,6 +602,7 @@ export default function ExplorarPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {negociosFiltrados.map((negocio) => {
               const categoriaNegocio = normalizarCategoriaNegocio(negocio.categoria)
+              const categoriasNegocio = normalizarCategoriasNegocio(negocio.categorias, negocio.categoria)
               const planRequerido = planRequeridoNegocio(negocio)
               const bloqueadoPorMembresia = !planEfectivo
               const puedeReservar = !bloqueadoPorMembresia && planEfectivo
@@ -720,9 +722,16 @@ export default function ExplorarPage() {
                     </div>
                   ) : (
                     <div className="mt-2 space-y-1 text-sm text-[#555]">
-                      <p>
-                        <span className="font-semibold text-[#0A0A0A]">Categoría:</span> {categoriaNegocio ? CATEGORIA_LABELS[categoriaNegocio] : 'Sin categoría'}
-                      </p>
+                      <div>
+                        <p className="font-semibold text-[#0A0A0A]">Categorías:</p>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {categoriasNegocio.map((categoria) => (
+                            <span key={`${negocio.id}-${categoria}`} className="rounded-full bg-[#EFEAFE] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#6B4FE8]">
+                              {categoria === 'gimnasio' ? 'GYM' : categoria === 'clases' ? 'CLASES' : CATEGORIA_LABELS[categoria]}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                       <p>
                         <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {CIUDAD_LABELS[negocio.ciudad]}
                       </p>

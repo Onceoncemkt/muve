@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { Negocio, ServicioNegocio } from '@/types'
-import { normalizarCategoriaNegocio } from '@/lib/planes'
+import { normalizarCategoriaNegocio, normalizarCategoriasNegocio } from '@/lib/planes'
 
 type ServicioFila = {
   id: string
@@ -127,6 +127,7 @@ export async function GET() {
     return {
       ...negocio,
       categoria: categoriaNormalizada ?? negocio.categoria,
+      categorias: normalizarCategoriasNegocio((negocio as { categorias?: unknown }).categorias, negocio.categoria),
       nivel: nivelNormalizado,
       monto_maximo_visita: typeof negocio.monto_maximo_visita === 'number'
         ? Math.max(Math.trunc(negocio.monto_maximo_visita), 0)

@@ -1,6 +1,7 @@
 export type Ciudad = 'tulancingo' | 'pachuca' | 'ensenada' | 'tijuana' | 'tecate'
 export type ZonaNegocio = 'zona1' | 'zona1_5' | 'zona2'
-export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante'
+export type Categoria = 'gimnasio' | 'estetica' | 'clases' | 'restaurante' | 'clinica'
+export type TipoServicioHorario = 'clase' | 'gym'
 export type Rol = 'usuario' | 'staff' | 'admin'
 export type PlanMembresia = 'basico' | 'plus' | 'total'
 export type NivelNegocio = 'basico' | 'plus' | 'total'
@@ -82,6 +83,7 @@ export interface Negocio {
   id: string
   nombre: string
   categoria: Categoria
+  categorias?: Categoria[] | null
   ciudad: Ciudad
   zona?: ZonaNegocio | null
   direccion: string
@@ -121,6 +123,7 @@ export interface Horario {
   hora_fin: string
   nombre_coach: string | null
   tipo_clase: string | null
+  tipo_servicio?: TipoServicioHorario | null
   capacidad_total: number
   activo: boolean
 }
@@ -162,6 +165,7 @@ export const CATEGORIA_LABELS: Record<Categoria, string> = {
   estetica: 'Estética & Wellness',
   clases: 'Clases',
   restaurante: 'Restaurante',
+  clinica: 'Clínica',
 }
 
 export const CATEGORIA_ICONS: Record<Categoria, string> = {
@@ -169,6 +173,7 @@ export const CATEGORIA_ICONS: Record<Categoria, string> = {
   estetica: '✨',
   clases: '🧘',
   restaurante: '🥗',
+  clinica: '🏥',
 }
 
 export const DIA_LABELS: Record<DiaSemana, string> = {

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { normalizarCiudadOperativa, type Categoria, type Ciudad, type NivelNegocio, type Rol, type ZonaNegocio } from '@/types'
-const CATEGORIAS_VALIDAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
+import { normalizarCategoriaNegocio } from '@/lib/planes'
+const CATEGORIAS_VALIDAS: Categoria[] = ['gimnasio', 'clases', 'estetica', 'restaurante', 'clinica']
 const ZONAS_VALIDAS: ZonaNegocio[] = ['zona1', 'zona1_5', 'zona2']
 const NIVELES_VALIDOS: NivelNegocio[] = ['basico', 'plus', 'total']
 const COLUMNAS_OPCIONALES_NEGOCIO = [
@@ -15,6 +16,7 @@ const COLUMNAS_OPCIONALES_NEGOCIO = [
   'logo_url',
   'mostrar_en_landing',
   'imagen_url',
+  'categorias',
 ] as const
 const BUCKET_NEGOCIOS = 'negocios'
 
@@ -148,6 +150,10 @@ export async function POST(
 
   const nombre = texto(formData.get('nombre'))
   const categoriaRaw = texto(formData.get('categoria')).toLowerCase()
+  const categoriasRaw = formData.getAll('categorias')
+    .map((value) => (typeof value === 'string' ? value : ''))
+    .map((value) => normalizarCategoriaNegocio(value))
+    .filter((value): value is Categoria => Boolean(value) && CATEGORIAS_VALIDAS.includes(value))
   const ciudadRaw = texto(formData.get('ciudad')).toLowerCase()
   const zonaRaw = texto(formData.get('zona')).toLowerCase()
   const nivelRaw = texto(formData.get('nivel')).toLowerCase()
@@ -161,9 +167,13 @@ export async function POST(
   const capacidadDefaultRaw = texto(formData.get('capacidad_default'))
   const fotoNegocio = obtenerArchivoImagen(formData.get('foto_negocio'))
 
-  const categoria = CATEGORIAS_VALIDAS.includes(categoriaRaw as Categoria)
+  const categoriaDesdeCampo = CATEGORIAS_VALIDAS.includes(categoriaRaw as Categoria)
     ? (categoriaRaw as Categoria)
     : null
+  const categorias = categoriasRaw.length > 0
+    ? Array.from(new Set(categoriasRaw))
+    : (categoriaDesdeCampo ? [categoriaDesdeCampo] : [])
+  const categoria = categorias[0] ?? categoriaDesdeCampo ?? null
   const ciudad = normalizarCiudadOperativa(ciudadRaw)
   const zona = ZONAS_VALIDAS.includes(zonaRaw as ZonaNegocio)
     ? (zonaRaw as ZonaNegocio)
@@ -241,6 +251,7 @@ export async function POST(
   const payload: Record<string, unknown> = {
     nombre,
     categoria,
+    categorias,
     ciudad,
     zona,
     nivel,

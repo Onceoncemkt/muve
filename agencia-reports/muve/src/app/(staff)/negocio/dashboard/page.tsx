@@ -6,7 +6,7 @@ import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import NegocioReservacionesPanel from '@/components/negocio/NegocioReservacionesPanel'
 import type { DiaSemana, EstadoReserva, NivelNegocio, PlanMembresia } from '@/types'
 import { DIA_LABELS, PLAN_NEGOCIO_LABELS, formatHora } from '@/types'
-import { normalizarCategoriaNegocio, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
+import { normalizarCategoriaNegocio, normalizarCategoriasNegocio, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
 
 type UsuarioReserva = { id: string; nombre: string; email: string }
 type HorarioReserva = {
@@ -61,6 +61,7 @@ interface NegocioDashboard {
   monto_maximo_visita?: number | null
   servicios_incluidos?: string | null
   plan_negocio?: NivelNegocio | string | null
+  categorias?: string[] | null
 }
 
 interface GananciasSemana {
@@ -331,6 +332,8 @@ export default function NegocioDashboardPage() {
   const [configuracionRestaurante, setConfiguracionRestaurante] = useState<ConfiguracionRestaurante>(
     configuracionRestauranteInicial()
   )
+  const [categoriasNegocio, setCategoriasNegocio] = useState<string[]>([])
+  const [tabServicio, setTabServicio] = useState<'clases' | 'gym'>('clases')
   const [guardandoConfiguracionRestaurante, setGuardandoConfiguracionRestaurante] = useState(false)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(() => {
     if (typeof window === 'undefined') return null
@@ -416,6 +419,18 @@ export default function NegocioDashboardPage() {
     }, 0)
     return () => clearTimeout(id)
   }, [cargarDashboard])
+
+  useEffect(() => {
+    if (!negocio?.id) return
+    const id = window.setTimeout(async () => {
+      const res = await fetch('/api/negocio/negocios', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json().catch(() => ({})) as { negocios?: Array<{ id: string; categoria?: string | null; categorias?: string[] | null }> }
+      const negocioActual = (data.negocios ?? []).find((item) => item.id === negocio.id)
+      setCategoriasNegocio(normalizarCategoriasNegocio(negocioActual?.categorias, negocioActual?.categoria ?? negocio.categoria))
+    }, 0)
+    return () => window.clearTimeout(id)
+  }, [negocio?.id, negocio?.categoria])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -563,10 +578,11 @@ export default function NegocioDashboardPage() {
       })
   }, [reservaciones])
   const categoriaNegocio = normalizarCategoriaNegocio(negocio?.categoria)
+  const tieneGymYClases = categoriasNegocio.includes('gimnasio') && categoriasNegocio.includes('clases')
   const esRestaurante = categoriaNegocio === 'restaurante'
-  const esGimnasio = categoriaNegocio === 'gimnasio'
+  const esGimnasio = categoriaNegocio === 'gimnasio' || (tieneGymYClases && tabServicio === 'gym')
   const esEstetica = categoriaNegocio === 'estetica' || serviciosDisponibles.length > 0
-  const esClases = !esRestaurante && !esGimnasio && !esEstetica
+  const esClases = (categoriaNegocio === 'clases' || (tieneGymYClases && tabServicio === 'clases')) && !esEstetica && !esRestaurante
   const planNegocio: NivelNegocio = (
     negocio?.plan_negocio === 'plus' || negocio?.plan_negocio === 'total'
       ? negocio.plan_negocio
@@ -574,11 +590,19 @@ export default function NegocioDashboardPage() {
   )
   const tarifaMiCheckin = useMemo(() => {
     if (!negocio) return 0
+    if (tieneGymYClases && esGimnasio) {
+      const tarifasGym = obtenerTarifasNegocioPorPlan('gimnasio', negocio.zona ?? negocio.ciudad)
+      return tarifasGym[planNegocio] ?? 0
+    }
+    if (tieneGymYClases && esClases) {
+      const tarifasClases = obtenerTarifasNegocioPorPlan('clases', negocio.zona ?? negocio.ciudad)
+      return tarifasClases[planNegocio] ?? 0
+    }
     const tarifaCalculada = ganancias.tarifas_por_plan?.[planNegocio]
     if (typeof tarifaCalculada === 'number') return tarifaCalculada
     const tarifas = obtenerTarifasNegocioPorPlan(negocio.categoria, negocio.zona ?? negocio.ciudad)
     return tarifas[planNegocio] ?? 0
-  }, [negocio, planNegocio, ganancias.tarifas_por_plan])
+  }, [negocio, planNegocio, ganancias.tarifas_por_plan, tieneGymYClases, esGimnasio, esClases])
   const etiquetaCategoriaTarifa = esGimnasio
     ? 'Gym'
     : esClases
@@ -687,13 +711,38 @@ export default function NegocioDashboardPage() {
 
         {!sinNegocio && negocio && (
           <section className="rounded-xl border border-[#E5E5E5] bg-white p-4">
+            {tieneGymYClases && (
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTabServicio('clases')}
+                  className={`rounded-lg border px-3 py-2 text-xs font-black uppercase tracking-widest ${tabServicio === 'clases' ? 'border-[#6B4FE8] bg-[#6B4FE8] text-white' : 'border-[#E5E5E5] bg-white text-[#666]'}`}
+                >
+                  Clases
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTabServicio('gym')}
+                  className={`rounded-lg border px-3 py-2 text-xs font-black uppercase tracking-widest ${tabServicio === 'gym' ? 'border-[#6B4FE8] bg-[#6B4FE8] text-white' : 'border-[#E5E5E5] bg-white text-[#666]'}`}
+                >
+                  Gym
+                </button>
+              </div>
+            )}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Mi tarifa</p>
-                <p className="mt-1 text-3xl font-black text-[#0A0A0A]">
-                  {formatMonedaMXN(tarifaMiCheckin)}{' '}
-                  <span className="text-base font-bold text-[#666]">por check-in</span>
-                </p>
+                {tieneGymYClases ? (
+                  <div className="mt-1 space-y-1">
+                    <p className="text-xl font-black text-[#0A0A0A]">Gym: {formatMonedaMXN(obtenerTarifasNegocioPorPlan('gimnasio', negocio.zona ?? negocio.ciudad)[planNegocio] ?? 0)}</p>
+                    <p className="text-xl font-black text-[#0A0A0A]">Clases: {formatMonedaMXN(obtenerTarifasNegocioPorPlan('clases', negocio.zona ?? negocio.ciudad)[planNegocio] ?? 0)}</p>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-3xl font-black text-[#0A0A0A]">
+                    {formatMonedaMXN(tarifaMiCheckin)}{' '}
+                    <span className="text-base font-bold text-[#666]">por check-in</span>
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-[#666]">
                   {etiquetaCategoriaTarifa} · Plan{' '}
                   <span className="font-bold text-[#0A0A0A]">{PLAN_NEGOCIO_LABELS[planNegocio]}</span>

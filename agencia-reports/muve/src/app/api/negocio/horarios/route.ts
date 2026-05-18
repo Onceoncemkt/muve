@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
-import type { DiaSemana } from '@/types'
+import type { DiaSemana, TipoServicioHorario } from '@/types'
 
 const DIA_INDEX: Record<DiaSemana, number> = {
   domingo: 0,
@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}))
-  const { negocio_id, dia_semana, fecha, hora_inicio, hora_fin, capacidad_total, nombre_coach, tipo_clase, activo } = body as {
+  const { negocio_id, dia_semana, fecha, hora_inicio, hora_fin, capacidad_total, nombre_coach, tipo_clase, tipo_servicio, activo } = body as {
     negocio_id?: string
     dia_semana?: DiaSemana | string
     fecha?: string
@@ -205,7 +205,15 @@ export async function POST(request: NextRequest) {
     capacidad_total?: number | string
     nombre_coach?: string | null
     tipo_clase?: string | null
+    tipo_servicio?: TipoServicioHorario | string | null
     activo?: boolean
+  }
+  const tipoServicio: TipoServicioHorario = tipo_servicio === 'gym' ? 'gym' : 'clase'
+  if (tipoServicio === 'gym') {
+    return NextResponse.json(
+      { error: 'Los accesos de gym no requieren crear horarios reservables.' },
+      { status: 400 }
+    )
   }
 
   const diaSemanaFinal = esDiaSemana(dia_semana)
@@ -255,6 +263,7 @@ export async function POST(request: NextRequest) {
       capacidad_total: capacidadFinal,
       nombre_coach: nombreCoachNormalizado,
       tipo_clase: tipoClaseNormalizado,
+      tipo_servicio: tipoServicio,
       activo: typeof activo === 'boolean' ? activo : true,
     })
     .select('*')

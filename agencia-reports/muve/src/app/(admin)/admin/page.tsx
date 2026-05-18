@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, CATEGORIA_LABELS, ZONA_NEGOCIO_LABELS } from '@/types'
+import { CIUDAD_LABELS, CIUDADES_OPERATIVAS, ZONA_NEGOCIO_LABELS } from '@/types'
+import { normalizarCategoriasNegocio } from '@/lib/planes'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import StaffNegocioAsignadoSelect from '@/components/admin/StaffNegocioAsignadoSelect'
 import NegocioStaffAsignarSelect from '@/components/admin/NegocioStaffAsignarSelect'
@@ -37,6 +38,7 @@ type NegocioAdmin = {
   nivel?: NivelNegocio
   plan_negocio?: NivelNegocio | null
   categoria: Categoria
+  categorias?: Categoria[] | null
   direccion: string
   descripcion: string | null
   imagen_url: string | null
@@ -62,7 +64,14 @@ type CreditoOtorgadoRow = {
 }
 
 const CIUDADES: Ciudad[] = CIUDADES_OPERATIVAS
-const CATEGORIAS: Categoria[] = ['gimnasio', 'estetica', 'clases', 'restaurante']
+const CATEGORIAS: Categoria[] = ['gimnasio', 'clases', 'estetica', 'restaurante', 'clinica']
+const CATEGORIA_FORM_LABELS: Record<Categoria, string> = {
+  gimnasio: 'GYM',
+  clases: 'CLASES',
+  estetica: 'ESTÉTICAS Y SPA',
+  restaurante: 'RESTAURANTE',
+  clinica: 'CLÍNICA',
+}
 const ZONAS: ZonaNegocio[] = ['zona1', 'zona1_5', 'zona2']
 const NIVELES: NivelNegocio[] = ['basico', 'plus', 'total']
 const ZONA_LABELS: Record<ZonaNegocio, string> = ZONA_NEGOCIO_LABELS
@@ -214,7 +223,7 @@ export default async function AdminPage({
 
   const consultaConPlan = await db
     .from('negocios')
-    .select('id, nombre, ciudad, zona, nivel, plan_negocio, categoria, direccion, descripcion, imagen_url, logo_url, mostrar_en_landing, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
+      .select('id, nombre, ciudad, zona, nivel, plan_negocio, categoria, categorias, direccion, descripcion, imagen_url, logo_url, mostrar_en_landing, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
     .order('ciudad')
     .order('nombre')
 
@@ -225,7 +234,7 @@ export default async function AdminPage({
     if (faltaColumnaRequiereReserva(consultaConPlan.error)) {
       const consultaSinPlan = await db
         .from('negocios')
-        .select('id, nombre, ciudad, zona, nivel, categoria, direccion, descripcion, imagen_url, logo_url, mostrar_en_landing, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
+        .select('id, nombre, ciudad, zona, nivel, categoria, categorias, direccion, descripcion, imagen_url, logo_url, mostrar_en_landing, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
         .order('ciudad')
         .order('nombre')
 
@@ -596,6 +605,7 @@ export default async function AdminPage({
                   {negociosAfiliados.map(negocio => {
                     const staffAsignado = staffPorNegocio.get(negocio.id) ?? []
                     const planActual = (negocio.plan_negocio ?? 'basico') as NivelNegocio
+                    const categoriasNegocio = normalizarCategoriasNegocio(negocio.categorias, negocio.categoria)
                     const stripeStatus = stripeStatusPorNegocio.get(negocio.id) ?? 'no_account'
                     const planBadgeClass = planActual === 'total'
                       ? 'bg-[#E8FF47] text-[#0A0A0A] ring-[#E8FF47]'
@@ -657,22 +667,33 @@ export default async function AdminPage({
                                         URL pública del logo para la landing.
                                       </p>
                                     </div>
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                        Categoría
-                                      </label>
-                                      <select
-                                        name="categoria"
-                                        required
-                                        defaultValue={negocio.categoria}
-                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                      >
-                                        {CATEGORIAS.map(categoria => (
-                                          <option key={categoria} value={categoria}>
-                                            {CATEGORIA_LABELS[categoria]}
-                                          </option>
-                                        ))}
-                                      </select>
+                                    <div className="sm:col-span-2">
+                                      <p className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                                        Categorías
+                                      </p>
+                                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                        {CATEGORIAS.map(categoria => {
+                                          const checked = categoriasNegocio.includes(categoria)
+                                          const inputId = `edit-cat-${negocio.id}-${categoria}`
+                                          return (
+                                            <label
+                                              key={categoria}
+                                              htmlFor={inputId}
+                                              className="flex items-center gap-2 rounded-md border border-white/10 bg-[#151515] px-2.5 py-2 text-xs text-white/85"
+                                            >
+                                              <input
+                                                id={inputId}
+                                                type="checkbox"
+                                                name="categorias"
+                                                value={categoria}
+                                                defaultChecked={checked}
+                                                className="h-4 w-4 accent-[#6B4FE8]"
+                                              />
+                                              {CATEGORIA_FORM_LABELS[categoria]}
+                                            </label>
+                                          )
+                                        })}
+                                      </div>
                                     </div>
                                     <div>
                                       <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
@@ -894,9 +915,11 @@ export default async function AdminPage({
                         </header>
 
                         <div className="mt-3 flex flex-wrap gap-1.5">
-                          <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/65 ring-1 ring-white/10">
-                            {CATEGORIA_LABELS[negocio.categoria]}
-                          </span>
+                          {categoriasNegocio.map(categoria => (
+                            <span key={`${negocio.id}-${categoria}`} className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/65 ring-1 ring-white/10">
+                              {CATEGORIA_FORM_LABELS[categoria]}
+                            </span>
+                          ))}
                           <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/65 ring-1 ring-white/10">
                             {CIUDAD_LABELS[negocio.ciudad]}
                           </span>
@@ -1017,23 +1040,29 @@ export default async function AdminPage({
                   </div>
 
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
-                        Categoría
-                      </label>
-                      <select
-                        name="categoria"
-                        required
-                        defaultValue=""
-                        className="w-full rounded-md border border-white/15 bg-[#151515] px-3 py-2 text-sm text-white outline-none focus:border-[#6B4FE8]"
-                      >
-                        <option value="" disabled>Selecciona</option>
+                    <div className="sm:col-span-2">
+                      <p className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
+                        Categorías
+                      </p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {CATEGORIAS.map(categoria => (
-                          <option key={categoria} value={categoria}>
-                            {CATEGORIA_LABELS[categoria]}
-                          </option>
+                          <label
+                            key={categoria}
+                            className="flex items-center gap-2 rounded-md border border-white/10 bg-[#151515] px-3 py-2 text-sm text-white/85"
+                          >
+                            <input
+                              type="checkbox"
+                              name="categorias"
+                              value={categoria}
+                              className="h-4 w-4 accent-[#6B4FE8]"
+                            />
+                            {CATEGORIA_FORM_LABELS[categoria]}
+                          </label>
                         ))}
-                      </select>
+                      </div>
+                      <p className="mt-1 text-[10px] text-white/45">
+                        Selecciona al menos una categoría.
+                      </p>
                     </div>
                     <div>
                       <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/45">
