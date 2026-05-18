@@ -138,7 +138,9 @@ export async function GET(request: NextRequest) {
         return {
           ...h,
           fecha_proxima: fechaProximaYmd,
-          spots_disponibles: h.capacidad_total - (count ?? 0),
+          spots_disponibles: typeof h.capacidad_total === 'number'
+            ? h.capacidad_total - (count ?? 0)
+            : null,
           spots_ocupados: count ?? 0,
         }
       })
@@ -172,7 +174,9 @@ export async function GET(request: NextRequest) {
 
       return {
         ...h,
-        spots_disponibles: h.capacidad_total - (count ?? 0),
+        spots_disponibles: typeof h.capacidad_total === 'number'
+          ? h.capacidad_total - (count ?? 0)
+          : null,
         spots_ocupados: count ?? 0,
       }
     })
@@ -209,12 +213,6 @@ export async function POST(request: NextRequest) {
     activo?: boolean
   }
   const tipoServicio: TipoServicioHorario = tipo_servicio === 'gym' ? 'gym' : 'clase'
-  if (tipoServicio === 'gym') {
-    return NextResponse.json(
-      { error: 'Los accesos de gym no requieren crear horarios reservables.' },
-      { status: 400 }
-    )
-  }
 
   const diaSemanaFinal = esDiaSemana(dia_semana)
     ? dia_semana
@@ -239,7 +237,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'capacidad_total debe ser mayor a 0' }, { status: 400 })
   }
 
-  if (capacidadFinal === null) {
+  if (capacidadFinal === null && tipoServicio !== 'gym') {
     const { data: negocio } = await db
       .from('negocios')
       .select('capacidad_default')
@@ -250,8 +248,8 @@ export async function POST(request: NextRequest) {
       : 10
   }
 
-  const nombreCoachNormalizado = normalizarTextoOpcional(nombre_coach)
-  const tipoClaseNormalizado = normalizarTextoOpcional(tipo_clase)
+  const nombreCoachNormalizado = tipoServicio === 'gym' ? null : normalizarTextoOpcional(nombre_coach)
+  const tipoClaseNormalizado = tipoServicio === 'gym' ? null : normalizarTextoOpcional(tipo_clase)
 
   const { data: nuevo, error } = await db
     .from('horarios')
@@ -260,7 +258,7 @@ export async function POST(request: NextRequest) {
       dia_semana: diaSemanaFinal,
       hora_inicio,
       hora_fin,
-      capacidad_total: capacidadFinal,
+      capacidad_total: tipoServicio === 'gym' ? null : capacidadFinal,
       nombre_coach: nombreCoachNormalizado,
       tipo_clase: tipoClaseNormalizado,
       tipo_servicio: tipoServicio,

@@ -57,6 +57,7 @@ interface HorarioConSpots {
   activo: boolean
   spots_disponibles: number
   spots_ocupados: number
+  tipo_servicio?: "clase" | "gym" | null
 }
 
 interface CargaNegociosResponse {
@@ -200,10 +201,13 @@ export default function NegocioHorariosPage() {
   const categoriaNegocio = normalizarCategoriaNegocio(negocioSeleccionado?.categoria)
   const categoriasNegocio = normalizarCategoriasNegocio(negocioSeleccionado?.categorias, categoriaNegocio)
   const tieneGymYClases = categoriasNegocio.includes('gimnasio') && categoriasNegocio.includes('clases')
-  const esGimnasio = categoriaNegocio === 'gimnasio' || (tieneGymYClases && tipoServicioSeleccionado === 'gym')
-  const esClases = categoriaNegocio === 'clases' || (tieneGymYClases && tipoServicioSeleccionado === 'clase')
-  const esRestaurante = categoriaNegocio === 'restaurante'
-  const esWellness = categoriaNegocio === 'estetica'
+  const categoriaActiva: Categoria | null = tieneGymYClases
+    ? (tipoServicioSeleccionado === 'gym' ? 'gimnasio' : 'clases')
+    : categoriaNegocio
+  const esGimnasio = categoriaActiva === 'gimnasio'
+  const esClases = categoriaActiva === 'clases'
+  const esRestaurante = categoriaActiva === 'restaurante'
+  const esWellness = categoriaActiva === 'estetica'
 
   const inputCls = 'w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8] focus:ring-1 focus:ring-[#6B4FE8]/20'
 
@@ -237,7 +241,7 @@ export default function NegocioHorariosPage() {
 
 
   async function cargarHorarios(negocioActualId: string, categoriaActual: Categoria | null) {
-    if (!negocioActualId || categoriaActual === 'gimnasio') {
+    if (!negocioActualId) {
       setHorarios([])
       return
     }
@@ -253,7 +257,14 @@ export default function NegocioHorariosPage() {
         setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudieron cargar horarios' })
         setHorarios([])
       } else {
-        setHorarios((data.horarios ?? []) as HorarioConSpots[])
+        const todos = (data.horarios ?? []) as HorarioConSpots[]
+        if (categoriaActual === 'gimnasio') {
+          setHorarios(todos.filter((horario) => horario.tipo_servicio === 'gym'))
+        } else if (tieneGymYClases && categoriaActual === 'clases') {
+          setHorarios(todos.filter((horario) => (horario.tipo_servicio ?? 'clase') === 'clase'))
+        } else {
+          setHorarios(todos)
+        }
       }
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al consultar horarios' })
@@ -265,10 +276,10 @@ export default function NegocioHorariosPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void cargarHorarios(negocioId, categoriaNegocio)
+      void cargarHorarios(negocioId, categoriaActiva)
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [categoriaNegocio, negocioId])
+  }, [categoriaActiva, negocioId, tieneGymYClases])
 
   const horariosOrdenados = useMemo(() => {
     return horarios.slice().sort((a, b) => {
@@ -350,7 +361,7 @@ export default function NegocioHorariosPage() {
   }
 
   async function crearHorariosPorCategoria() {
-    if (!negocioId || !categoriaNegocio) {
+    if (!negocioId || !categoriaActiva) {
       setMensaje({ tipo: 'error', texto: 'Selecciona un negocio' })
       return
     }
@@ -363,7 +374,7 @@ export default function NegocioHorariosPage() {
     let precioWellness = 0
     let nombreServicioWellness = ''
 
-    if (categoriaNegocio === 'clases') {
+    if (categoriaActiva === 'clases') {
       if (formClases.capacidad_total < 1) {
         setMensaje({ tipo: 'error', texto: 'La capacidad debe ser mayor a 0' })
         return
@@ -392,7 +403,7 @@ export default function NegocioHorariosPage() {
       }
     }
 
-    if (categoriaNegocio === 'restaurante') {
+    if (categoriaActiva === 'restaurante') {
       if (!formRestaurante.servicio_descuento.trim()) {
         setMensaje({ tipo: 'error', texto: 'Especifica el servicio o descuento' })
         return
@@ -418,7 +429,7 @@ export default function NegocioHorariosPage() {
       })
     }
 
-    if (categoriaNegocio === 'estetica') {
+    if (categoriaActiva === 'estetica') {
       if (!formWellness.servicio_incluido.trim()) {
         setMensaje({ tipo: 'error', texto: 'Especifica el servicio incluido' })
         return
@@ -472,7 +483,7 @@ export default function NegocioHorariosPage() {
         creados += 1
       }
 
-      if (categoriaNegocio === 'estetica') {
+      if (categoriaActiva === 'estetica') {
         await sincronizarServicioWellness(nombreServicioWellness, precioWellness)
       }
 
@@ -483,7 +494,7 @@ export default function NegocioHorariosPage() {
           : `Se crearon ${creados} horarios recurrentes`,
       })
       setMostrarForm(false)
-      void cargarHorarios(negocioId, categoriaNegocio)
+      void cargarHorarios(negocioId, categoriaActiva)
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al crear horarios' })
     } finally {
@@ -504,30 +515,34 @@ export default function NegocioHorariosPage() {
     setGuardandoGym(true)
     setMensaje(null)
     try {
-      const serializado = serializarHorarioGeneralGym(gymDraft)
-      const res = await fetch('/api/negocio/configuracion', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          negocio_id: negocioId,
-          servicios_incluidos: serializado,
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudo guardar el horario general' })
-        return
+      let creados = 0
+      for (const dia of DIAS) {
+        const res = await fetch('/api/negocio/horarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            negocio_id: negocioId,
+            dia_semana: dia,
+            hora_inicio: gymDraft.apertura,
+            hora_fin: gymDraft.cierre,
+            tipo_clase: null,
+            nombre_coach: null,
+            capacidad_total: null,
+            activo: true,
+            tipo_servicio: 'gym',
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setMensaje({ tipo: 'error', texto: data.error ?? 'No se pudo guardar el horario de acceso' })
+          return
+        }
+        creados += 1
       }
-
-      setNegocios((prev) => prev.map((negocio) => (
-        negocio.id === negocioId
-          ? { ...negocio, servicios_incluidos: serializado }
-          : negocio
-      )))
-      setMensaje({ tipo: 'ok', texto: 'Horario general de gimnasio actualizado' })
+      setMensaje({ tipo: 'ok', texto: `Se guardaron ${creados} horarios de acceso gym` })
+      void cargarHorarios(negocioId, 'gimnasio')
     } catch {
-      setMensaje({ tipo: 'error', texto: 'Error de conexión al guardar horario general' })
+      setMensaje({ tipo: 'error', texto: 'Error de conexión al guardar horario de acceso' })
     } finally {
       setGuardandoGym(false)
     }
@@ -556,7 +571,7 @@ export default function NegocioHorariosPage() {
         activo: edicionDraft.activo,
       }
 
-      if (categoriaNegocio === 'clases') {
+      if (categoriaActiva === 'clases') {
         payload.nombre_coach = edicionDraft.nombre_coach
         payload.tipo_clase = edicionDraft.tipo_clase
       } else {
@@ -577,7 +592,7 @@ export default function NegocioHorariosPage() {
         setMensaje({ tipo: 'ok', texto: 'Horario actualizado' })
         setEdicionId(null)
         setEdicionDraft(null)
-        void cargarHorarios(negocioId, categoriaNegocio)
+        void cargarHorarios(negocioId, categoriaActiva)
       }
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al actualizar el horario' })
@@ -602,7 +617,7 @@ export default function NegocioHorariosPage() {
           setEdicionId(null)
           setEdicionDraft(null)
         }
-        void cargarHorarios(negocioId, categoriaNegocio)
+        void cargarHorarios(negocioId, categoriaActiva)
       }
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al eliminar horario' })
@@ -796,13 +811,13 @@ export default function NegocioHorariosPage() {
 
         {negocioId && esGimnasio && (
           <div className="rounded-xl border border-[#E5E5E5] bg-white p-4">
-            <h2 className="text-sm font-black uppercase tracking-widest text-[#0A0A0A]">Operación de gimnasio</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-[#0A0A0A]">Horarios de acceso para socios MUVET</h2>
             <p className="mt-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3 text-sm text-[#444]">
-              Los gimnasios no requieren horarios. Los usuarios llegan directo y escanean su QR.
+              Configura el rango de acceso para socios MUVET. Este guardado crea acceso recurrente para todos los días.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">Apertura general</label>
+                <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">Hora apertura</label>
                 <input
                   type="time"
                   value={gymDraft.apertura}
@@ -811,7 +826,7 @@ export default function NegocioHorariosPage() {
                 />
               </div>
               <div>
-                <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">Cierre general</label>
+                <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">Hora cierre</label>
                 <input
                   type="time"
                   value={gymDraft.cierre}
@@ -826,7 +841,7 @@ export default function NegocioHorariosPage() {
                   disabled={guardandoGym}
                   className="w-full rounded-lg bg-[#6B4FE8] px-4 py-2 text-xs font-bold uppercase tracking-widest text-white transition-colors hover:bg-[#5a3fd6] disabled:opacity-40"
                 >
-                  {guardandoGym ? 'Guardando...' : 'Guardar horario general'}
+                  {guardandoGym ? 'Guardando...' : 'Guardar acceso todos los días'}
                 </button>
               </div>
             </div>

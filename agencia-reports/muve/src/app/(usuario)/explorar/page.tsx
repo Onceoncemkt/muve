@@ -42,6 +42,7 @@ type HorarioExplorar = {
   dia_semana: DiaSemana
   hora_inicio: string
   hora_fin: string
+  tipo_servicio?: 'clase' | 'gym' | null
   fecha_proxima?: string
   nombre_coach: string | null
   tipo_clase: string | null
@@ -189,6 +190,39 @@ function formatMoneyMxn(monto: number) {
     currency: 'MXN',
     maximumFractionDigits: 0,
   }).format(monto)
+}
+
+function resumenDiasAccesoGym(dias: DiaSemana[]) {
+  const orden: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+  const unicos = orden.filter((dia) => dias.includes(dia))
+  if (unicos.length === 7) return 'Todos los días'
+  if (
+    ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'].every((dia) => unicos.includes(dia as DiaSemana))
+    && !unicos.includes('sabado')
+    && !unicos.includes('domingo')
+  ) {
+    return 'Lunes a Viernes'
+  }
+  if (unicos.length === 2 && unicos.includes('sabado') && unicos.includes('domingo')) {
+    return 'Sábado y Domingo'
+  }
+  return unicos.map((dia) => DIA_LABELS[dia]).join(', ')
+}
+
+function resumirAccesosGym(horarios: HorarioExplorar[]) {
+  const grupos = new Map<string, DiaSemana[]>()
+  for (const horario of horarios) {
+    if (horario.tipo_servicio !== 'gym') continue
+    const key = `${horario.hora_inicio}-${horario.hora_fin}`
+    const dias = grupos.get(key) ?? []
+    dias.push(horario.dia_semana)
+    grupos.set(key, dias)
+  }
+
+  return Array.from(grupos.entries()).map(([rango, dias]) => {
+    const [inicio, fin] = rango.split('-')
+    return `Acceso MUVET: ${resumenDiasAccesoGym(dias)} ${formatHora(inicio)} — ${formatHora(fin)}`
+  })
 }
 
 
@@ -619,6 +653,7 @@ export default function ExplorarPage() {
               const menuReservasAbierto = Boolean(menuReservasAbiertoPorNegocioId[negocio.id])
               const cargandoHorarios = Boolean(cargandoHorariosPorNegocioId[negocio.id])
               const horarios = horariosPorNegocioId[negocio.id] ?? []
+              const accesosGym = resumirAccesosGym(horarios)
               const disponibilidadCargada = Object.prototype.hasOwnProperty.call(horariosPorNegocioId, negocio.id)
               const errorHorarios = errorHorariosPorNegocioId[negocio.id]
               const sinHorariosFuturos = !esRestaurante && disponibilidadCargada && !cargandoHorarios && !errorHorarios && horarios.length === 0
@@ -732,6 +767,15 @@ export default function ExplorarPage() {
                           ))}
                         </div>
                       </div>
+                      {accesosGym.length > 0 && (
+                        <div>
+                          {accesosGym.slice(0, 2).map((acceso) => (
+                            <p key={`${negocio.id}-${acceso}`} className="text-xs font-semibold text-[#444]">
+                              {acceso}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                       <p>
                         <span className="font-semibold text-[#0A0A0A]">Ciudad:</span> {CIUDAD_LABELS[negocio.ciudad]}
                       </p>

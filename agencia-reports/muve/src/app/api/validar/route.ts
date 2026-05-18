@@ -14,6 +14,27 @@ import {
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 import { getValidadorSession } from '@/lib/validador-auth'
 import { notificarActualizacionWallet } from '@/lib/wallet/notificar-actualizacion'
+function diaSemanaActual(): 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo' {
+  const dias: Array<'domingo' | 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado'> = [
+    'domingo',
+    'lunes',
+    'martes',
+    'miercoles',
+    'jueves',
+    'viernes',
+    'sabado',
+  ]
+  const ahora = new Date()
+  return dias[ahora.getDay()]
+}
+
+function horaActualHHMMSS() {
+  const ahora = new Date()
+  const hh = String(ahora.getHours()).padStart(2, '0')
+  const mm = String(ahora.getMinutes()).padStart(2, '0')
+  const ss = String(ahora.getSeconds()).padStart(2, '0')
+  return `${hh}:${mm}:${ss}`
+}
 
 export async function POST(request: NextRequest) {
   const authClient = await createClient()
@@ -541,6 +562,36 @@ export async function POST(request: NextRequest) {
       },
       { status: 400 }
     )
+  }
+
+  if (categoriaEfectiva === 'gimnasio') {
+    const diaActual = diaSemanaActual()
+    const horaActual = horaActualHHMMSS()
+    const { data: ventanasGym, error: ventanasGymError } = await db
+      .from('horarios')
+      .select('hora_inicio, hora_fin')
+      .eq('negocio_id', negocioIdObjetivo)
+      .eq('activo', true)
+      .eq('tipo_servicio', 'gym')
+      .eq('dia_semana', diaActual)
+
+    if (ventanasGymError) {
+      return NextResponse.json({ error: 'No se pudo validar el horario de acceso del gym' }, { status: 500 })
+    }
+
+    const dentroDeHorarioGym = (ventanasGym ?? []).some((ventana) => (
+      typeof ventana.hora_inicio === 'string'
+      && typeof ventana.hora_fin === 'string'
+      && horaActual >= ventana.hora_inicio
+      && horaActual <= ventana.hora_fin
+    ))
+
+    if (!dentroDeHorarioGym) {
+      return NextResponse.json(
+        { valido: false, error: 'El gym no está disponible para socios MUVET en este horario.' },
+        { status: 400 }
+      )
+    }
   }
   creditosServicio = categoriaEfectiva === 'gimnasio' ? 0.5 : 1
   costoDobleZonaPremium = categoriaEfectiva !== 'gimnasio' && zonaUsuario === 'zona1' && zonaNegocio === 'zona2'
