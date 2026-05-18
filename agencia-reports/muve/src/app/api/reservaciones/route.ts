@@ -92,6 +92,67 @@ function plantillaConfirmacionReserva({
   `
 }
 
+function etiquetaPlan(plan: 'basico' | 'plus' | 'total') {
+  if (plan === 'plus') return 'PLUS'
+  if (plan === 'total') return 'TOTAL'
+  return 'BÁSICO'
+}
+
+function plantillaNuevaReservacionNegocio({
+  nombreUsuario,
+  planUsuario,
+  fecha,
+  hora,
+  tipoServicio,
+  tieneLesiones,
+}: {
+  nombreUsuario: string
+  planUsuario: 'basico' | 'plus' | 'total'
+  fecha: string
+  hora: string
+  tipoServicio: string
+  tieneLesiones: boolean
+}) {
+  const nombreSeguro = escapeHtml(nombreUsuario)
+  const fechaSegura = escapeHtml(fecha)
+  const horaSegura = escapeHtml(hora)
+  const tipoServicioSeguro = escapeHtml(tipoServicio)
+  const planSeguro = escapeHtml(etiquetaPlan(planUsuario))
+
+  return `
+    <div style="font-family: Inter, Arial, sans-serif; background: #0A0A0A; color: #ffffff; padding: 24px;">
+      <div style="max-width: 560px; margin: 0 auto; border: 1px solid #1f1f1f; border-radius: 12px; overflow: hidden;">
+        <div style="padding: 20px 24px; border-bottom: 1px solid #1f1f1f;">
+          <p style="font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #E8FF47; margin: 0;">MUVET</p>
+          <h1 style="font-size: 24px; line-height: 1.2; margin: 10px 0 0;">Nueva reservación confirmada</h1>
+        </div>
+        <div style="padding: 20px 24px;">
+          <p style="margin: 0 0 12px; color: #d1d5db;">Se registró una nueva reservación en tu negocio:</p>
+          <p style="margin: 0 0 8px;"><strong>Cliente:</strong> ${nombreSeguro}</p>
+          <p style="margin: 0 0 8px;">
+            <strong>Plan activo:</strong>
+            <span style="display: inline-block; margin-left: 6px; background: #6B4FE8; color: #ffffff; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700;">
+              ${planSeguro}
+            </span>
+          </p>
+          <p style="margin: 0 0 8px;"><strong>Fecha:</strong> ${fechaSegura}</p>
+          <p style="margin: 0 0 8px;"><strong>Hora:</strong> ${horaSegura}</p>
+          <p style="margin: 0 0 8px;"><strong>Clase / servicio:</strong> ${tipoServicioSeguro}</p>
+          ${tieneLesiones ? `
+            <div style="margin-top: 14px; border: 1px solid #E8FF47; background: rgba(232,255,71,0.12); border-radius: 8px; padding: 10px;">
+              <p style="margin: 0; color: #E8FF47; font-weight: 700;">Este cliente tiene lesiones registradas</p>
+            </div>
+          ` : ''}
+          <div style="margin-top: 18px;">
+            <a href="https://muvet.mx/negocio/dashboard" style="display: inline-block; background: #E8FF47; color: #0A0A0A; text-decoration: none; font-weight: 800; padding: 10px 14px; border-radius: 8px;">
+              Ir al panel del negocio
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+}
 async function enviarEmailConfirmacionReserva({
   email,
   nombreUsuario,
@@ -146,6 +207,59 @@ async function enviarEmailConfirmacionReserva({
   }
 }
 
+async function enviarEmailNuevaReservacionNegocio({
+  email,
+  nombreUsuario,
+  planUsuario,
+  fecha,
+  hora,
+  tipoServicio,
+  tieneLesiones,
+}: {
+  email: string | null
+  nombreUsuario: string
+  planUsuario: 'basico' | 'plus' | 'total'
+  fecha: string
+  hora: string
+  tipoServicio: string
+  tieneLesiones: boolean
+}) {
+  if (!email) return
+
+  const resendApiKey = process.env.RESEND_API_KEY
+  const fromEmail = getEmailFrom()
+  if (!resendApiKey) return
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [email],
+        subject: `Nueva reservación MUVET — ${nombreUsuario} — ${hora}`,
+        html: plantillaNuevaReservacionNegocio({
+          nombreUsuario,
+          planUsuario,
+          fecha,
+          hora,
+          tipoServicio,
+          tieneLesiones,
+        }),
+      }),
+    })
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      console.warn('[POST /api/reservaciones] No se pudo enviar email al negocio', payload)
+    }
+  } catch (error) {
+    console.warn('[POST /api/reservaciones] Error enviando email al negocio', error)
+  }
+}
 function admin() {
   return createAdmin(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -615,28 +729,61 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: iError.message }, { status: 500 })
   }
 
-  const [negocioData, usuarioData] = await Promise.all([
-    typeof horario.negocio_id === 'string'
-      ? db
+  let negocioNombre = 'negocio'
+  let negocioEmail: string | null = null
+  if (typeof horario.negocio_id === 'string') {
+    const consultasNegocio = [
+      'nombre, email_contacto',
+      'nombre, contacto_email',
+      'nombre, email',
+      'nombre',
+    ] as const
+
+    for (const select of consultasNegocio) {
+      const { data, error } = await db
         .from('negocios')
-        .select('nombre')
+        .select(select)
         .eq('id', horario.negocio_id)
-        .maybeSingle<{ nombre: string }>()
-      : Promise.resolve({ data: null, error: null }),
-    db
+        .maybeSingle<Record<string, unknown>>()
+
+      if (error) continue
+      if (data) {
+        negocioNombre = typeof data.nombre === 'string' ? data.nombre : 'negocio'
+        const emailContacto = typeof data.email_contacto === 'string' ? data.email_contacto.trim() : ''
+        const contactoEmail = typeof data.contacto_email === 'string' ? data.contacto_email.trim() : ''
+        const emailNegocio = typeof data.email === 'string' ? data.email.trim() : ''
+        negocioEmail = emailNegocio || contactoEmail || emailContacto || null
+        break
+      }
+    }
+  }
+
+  let usuarioData: { nombre: string; email: string | null; lesiones?: string | null } | null = null
+  const usuarioConLesiones = await db
+    .from('users')
+    .select('nombre, email, lesiones')
+    .eq('id', user.id)
+    .maybeSingle<{ nombre: string; email: string | null; lesiones: string | null }>()
+
+  if (!usuarioConLesiones.error) {
+    usuarioData = usuarioConLesiones.data
+  } else if (faltaColumna(usuarioConLesiones.error, 'lesiones')) {
+    const usuarioSinLesiones = await db
       .from('users')
       .select('nombre, email')
       .eq('id', user.id)
-      .maybeSingle<{ nombre: string; email: string | null }>(),
-  ])
+      .maybeSingle<{ nombre: string; email: string | null }>()
+    usuarioData = usuarioSinLesiones.data
+  }
 
-  const negocioNombre = negocioData.data?.nombre ?? 'negocio'
-  const usuarioNombre = usuarioData.data?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
-  const usuarioEmail = usuarioData.data?.email ?? user.email ?? null
+  const usuarioNombre = usuarioData?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
+  const usuarioEmail = usuarioData?.email ?? user.email ?? null
+  const tieneLesiones = typeof usuarioData?.lesiones === 'string' && usuarioData.lesiones.trim().length > 0
   const hora = formatHora(horario.hora_inicio)
   const nombreCoach = normalizarTextoOpcional((horario as { nombre_coach?: unknown }).nombre_coach)
   const tipoClase = normalizarTextoOpcional((horario as { tipo_clase?: unknown }).tipo_clase)
   const detalle = detalleHorario(tipoClase, nombreCoach)
+  const tipoServicio = servicioReservado?.nombre ?? tipoClase ?? 'Clase'
 
   await enviarPushAUsuarios(
     [user.id],
@@ -654,7 +801,7 @@ export async function POST(request: NextRequest) {
         staffIds,
         {
           title: 'MUVET',
-          body: `Nueva reservación de ${usuarioNombre} para ${fecha} a las ${hora}${detalle ? ` · ${detalle}` : ''}`,
+          body: `Nueva reservación: ${usuarioNombre} — ${hora} — ${tipoServicio}`,
           url: '/negocio/dashboard',
         }
       )
@@ -669,6 +816,16 @@ export async function POST(request: NextRequest) {
     hora,
     tipoClase,
     nombreCoach,
+  })
+
+  await enviarEmailNuevaReservacionNegocio({
+    email: negocioEmail,
+    nombreUsuario: usuarioNombre,
+    planUsuario,
+    fecha,
+    hora,
+    tipoServicio,
+    tieneLesiones,
   })
 
   return NextResponse.json({ reservacion: nueva }, { status: 201 })
