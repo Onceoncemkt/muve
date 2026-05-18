@@ -3,24 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import type { EmailOtpType } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
-
-type TipoFlujo = 'invite' | 'signup' | 'recovery'
-
-function normalizarTipo(value: string | null): TipoFlujo | null {
-  if (!value) return null
-  const tipo = value.trim().toLowerCase()
-  if (tipo === 'invite' || tipo === 'signup' || tipo === 'recovery') {
-    return tipo
-  }
-  return null
-}
-
-function tituloPorTipo(tipo: TipoFlujo | null) {
-  if (tipo === 'recovery') return 'Nueva contraseña'
-  return 'Crea tu contraseña'
-}
 
 export default function ConfirmPage() {
   return (
@@ -39,7 +22,6 @@ function ConfirmPageContent() {
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
   const [inicializando, setInicializando] = useState(true)
-  const [tipoFlujo, setTipoFlujo] = useState<TipoFlujo | null>(null)
   const [tokenValido, setTokenValido] = useState(false)
 
   useEffect(() => {
@@ -51,50 +33,29 @@ function ConfirmPageContent() {
       setError(null)
 
       const tokenHash = searchParams.get('token_hash')
-      const typeQueryRaw = searchParams.get('type')
-      const tipoQuery = normalizarTipo(typeQueryRaw)
-      let flujoDetectado: TipoFlujo | null = null
+      const typeQuery = searchParams.get('type')?.trim().toLowerCase()
 
       try {
-        if (tokenHash && tipoQuery) {
-          flujoDetectado = tipoQuery
-          await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: tipoQuery as EmailOtpType,
-          })
-        } else {
-          const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : ''
-          const hashParams = new URLSearchParams(hash)
-          const accessToken = hashParams.get('access_token')
-          const refreshToken = hashParams.get('refresh_token')
-          const tipoHash = normalizarTipo(hashParams.get('type'))
-
-          if (accessToken && refreshToken && tipoHash) {
-            flujoDetectado = tipoHash
-            await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            })
-
-            if (typeof window !== 'undefined') {
-              const limpia = `${window.location.pathname}${window.location.search}`
-              window.history.replaceState({}, '', limpia)
-            }
-          }
+        if (!tokenHash || typeQuery !== 'invite') {
+          throw new Error('Link inválido o expirado')
         }
+
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'invite',
+        })
+        if (verifyError) throw verifyError
 
         const { data: authData } = await supabase.auth.getUser()
         if (!activo) return
 
-        const sesionActiva = Boolean(authData.user)
-        const tipoPermitido = flujoDetectado === 'invite' || flujoDetectado === 'signup' || flujoDetectado === 'recovery'
-        const valido = sesionActiva && tipoPermitido
-        setTipoFlujo(flujoDetectado)
+        const valido = Boolean(authData.user)
         setTokenValido(valido)
-
-        if (!valido) {
-          setError('Link inválido o expirado')
-        }
+        if (!valido) setError('Link inválido o expirado')
+      } catch {
+        if (!activo) return
+        setTokenValido(false)
+        setError('Link inválido o expirado')
       } finally {
         if (activo) setInicializando(false)
       }
@@ -133,9 +94,7 @@ function ConfirmPageContent() {
         setError(updateError.message)
         return
       }
-
-      await supabase.auth.signOut()
-      router.replace('/login?activada=1')
+      router.replace('/negocio/dashboard')
       router.refresh()
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
@@ -144,18 +103,14 @@ function ConfirmPageContent() {
     }
   }
 
-  const mostrarFormulario = tokenValido && Boolean(tipoFlujo)
-  const titulo = tituloPorTipo(tipoFlujo)
-  const subtitulo = tipoFlujo === 'recovery'
-    ? 'Actualiza tu contraseña para recuperar el acceso.'
-    : 'Activa tu cuenta para poder iniciar sesión.'
+  const mostrarFormulario = tokenValido
 
   return (
     <div className="flex min-h-screen flex-col bg-[#0A0A0A]">
       <div className="px-6 pt-8">
         <Link
           href="/"
-          className="text-xs font-bold uppercase tracking-widest text-white/30 transition-colors hover:text-white/60"
+          className="inline-flex items-center rounded-full border border-[#6B4FE8]/45 bg-[#6B4FE8]/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-[#E8FF47] transition-colors hover:border-[#E8FF47]/50 hover:text-white"
         >
           MUVET
         </Link>
@@ -165,9 +120,11 @@ function ConfirmPageContent() {
         <div className="w-full max-w-sm">
           <div className="mb-10">
             <h1 className="text-4xl font-black tracking-tight text-white">
-              {titulo}
+              Crea tu contraseña
             </h1>
-            <p className="mt-3 text-sm text-white/40">{subtitulo}</p>
+            <p className="mt-3 text-sm text-white/40">
+              Bienvenido a MUVET. Elige una contraseña para acceder a tu panel.
+            </p>
           </div>
 
           {inicializando ? (
@@ -188,7 +145,7 @@ function ConfirmPageContent() {
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] font-bold uppercase tracking-widest text-white/30">
-                  {tipoFlujo === 'recovery' ? 'Nueva contraseña' : 'Crea tu contraseña'}
+                  Nueva contraseña
                 </label>
                 <input
                   type="password"
@@ -223,7 +180,7 @@ function ConfirmPageContent() {
                 disabled={cargando || !tokenValido}
                 className="mt-1 w-full rounded-lg bg-[#E8FF47] py-4 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-white disabled:opacity-40"
               >
-                {cargando ? 'Guardando...' : 'Guardar contraseña'}
+                {cargando ? 'Activando cuenta...' : 'Activar mi cuenta'}
               </button>
             </form>
           )}
