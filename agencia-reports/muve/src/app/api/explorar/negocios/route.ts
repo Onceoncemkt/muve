@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { Negocio, ServicioNegocio } from '@/types'
-import { normalizarCategoriaNegocio, normalizarCategoriasNegocio } from '@/lib/planes'
+import { MAX_VISITAS_POR_LUGAR, normalizarCategoriaNegocio, normalizarCategoriasNegocio, normalizarPlan } from '@/lib/planes'
+import { resolverVentanaCiclo } from '@/lib/ciclos'
 
 type ServicioFila = {
   id: string
@@ -11,6 +12,15 @@ type ServicioFila = {
   precio_normal_mxn: number | null
   descripcion: string | null
   activo: boolean | null
+}
+type PerfilUsuarioLimites = {
+  plan: string | null
+  plan_activo: boolean | null
+  fecha_inicio_ciclo: string | null
+  fecha_fin_plan: string | null
+}
+type ReservacionConNegocio = {
+  horarios: { negocio_id: string | null } | Array<{ negocio_id: string | null }> | null
 }
 async function consultarNegocios(cliente: ReturnType<typeof createServiceClient>) {
   let consulta = await cliente
@@ -50,6 +60,7 @@ function parseServiciosTexto(negocioId: string, serviciosIncluidos: string | nul
 
 export async function GET() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   let clienteLectura = supabase
 
   let consulta = await consultarNegocios(supabase as unknown as ReturnType<typeof createServiceClient>)
@@ -135,6 +146,45 @@ export async function GET() {
       servicios_disponibles: serviciosDisponibles,
     }
   })
+  let visitasRestantesPorNegocio: Record<string, number> = {}
+  if (user) {
+    const serviceClient = createServiceClient()
+    const { data: perfilUsuario } = await serviceClient
+      .from('users')
+      .select('plan, plan_activo, fecha_inicio_ciclo, fecha_fin_plan')
+      .eq('id', user.id)
+      .maybeSingle<PerfilUsuarioLimites>()
 
-  return NextResponse.json({ negocios: negociosConServicios })
+    const plan = normalizarPlan(perfilUsuario?.plan ?? null)
+    const planActivo = Boolean(perfilUsuario?.plan_activo)
+    if (plan && planActivo) {
+      const limitePorLugar = MAX_VISITAS_POR_LUGAR[plan]
+      const ciclo = resolverVentanaCiclo({
+        fechaInicioCiclo: perfilUsuario?.fecha_inicio_ciclo ?? null,
+        fechaFinPlan: perfilUsuario?.fecha_fin_plan ?? null,
+      })
+      const { data: reservacionesCiclo } = await serviceClient
+        .from('reservaciones')
+        .select('horarios!inner(negocio_id)')
+        .eq('user_id', user.id)
+        .in('estado', ['confirmada', 'completada'])
+        .gte('fecha', ciclo.inicio.toISOString().slice(0, 10))
+        .lt('fecha', ciclo.fin.toISOString().slice(0, 10))
+        .returns<ReservacionConNegocio[]>()
+
+      const visitasPorNegocio = new Map<string, number>()
+      for (const reservacion of reservacionesCiclo ?? []) {
+        const horario = Array.isArray(reservacion.horarios) ? reservacion.horarios[0] : reservacion.horarios
+        const negocioId = horario?.negocio_id
+        if (!negocioId) continue
+        visitasPorNegocio.set(negocioId, (visitasPorNegocio.get(negocioId) ?? 0) + 1)
+      }
+
+      for (const negocio of negociosConServicios) {
+        const usadasAqui = visitasPorNegocio.get(negocio.id) ?? 0
+        visitasRestantesPorNegocio[negocio.id] = Math.max(limitePorLugar - usadasAqui, 0)
+      }
+    }
+  }
+  return NextResponse.json({ negocios: negociosConServicios, visitas_restantes_por_negocio: visitasRestantesPorNegocio })
 }

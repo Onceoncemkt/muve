@@ -105,6 +105,10 @@ function faltaColumna(error: { message?: string } | null | undefined, columna: s
   const message = error?.message?.toLowerCase() ?? ''
   return message.includes('column') && message.includes(columna.toLowerCase())
 }
+function formatearCreditos(valor: number) {
+  const redondeado = Math.round(valor * 10) / 10
+  return Number.isInteger(redondeado) ? String(redondeado) : redondeado.toFixed(1)
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -160,10 +164,16 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .maybeSingle<{ foto_url?: string | null }>()
 
-  const { count: totalVisitas } = await supabase
-    .from('visitas')
-    .select('id', { count: 'exact', head: true })
+  const { data: totalReservaciones } = await supabase
+    .from('reservaciones')
+    .select('horarios!inner(tipo_servicio)')
     .eq('user_id', user.id)
+    .in('estado', ['confirmada', 'completada'])
+  let totalVisitas = 0
+  for (const reservacion of totalReservaciones ?? []) {
+    const horario = Array.isArray(reservacion.horarios) ? reservacion.horarios[0] : reservacion.horarios
+    totalVisitas += horario?.tipo_servicio === 'gym' ? 0.5 : 1
+  }
 
   const nombre = perfil?.nombre ?? user.email?.split('@')[0] ?? 'Muver'
   const ciudad = perfil?.ciudad ?? 'tulancingo'
@@ -227,17 +237,20 @@ export default async function DashboardPage() {
     const finPlan = parseFechaSegura(perfil?.fecha_fin_plan) ?? ahora
     const finCiclo = finPlan.getTime() > inicioCiclo.getTime() ? finPlan : ahora
 
-    const cicloInicioIso = inicioCiclo.toISOString()
-    const cicloFinIso = finCiclo.toISOString()
-
-    const { count: visitasCiclo } = await supabase
-      .from('visitas')
-      .select('id', { count: 'exact', head: true })
+    const cicloInicioIso = inicioCiclo.toISOString().slice(0, 10)
+    const cicloFinIso = finCiclo.toISOString().slice(0, 10)
+    const { data: reservacionesCiclo } = await supabase
+      .from('reservaciones')
+      .select('horarios!inner(tipo_servicio)')
       .eq('user_id', user.id)
       .gte('fecha', cicloInicioIso)
-      .lte('fecha', cicloFinIso)
-
-    usadasCiclo = visitasCiclo ?? 0
+      .lt('fecha', cicloFinIso)
+      .in('estado', ['confirmada', 'completada'])
+    usadasCiclo = 0
+    for (const reservacion of reservacionesCiclo ?? []) {
+      const horario = Array.isArray(reservacion.horarios) ? reservacion.horarios[0] : reservacion.horarios
+      usadasCiclo += horario?.tipo_servicio === 'gym' ? 0.5 : 1
+    }
     cicloActualTexto = `${formatearFecha(inicioCiclo)} — ${formatearFecha(finCiclo)}`
     cicloNuevoTexto = formatearFecha(finCiclo)
   }
@@ -402,7 +415,7 @@ export default async function DashboardPage() {
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 sm:col-span-2">
             <p className="text-xs text-white/40">
-              {checkInsRealizados} de {visitasDisponibles} créditos usados
+              {formatearCreditos(visitasRestantes)} de {formatearCreditos(visitasDisponibles)} créditos disponibles
             </p>
             <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
               <div
@@ -411,7 +424,7 @@ export default async function DashboardPage() {
               />
             </div>
             <p className={`mt-2 text-sm font-bold ${textoRestantesColor}`}>
-              Créditos restantes: {visitasRestantes}
+              Créditos usados: {formatearCreditos(checkInsRealizados)}
             </p>
             {hasActiveMembership && (
               <>
@@ -433,7 +446,7 @@ export default async function DashboardPage() {
             )}
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-            <p className="text-2xl font-black text-[#E8FF47]">{totalVisitas ?? 0}</p>
+            <p className="text-2xl font-black text-[#E8FF47]">{formatearCreditos(totalVisitas)}</p>
             <p className="text-xs text-white/40">créditos totales</p>
           </div>
         </div>

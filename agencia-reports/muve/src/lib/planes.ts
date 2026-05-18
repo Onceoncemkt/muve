@@ -52,7 +52,7 @@ export const PRECIOS_ANTERIORES_MEMBRESIA_POR_REGION: Record<RegionPrecios, Part
   },
 }
 export const MAX_VISITAS_POR_LUGAR: Record<PlanMembresia, number> = {
-  basico: 3,
+  basico: 4,
   plus: 6,
   total: 10,
 }

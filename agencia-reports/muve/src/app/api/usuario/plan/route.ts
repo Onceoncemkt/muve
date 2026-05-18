@@ -112,18 +112,25 @@ async function planDesdeStripe(subscriptionId: string): Promise<PlanMembresia | 
 
 async function contarVisitasCiclo(userId: string, inicioCicloIso: string, finCicloIso: string): Promise<number> {
   const supabase = createServiceClient()
-  const { count, error } = await supabase
-    .from('visitas')
-    .select('id', { count: 'exact', head: true })
+  const { data, error } = await supabase
+    .from('reservaciones')
+    .select('horarios!inner(tipo_servicio)')
     .eq('user_id', userId)
-    .gte('fecha', inicioCicloIso)
-    .lt('fecha', finCicloIso)
+    .in('estado', ['confirmada', 'completada'])
+    .gte('fecha', inicioCicloIso.slice(0, 10))
+    .lt('fecha', finCicloIso.slice(0, 10))
 
   if (error) {
     throw new Error(error.message)
   }
-
-  return count ?? 0
+  let creditosUsados = 0
+  for (const reservacion of data ?? []) {
+    const horario = Array.isArray(reservacion.horarios)
+      ? reservacion.horarios[0]
+      : reservacion.horarios
+    creditosUsados += horario?.tipo_servicio === 'gym' ? 0.5 : 1
+  }
+  return creditosUsados
 }
 
 async function desactivarPlanSiExpirado(userId: string, perfil: PerfilPlan): Promise<PerfilPlan> {

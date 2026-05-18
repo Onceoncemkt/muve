@@ -247,6 +247,7 @@ export default function ExplorarPage() {
   const [visitasDisponiblesMes, setVisitasDisponiblesMes] = useState(0)
   const [maxVisitasPorLugar, setMaxVisitasPorLugar] = useState(0)
   const [visitasRestantesMes, setVisitasRestantesMes] = useState(0)
+  const [visitasRestantesPorNegocio, setVisitasRestantesPorNegocio] = useState<Record<string, number>>({})
   const [filtroCiudad, setFiltroCiudad] = useState<Ciudad | 'todas'>('todas')
   const [filtroCategoria, setFiltroCategoria] = useState<FiltroCategoria>('todas')
   const [menuReservasAbiertoPorNegocioId, setMenuReservasAbiertoPorNegocioId] =
@@ -278,6 +279,7 @@ export default function ExplorarPage() {
 
       const estadoPlan = await obtenerEstadoPlanUsuario()
       let negociosCargados: Negocio[] = []
+      let visitasRestantesNegocio: Record<string, number> = {}
       let ultimoErrorNegocios: string | null = null
 
       for (let intento = 1; intento <= MAX_INTENTOS_CARGA_NEGOCIOS; intento += 1) {
@@ -299,6 +301,9 @@ export default function ExplorarPage() {
 
         if (respuestaNegocios.ok) {
           negociosCargados = (payloadNegocios.negocios ?? []) as Negocio[]
+          visitasRestantesNegocio = typeof payloadNegocios.visitas_restantes_por_negocio === 'object' && payloadNegocios.visitas_restantes_por_negocio !== null
+            ? payloadNegocios.visitas_restantes_por_negocio as Record<string, number>
+            : {}
           ultimoErrorNegocios = null
           break
         }
@@ -320,6 +325,7 @@ export default function ExplorarPage() {
       setVisitasDisponiblesMes(estadoPlan.creditos_disponibles)
       setMaxVisitasPorLugar(estadoPlan.max_creditos_por_lugar)
       setVisitasRestantesMes(estadoPlan.creditos_restantes_ciclo)
+      setVisitasRestantesPorNegocio(visitasRestantesNegocio)
       setNegocios(negociosCargados)
       setErrorCargaNegocios(ultimoErrorNegocios)
       setReintentandoNegocios(false)
@@ -681,6 +687,10 @@ export default function ExplorarPage() {
                       clase: puedeReservar ? 'bg-[#6B4FE8] text-white' : 'bg-[#E5E5E5] text-[#666]',
                     }
                     : null
+              const visitasRestantesAqui = planEfectivo
+                ? Math.max(Number(visitasRestantesPorNegocio[negocio.id] ?? maxVisitasPorLugar), 0)
+                : null
+              const limiteLugarAlcanzado = typeof visitasRestantesAqui === 'number' && visitasRestantesAqui <= 0
 
               return (
                 <div
@@ -728,6 +738,18 @@ export default function ExplorarPage() {
                       Ver detalle
                     </button>
                   </div>
+                  {typeof visitasRestantesAqui === 'number' && (
+                    <div className="mt-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2">
+                      <p className="text-xs font-semibold text-[#444]">
+                        Te quedan {visitasRestantesAqui} visitas disponibles aquí este mes
+                      </p>
+                      {limiteLugarAlcanzado && (
+                        <span className="mt-1 inline-flex rounded-full bg-[#E5E5E5] px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#666]">
+                          Límite alcanzado
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {esRestaurante ? (
                     <div className="mt-2 space-y-1 text-sm text-[#555]">
                       {negocio.descripcion && (
@@ -895,10 +917,12 @@ export default function ExplorarPage() {
                           }
                           abrirOCerrarMenuReservas(negocio, menuReservasAbierto)
                         }}
-                        disabled={!puedeReservar && !bloqueadoPorMembresia}
+                        disabled={(!puedeReservar && !bloqueadoPorMembresia) || limiteLugarAlcanzado}
                         className={`mt-4 w-full rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
                           puedeReservar
-                            ? 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
+                            ? limiteLugarAlcanzado
+                              ? 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
+                              : 'bg-[#0A0A0A] text-[#E8FF47] hover:bg-[#222]'
                             : bloqueadoPorMembresia
                               ? 'border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
                               : 'cursor-not-allowed border border-[#E5E5E5] bg-[#F7F7F7] text-[#888]'
@@ -910,6 +934,8 @@ export default function ExplorarPage() {
                             : planRequerido === 'plus'
                             ? 'Requiere Plus'
                             : 'Requiere Total'
+                          : limiteLugarAlcanzado
+                            ? 'Límite alcanzado'
                           : menuReservasAbierto
                             ? esWellness
                               ? 'Ocultar disponibilidad'

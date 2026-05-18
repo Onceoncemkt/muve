@@ -5,12 +5,28 @@ import { formatHora, type DiaSemana } from '@/types'
 import { getEmailFrom } from '@/lib/email'
 import { enviarPushAUsuarios, obtenerStaffIdsPorNegocio } from '@/lib/push/server'
 import {
-  PLAN_MAX_VISITAS_POR_LUGAR,
-  PLAN_VISITAS_MENSUALES,
+  CREDITOS_POR_PLAN,
+  MAX_VISITAS_POR_LUGAR,
   normalizarPlan,
   puedeReservarConPlan,
 } from '@/lib/planes'
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
+type HorarioRelacionReserva = {
+  tipo_servicio?: string | null
+  negocio_id?: string | null
+}
+type ReservacionCiclo = {
+  horarios: HorarioRelacionReserva | HorarioRelacionReserva[] | null
+}
+
+function obtenerHorarioRelacionado(relacion: HorarioRelacionReserva | HorarioRelacionReserva[] | null | undefined) {
+  if (Array.isArray(relacion)) return relacion[0] ?? null
+  return relacion ?? null
+}
+
+function costoCreditoPorTipoServicio(tipoServicio: string | null | undefined) {
+  return tipoServicio === 'gym' ? 0.5 : 1
+}
 function diaSemanaDesdeFecha(fecha: string): DiaSemana | null {
   const dias: DiaSemana[] = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
   const date = new Date(`${fecha}T00:00:00`)
@@ -471,7 +487,7 @@ export async function POST(request: NextRequest) {
   // Verificar que el horario existe y está activo
   const { data: horario, error: hError } = await db
     .from('horarios')
-    .select('id, capacidad_total, activo, dia_semana, hora_inicio, negocio_id, nombre_coach, tipo_clase')
+    .select('id, capacidad_total, activo, dia_semana, hora_inicio, negocio_id, nombre_coach, tipo_clase, tipo_servicio')
     .eq('id', horario_id)
     .single()
 
@@ -630,40 +646,46 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const [{ count: visitasCiclo, error: visitasCicloError }, { count: visitasLugarCiclo, error: visitasLugarCicloError }] = await Promise.all([
-    db
-      .from('visitas')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('fecha', ciclo.inicio.toISOString())
-      .lt('fecha', ciclo.fin.toISOString()),
-    db
-      .from('visitas')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('negocio_id', horario.negocio_id)
-      .gte('fecha', ciclo.inicio.toISOString())
-      .lt('fecha', ciclo.fin.toISOString()),
-  ])
+  const fechaInicioCicloIso = ciclo.inicio.toISOString().slice(0, 10)
+  const fechaFinCicloIso = ciclo.fin.toISOString().slice(0, 10)
+  const { data: reservacionesCiclo, error: reservacionesCicloError } = await db
+    .from('reservaciones')
+    .select('horarios!inner(tipo_servicio, negocio_id)')
+    .eq('user_id', user.id)
+    .in('estado', ['confirmada', 'completada'])
+    .gte('fecha', fechaInicioCicloIso)
+    .lt('fecha', fechaFinCicloIso)
 
-  if (visitasCicloError || visitasLugarCicloError) {
-    return NextResponse.json({ error: 'No se pudieron validar tus límites de visitas' }, { status: 500 })
+  if (reservacionesCicloError) {
+    return NextResponse.json({ error: 'No se pudieron validar tus créditos del ciclo' }, { status: 500 })
   }
 
-  const limiteMensual = PLAN_VISITAS_MENSUALES[planUsuario]
+  let creditosUsadosCiclo = 0
+  let reservacionesLugarCiclo = 0
+  for (const reservacion of (reservacionesCiclo ?? []) as ReservacionCiclo[]) {
+    const horarioReservacion = obtenerHorarioRelacionado(reservacion.horarios)
+    creditosUsadosCiclo += costoCreditoPorTipoServicio(horarioReservacion?.tipo_servicio)
+    if (horarioReservacion?.negocio_id === horario.negocio_id) {
+      reservacionesLugarCiclo += 1
+    }
+  }
+
+  const creditosPlan = CREDITOS_POR_PLAN[planUsuario]
   const creditosExtra = Math.max(Math.trunc(perfilUsuario.creditos_extra ?? 0), 0)
-  const visitasDisponibles = limiteMensual + creditosExtra
-  if ((visitasCiclo ?? 0) >= visitasDisponibles) {
+  const creditosTotales = creditosPlan + creditosExtra
+  const costoReservacionActual = costoCreditoPorTipoServicio((horario as { tipo_servicio?: string | null }).tipo_servicio)
+
+  if ((creditosUsadosCiclo + costoReservacionActual) > creditosTotales) {
     return NextResponse.json(
-      { error: `Ya alcanzaste tu límite del ciclo actual de ${visitasDisponibles} visitas` },
+      { error: 'No tienes créditos suficientes para esta reservación' },
       { status: 400 }
     )
   }
 
-  const limitePorLugar = PLAN_MAX_VISITAS_POR_LUGAR[planUsuario]
-  if ((visitasLugarCiclo ?? 0) >= limitePorLugar) {
+  const limitePorLugar = MAX_VISITAS_POR_LUGAR[planUsuario]
+  if (reservacionesLugarCiclo >= limitePorLugar) {
     return NextResponse.json(
-      { error: `Ya alcanzaste tu límite de ${limitePorLugar} visitas en este lugar durante este ciclo` },
+      { error: `Has alcanzado el límite de visitas en este lugar para tu plan [${etiquetaPlan(planUsuario)}]` },
       { status: 400 }
     )
   }
