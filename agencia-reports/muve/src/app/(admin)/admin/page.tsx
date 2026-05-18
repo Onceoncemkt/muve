@@ -13,6 +13,7 @@ import AdminDarCreditosModal from '@/components/admin/AdminDarCreditosModal'
 import AdminInvitarUsuarioModal from '@/components/admin/AdminInvitarUsuarioModal'
 import AdminInvitarNegocioForm from '@/components/admin/AdminInvitarNegocioForm'
 import AdminReservacionesSection from '@/components/admin/AdminReservacionesSection'
+import NegocioPlanBadgeControl from '@/components/admin/NegocioPlanBadgeControl'
 import type { Ciudad, Categoria, NivelNegocio, Rol, ZonaNegocio } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 import { obtenerStripeStatus, type StripeConnectStatus } from '@/lib/stripe-connect'
@@ -607,11 +608,6 @@ export default async function AdminPage({
                     const planActual = (negocio.plan_negocio ?? 'basico') as NivelNegocio
                     const categoriasNegocio = normalizarCategoriasNegocio(negocio.categorias, negocio.categoria)
                     const stripeStatus = stripeStatusPorNegocio.get(negocio.id) ?? 'no_account'
-                    const planBadgeClass = planActual === 'total'
-                      ? 'bg-[#E8FF47] text-[#0A0A0A] ring-[#E8FF47]'
-                      : planActual === 'plus'
-                        ? 'bg-[#6B4FE8]/20 text-[#CBBEFF] ring-[#6B4FE8]/50'
-                        : 'bg-white/5 text-white/65 ring-white/15'
 
                     return (
                       <article
@@ -923,9 +919,7 @@ export default async function AdminPage({
                           <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/65 ring-1 ring-white/10">
                             {CIUDAD_LABELS[negocio.ciudad]}
                           </span>
-                          <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${planBadgeClass}`}>
-                            Plan {NIVEL_LABELS[planActual]}
-                          </span>
+                          <NegocioPlanBadgeControl negocioId={negocio.id} initialPlan={planActual} />
                           {stripeStatus === 'active' && (
                             <span className="rounded-md bg-green-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-300 ring-1 ring-green-500/40">
                               Stripe activo
@@ -948,37 +942,6 @@ export default async function AdminPage({
                           )}
                         </div>
 
-                        <form
-                          method="POST"
-                          action={`/api/admin/negocios/${negocio.id}/plan`}
-                          className="mt-3 flex flex-wrap items-center gap-2"
-                        >
-                          <input type="hidden" name="next" value="/admin" />
-                          <label
-                            htmlFor={`plan-negocio-${negocio.id}`}
-                            className="text-[10px] font-bold uppercase tracking-widest text-white/45"
-                          >
-                            Cambiar plan
-                          </label>
-                          <select
-                            id={`plan-negocio-${negocio.id}`}
-                            name="plan_negocio"
-                            defaultValue={planActual}
-                            className="rounded-md border border-white/15 bg-[#0A0A0A] px-2 py-1 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                          >
-                            {NIVELES.map(plan => (
-                              <option key={plan} value={plan}>
-                                {NIVEL_LABELS[plan]}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="submit"
-                            className="rounded-md bg-[#6B4FE8] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white hover:bg-[#5b40cd]"
-                          >
-                            Guardar
-                          </button>
-                        </form>
 
                         {staffAsignado.length > 0 && (
                           <div className="mt-3 flex flex-wrap gap-1">
