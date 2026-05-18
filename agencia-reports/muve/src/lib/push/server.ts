@@ -66,21 +66,47 @@ export async function guardarSuscripcionPush(userId: string, subscription: unkno
   }
 
   const db = admin()
-
-  // Evita duplicados por endpoint del mismo usuario
   const endpoint = subscription.endpoint
-  await db
+
+  const { data: existentes, error: existentesError } = await db
     .from('push_subscriptions')
-    .delete()
+    .select('id')
     .eq('user_id', userId)
     .contains('subscription', { endpoint })
 
-  const { error } = await db
+  if (existentesError) {
+    console.error('[push] Error consultando suscripción existente:', existentesError.message)
+    return { ok: false, error: 'No se pudo guardar la suscripción' as const }
+  }
+  const existentesNormalizados = existentes ?? []
+
+  if (existentesNormalizados.length > 0) {
+    const [primera, ...duplicadas] = existentesNormalizados
+    const { error: updateError } = await db
+      .from('push_subscriptions')
+      .update({ subscription })
+      .eq('id', primera.id)
+
+    if (updateError) {
+      console.error('[push] Error actualizando suscripción existente:', updateError.message)
+      return { ok: false, error: 'No se pudo guardar la suscripción' as const }
+    }
+
+    if (duplicadas.length > 0) {
+      await db
+        .from('push_subscriptions')
+        .delete()
+        .in('id', duplicadas.map((item) => item.id))
+    }
+    return { ok: true as const }
+  }
+
+  const { error: insertError } = await db
     .from('push_subscriptions')
     .insert({ user_id: userId, subscription })
 
-  if (error) {
-    console.error('[push] Error al guardar suscripción:', error.message)
+  if (insertError) {
+    console.error('[push] Error insertando suscripción:', insertError.message)
     return { ok: false, error: 'No se pudo guardar la suscripción' as const }
   }
 

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import NegocioReservacionesPanel from '@/components/negocio/NegocioReservacionesPanel'
-import PushNotificationsSetup from '@/components/push/PushNotificationsSetup'
+import StaffPushNotificationBanner from '@/components/push/StaffPushNotificationBanner'
 import type { DiaSemana, EstadoReserva, NivelNegocio, PlanMembresia } from '@/types'
 import { DIA_LABELS, PLAN_NEGOCIO_LABELS, formatHora } from '@/types'
 import { normalizarCategoriaNegocio, normalizarCategoriasNegocio, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
@@ -635,7 +635,6 @@ export default function NegocioDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-10">
-      <PushNotificationsSetup />
       <div className="bg-[#0A0A0A] px-4 py-6">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -687,6 +686,7 @@ export default function NegocioDashboardPage() {
       </div>
 
       <div className="mx-auto w-full max-w-4xl space-y-4 p-4">
+        <StaffPushNotificationBanner />
         <div className="rounded-lg border border-[#E5E5E5] bg-white px-4 py-3 text-xs font-semibold text-[#555]">
           Hoy: {new Date(`${fechaHoy}T00:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
