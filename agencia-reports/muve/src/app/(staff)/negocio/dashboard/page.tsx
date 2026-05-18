@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import NegocioReservacionesPanel from '@/components/negocio/NegocioReservacionesPanel'
+import PushNotificationsSetup from '@/components/push/PushNotificationsSetup'
 import type { DiaSemana, EstadoReserva, NivelNegocio, PlanMembresia } from '@/types'
 import { DIA_LABELS, PLAN_NEGOCIO_LABELS, formatHora } from '@/types'
 import { normalizarCategoriaNegocio, normalizarCategoriasNegocio, obtenerTarifasNegocioPorPlan } from '@/lib/planes'
@@ -634,6 +635,7 @@ export default function NegocioDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-10">
+      <PushNotificationsSetup />
       <div className="bg-[#0A0A0A] px-4 py-6">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
