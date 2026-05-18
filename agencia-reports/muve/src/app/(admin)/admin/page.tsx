@@ -13,7 +13,6 @@ import AdminDarCreditosModal from '@/components/admin/AdminDarCreditosModal'
 import AdminInvitarUsuarioModal from '@/components/admin/AdminInvitarUsuarioModal'
 import AdminInvitarNegocioForm from '@/components/admin/AdminInvitarNegocioForm'
 import AdminReservacionesSection from '@/components/admin/AdminReservacionesSection'
-import NegocioPlanBadgeControl from '@/components/admin/NegocioPlanBadgeControl'
 import type { Ciudad, Categoria, NivelNegocio, Rol, ZonaNegocio } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 import { obtenerStripeStatus, type StripeConnectStatus } from '@/lib/stripe-connect'
@@ -238,7 +237,7 @@ export default async function AdminPage({
 
   const consultaConPlan = await db
     .from('negocios')
-      .select('id, nombre, ciudad, zona, nivel, plan_negocio, categoria, categorias, direccion, descripcion, imagen_url, logo_url, mostrar_en_landing, instagram_handle, requiere_reserva, capacidad_default, stripe_account_id, activo')
+    .select('*, plan_negocio, categorias')
     .order('ciudad')
     .order('nombre')
 
@@ -622,12 +621,23 @@ export default async function AdminPage({
                     const planActual = (negocio.plan_negocio ?? 'basico') as NivelNegocio
                     const categoriasNegocio = normalizarCategoriasNegocio(negocio.categorias, negocio.categoria)
                     const stripeStatus = stripeStatusPorNegocio.get(negocio.id) ?? 'no_account'
+                    const planBadge = {
+                      basico: { label: 'Básico', bg: '#2A2A2A', color: '#FFFFFF' },
+                      plus: { label: 'Plus', bg: '#6B4FE8', color: '#FFFFFF' },
+                      total: { label: 'Total', bg: '#E8FF47', color: '#0A0A0A' },
+                    } as const
+                    const plan = planBadge[planActual] ?? planBadge.basico
+                    const categoriasRaw = (negocio.categorias ?? []) as string[]
+                    const tieneGym = categoriasRaw.includes('gym') || categoriasRaw.includes('gimnasio')
+                    const tieneClases = categoriasRaw.includes('clases')
+                    const creditos = tieneGym
+                      ? (
+                        tieneClases
+                          ? [{ label: 'Gym', creditos: '0.5' }, { label: 'Clases', creditos: '1' }]
+                          : [{ label: 'Gym', creditos: '0.5' }]
+                      )
+                      : [{ label: CATEGORIA_TARIFA_LABELS[negocio.categoria], creditos: '1' }]
                     const categoriasCosto = categoriasNegocio.length > 0 ? categoriasNegocio : [negocio.categoria]
-                    const creditosPorCategoria = categoriasCosto.map((categoria) => ({
-                      categoria,
-                      label: CATEGORIA_TARIFA_LABELS[categoria],
-                      creditos: categoria === 'gimnasio' ? '0.5' : '1',
-                    }))
                     const tarifasPorCategoria = categoriasCosto.map((categoria) => {
                       const monto = tarifaNegocioPorCheckin({
                         categoria,
@@ -948,7 +958,19 @@ export default async function AdminPage({
                           <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/65 ring-1 ring-white/10">
                             {CIUDAD_LABELS[negocio.ciudad]}
                           </span>
-                          <NegocioPlanBadgeControl negocioId={negocio.id} initialPlan={planActual} />
+                          <span
+                            style={{
+                              background: plan.bg,
+                              color: plan.color,
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              padding: '3px 10px',
+                              borderRadius: '100px',
+                              letterSpacing: '1px',
+                            }}
+                          >
+                            {plan.label}
+                          </span>
                           {stripeStatus === 'active' && (
                             <span className="rounded-md bg-green-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-300 ring-1 ring-green-500/40">
                               Stripe activo
@@ -970,13 +992,23 @@ export default async function AdminPage({
                             </span>
                           )}
                         </div>
-                        <div className="mt-2 rounded-lg border border-white/10 bg-[#1A1A1A] p-2.5">
-                          {creditosPorCategoria.map(({ categoria, label, creditos }) => (
-                            <div key={`${negocio.id}-credito-${categoria}`} className="flex items-center justify-between text-xs">
-                              <span className="text-white/60">{label}</span>
-                              <span>
-                                <span className="font-black text-[#E8FF47]">{creditos}</span>
-                                <span className="ml-1 text-white/50">crédito/s / visita</span>
+                        <div
+                          style={{
+                            background: '#1A1A1A',
+                            border: '0.5px solid #2A2A2A',
+                            borderRadius: '6px',
+                            padding: '8px 10px',
+                            marginTop: '8px',
+                          }}
+                        >
+                          {creditos.map((c) => (
+                            <div
+                              key={`${negocio.id}-credito-${c.label}`}
+                              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}
+                            >
+                              <span style={{ color: '#E8FF47', fontWeight: 700, fontSize: '13px' }}>{c.creditos}</span>
+                              <span style={{ color: '#555', fontSize: '11px' }}>
+                                crédito{c.creditos !== '1' ? 's' : ''} por visita · {c.label}
                               </span>
                             </div>
                           ))}
