@@ -6,7 +6,6 @@ import { getEmailFrom } from '@/lib/email'
 import { enviarPushAUsuarios, obtenerStaffIdsPorNegocio } from '@/lib/push/server'
 import {
   CREDITOS_POR_PLAN,
-  MAX_VISITAS_POR_LUGAR,
   normalizarPlan,
   puedeReservarConPlan,
 } from '@/lib/planes'
@@ -682,7 +681,8 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const limitePorLugar = MAX_VISITAS_POR_LUGAR[planUsuario]
+  const limitesPorLugar = { basico: 3, plus: 6, total: 10 } as const
+  const limitePorLugar = limitesPorLugar[planUsuario]
   if (reservacionesLugarCiclo >= limitePorLugar) {
     return NextResponse.json(
       { error: `Has alcanzado el límite de visitas en este lugar para tu plan [${etiquetaPlan(planUsuario)}]` },
