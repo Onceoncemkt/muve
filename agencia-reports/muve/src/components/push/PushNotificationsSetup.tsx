@@ -31,7 +31,10 @@ export default function PushNotificationsSetup() {
       }
 
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      if (!vapidPublicKey) return
+      if (!vapidPublicKey) {
+        console.warn('[push] NEXT_PUBLIC_VAPID_PUBLIC_KEY no está configurada')
+        return
+      }
 
       try {
         const serviceWorkerUrl = `/sw.js?v=${SERVICE_WORKER_VERSION}`
@@ -49,31 +52,47 @@ export default function PushNotificationsSetup() {
           })
         )
 
-        const registration = await navigator.serviceWorker.register(serviceWorkerUrl, {
+        await navigator.serviceWorker.register(serviceWorkerUrl, {
           scope: '/',
           updateViaCache: 'none',
         })
+        const registration = await navigator.serviceWorker.ready
+        console.log('[push] Service Worker listo:', registration.scope)
 
         let permission = Notification.permission
         if (permission === 'default') {
+          console.log('[push] Solicitando permiso de notificaciones...')
           permission = await Notification.requestPermission()
         }
+        console.log('[push] Estado de permiso:', permission)
 
         if (permission !== 'granted' || cancelled) return
 
         const existingSubscription = await registration.pushManager.getSubscription()
+        if (existingSubscription) {
+          console.log('[push] Suscripción existente encontrada')
+        }
         const subscription = existingSubscription ?? await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         })
+        if (!existingSubscription) {
+          console.log('[push] Nueva suscripción creada')
+        }
 
         if (cancelled) return
 
-        await fetch('/api/push/subscribe', {
+        const response = await fetch('/api/push/subscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ subscription: subscription.toJSON() }),
         })
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null)
+          console.error('[push] Error al guardar suscripción en backend:', payload)
+          return
+        }
+        console.log('[push] Suscripción guardada en backend correctamente')
       } catch (error) {
         console.error('[push] Error al configurar notificaciones:', error)
       }

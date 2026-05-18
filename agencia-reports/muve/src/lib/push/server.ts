@@ -139,6 +139,7 @@ export async function enviarPushAUsuarios(
   let sent = 0
   let failed = 0
   const invalidSubscriptionIds: string[] = []
+  console.log('[push] Suscripciones encontradas para envío:', subscriptions.length)
 
   for (const row of subscriptions) {
     if (!esPushSubscription(row.subscription)) {
@@ -146,6 +147,13 @@ export async function enviarPushAUsuarios(
       invalidSubscriptionIds.push(row.id)
       continue
     }
+    console.log('Enviando push a:', row.subscription)
+    console.log('Payload:', {
+      title: payload.title,
+      body: payload.body,
+      url: payload.url ?? '/negocio/dashboard',
+      user_id: row.user_id,
+    })
 
     try {
       await webpush.sendNotification(
@@ -156,14 +164,15 @@ export async function enviarPushAUsuarios(
           url: payload.url ?? '/negocio/dashboard',
         })
       )
+      console.log('Push enviado OK')
       sent += 1
-    } catch (error) {
+    } catch (err) {
       failed += 1
-      const statusCode = obtenerStatusCode(error)
+      const statusCode = obtenerStatusCode(err)
       if (statusCode === 404 || statusCode === 410) {
         invalidSubscriptionIds.push(row.id)
       }
-      console.error('[push] Error al enviar push:', error)
+      console.error('Push error:', err)
     }
   }
 

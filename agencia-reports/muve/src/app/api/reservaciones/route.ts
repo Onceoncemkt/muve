@@ -784,27 +784,42 @@ export async function POST(request: NextRequest) {
   const tipoClase = normalizarTextoOpcional((horario as { tipo_clase?: unknown }).tipo_clase)
   const detalle = detalleHorario(tipoClase, nombreCoach)
   const tipoServicio = servicioReservado?.nombre ?? tipoClase ?? 'Clase'
+  const payloadUsuario = {
+    title: 'MUVET',
+    body: `Reservación confirmada en ${negocioNombre} — ${fecha} a las ${hora}${detalle ? ` · ${detalle}` : ''}`,
+    url: '/historial',
+  }
+  console.log('[POST /api/reservaciones] Preparando push usuario', {
+    userId: user.id,
+    payload: payloadUsuario,
+  })
 
   await enviarPushAUsuarios(
     [user.id],
-    {
-      title: 'MUVET',
-      body: `Reservación confirmada en ${negocioNombre} — ${fecha} a las ${hora}${detalle ? ` · ${detalle}` : ''}`,
-      url: '/historial',
-    }
+    payloadUsuario
   )
 
   if (typeof horario.negocio_id === 'string') {
     const staffIds = await obtenerStaffIdsPorNegocio(horario.negocio_id)
     if (staffIds.length > 0) {
+      const payloadStaff = {
+        title: 'MUVET',
+        body: `Nueva reservación: ${usuarioNombre} — ${hora} — ${tipoServicio}`,
+        url: '/negocio/dashboard',
+      }
+      console.log('[POST /api/reservaciones] Preparando push staff', {
+        negocioId: horario.negocio_id,
+        staffIds,
+        payload: payloadStaff,
+      })
       await enviarPushAUsuarios(
         staffIds,
-        {
-          title: 'MUVET',
-          body: `Nueva reservación: ${usuarioNombre} — ${hora} — ${tipoServicio}`,
-          url: '/negocio/dashboard',
-        }
+        payloadStaff
       )
+    } else {
+      console.log('[POST /api/reservaciones] No se encontraron staffIds para push', {
+        negocioId: horario.negocio_id,
+      })
     }
   }
 

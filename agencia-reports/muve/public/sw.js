@@ -18,7 +18,14 @@ self.addEventListener('fetch', event => {
   event.respondWith(fetch(event.request))
 })
 self.addEventListener('push', (event) => {
-  const data = event.data?.json() ?? {}
+  const rawPayload = event.data?.text() ?? ''
+  console.log('[SW] Push recibido:', rawPayload)
+  let data: Record<string, unknown> = {}
+  try {
+    data = rawPayload ? JSON.parse(rawPayload) : {}
+  } catch (error) {
+    console.error('[SW] Payload push inválido:', error)
+  }
   const title = typeof data.title === 'string' && data.title ? data.title : 'MUVET'
   const body = typeof data.body === 'string' && data.body ? data.body : 'Tienes una notificación nueva.'
 
@@ -36,6 +43,7 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const targetUrl = event.notification?.data?.url || '/negocio/dashboard'
+  console.log('[SW] Click en notificación. Abriendo:', targetUrl)
   event.waitUntil(
     clients.openWindow(targetUrl)
   )
