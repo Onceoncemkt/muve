@@ -3,18 +3,6 @@
 import { useState, useTransition } from 'react'
 import type { NivelNegocio } from '@/types'
 
-const PLAN_LABELS: Record<NivelNegocio, string> = {
-  basico: 'Básico',
-  plus: 'Plus',
-  total: 'Total',
-}
-
-const BADGE_CLASS: Record<NivelNegocio, string> = {
-  basico: 'bg-[#7A7A7A] text-white',
-  plus: 'bg-[#6B4FE8] text-white',
-  total: 'bg-[#E8FF47] text-[#0A0A0A]',
-}
-
 export default function NegocioPlanBadgeControl({
   negocioId,
   initialPlan,
@@ -41,9 +29,21 @@ export default function NegocioPlanBadgeControl({
 
   return (
     <div className="mt-2 flex w-full flex-wrap items-center gap-2">
-      <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${BADGE_CLASS[plan]}`}>
-        {PLAN_LABELS[plan]}
-      </span>
+      {plan === 'basico' && (
+        <span className="rounded-md bg-[#333] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+          Básico
+        </span>
+      )}
+      {plan === 'plus' && (
+        <span className="rounded-md bg-[#6B4FE8] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+          Plus
+        </span>
+      )}
+      {plan === 'total' && (
+        <span className="rounded-md bg-[#E8FF47] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0A0A0A]">
+          Total
+        </span>
+      )}
       <label
         htmlFor={`plan-negocio-${negocioId}`}
         className="text-[10px] font-bold uppercase tracking-widest text-white/45"
