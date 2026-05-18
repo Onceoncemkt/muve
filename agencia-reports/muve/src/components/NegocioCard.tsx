@@ -6,6 +6,7 @@ const CATEGORIA_ACCENT: Record<Categoria, string> = {
   clases:      '#E8FF47',
   estetica:    '#0A0A0A',
   restaurante: '#6B4FE8',
+  clinica:     '#0A0A0A',
 }
 
 function getInitials(nombre: string): string {

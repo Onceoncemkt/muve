@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
   const categoriasRaw = formData.getAll('categorias')
     .map((value) => (typeof value === 'string' ? value : ''))
     .map((value) => normalizarCategoriaNegocio(value))
-    .filter((value): value is Categoria => Boolean(value) && CATEGORIAS_VALIDAS.includes(value))
+    .filter((value): value is Categoria => value !== null)
   const ciudadRaw = texto(formData.get('ciudad')).toLowerCase()
   const zonaRaw = texto(formData.get('zona')).toLowerCase()
   const nivelRaw = texto(formData.get('nivel')).toLowerCase()

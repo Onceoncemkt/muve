@@ -14,6 +14,7 @@ const CATEGORIA_TAB_LABELS: Record<Categoria, string> = {
   restaurante: 'Restaurante',
   estetica: 'Estética / Wellness',
   gimnasio: 'Gimnasio',
+  clinica: 'Clínica',
 }
 const TIPOS_CLASE_OPCIONES = [
   'Cycling',
@@ -235,15 +236,15 @@ export default function NegocioHorariosPage() {
   }, [])
 
 
-  async function cargarHorarios() {
-    if (!negocioId || categoriaNegocio === 'gimnasio') {
+  async function cargarHorarios(negocioActualId: string, categoriaActual: Categoria | null) {
+    if (!negocioActualId || categoriaActual === 'gimnasio') {
       setHorarios([])
       return
     }
 
     setCargandoHorarios(true)
     try {
-      const res = await fetch(`/api/negocio/horarios?negocio_id=${encodeURIComponent(negocioId)}&incluir_inactivos=true`, {
+      const res = await fetch(`/api/negocio/horarios?negocio_id=${encodeURIComponent(negocioActualId)}&incluir_inactivos=true`, {
         cache: 'no-store',
       })
       const data = await res.json().catch(() => ({}))
@@ -264,7 +265,7 @@ export default function NegocioHorariosPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void cargarHorarios()
+      void cargarHorarios(negocioId, categoriaNegocio)
     }, 0)
     return () => window.clearTimeout(timer)
   }, [categoriaNegocio, negocioId])
@@ -482,7 +483,7 @@ export default function NegocioHorariosPage() {
           : `Se crearon ${creados} horarios recurrentes`,
       })
       setMostrarForm(false)
-      void cargarHorarios()
+      void cargarHorarios(negocioId, categoriaNegocio)
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al crear horarios' })
     } finally {
@@ -576,7 +577,7 @@ export default function NegocioHorariosPage() {
         setMensaje({ tipo: 'ok', texto: 'Horario actualizado' })
         setEdicionId(null)
         setEdicionDraft(null)
-        void cargarHorarios()
+        void cargarHorarios(negocioId, categoriaNegocio)
       }
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al actualizar el horario' })
@@ -601,7 +602,7 @@ export default function NegocioHorariosPage() {
           setEdicionId(null)
           setEdicionDraft(null)
         }
-        void cargarHorarios()
+        void cargarHorarios(negocioId, categoriaNegocio)
       }
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al eliminar horario' })
