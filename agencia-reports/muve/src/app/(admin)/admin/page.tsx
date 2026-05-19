@@ -16,6 +16,8 @@ import AdminReservacionesSection from '@/components/admin/AdminReservacionesSect
 import type { Ciudad, Categoria, NivelNegocio, Rol, ZonaNegocio } from '@/types'
 import { obtenerRolServidor } from '@/lib/auth/server-role'
 import { obtenerStripeStatus, type StripeConnectStatus } from '@/lib/stripe-connect'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 type UsuarioAdmin = {
   id: string
@@ -237,8 +239,7 @@ export default async function AdminPage({
 
   const consultaConPlan = await db
     .from('negocios')
-    .select('*, plan_negocio, categorias')
-    .order('ciudad')
+    .select('id, nombre, categoria, categorias, ciudad, zona, plan_negocio, activo, stripe_account_id, direccion, imagen_url, instagram_handle, descripcion, logo_url, mostrar_en_landing, requiere_reserva, capacidad_default, nivel')
     .order('nombre')
 
   if (!consultaConPlan.error) {
@@ -622,9 +623,9 @@ export default async function AdminPage({
                     const categoriasNegocio = normalizarCategoriasNegocio(negocio.categorias, negocio.categoria)
                     const stripeStatus = stripeStatusPorNegocio.get(negocio.id) ?? 'no_account'
                     const planBadge = {
-                      basico: { label: 'Básico', bg: '#2A2A2A', color: '#FFFFFF' },
-                      plus: { label: 'Plus', bg: '#6B4FE8', color: '#FFFFFF' },
-                      total: { label: 'Total', bg: '#E8FF47', color: '#0A0A0A' },
+                      basico: { label: 'Básico', className: 'rounded-full bg-[#2A2A2A] px-2.5 py-0.5 text-[10px] font-bold tracking-[1px] text-white' },
+                      plus: { label: 'Plus', className: 'rounded-full bg-[#6B4FE8] px-2.5 py-0.5 text-[10px] font-bold tracking-[1px] text-white' },
+                      total: { label: 'Total', className: 'rounded-full bg-[#E8FF47] px-2.5 py-0.5 text-[10px] font-bold tracking-[1px] text-[#0A0A0A]' },
                     } as const
                     const plan = planBadge[planActual] ?? planBadge.basico
                     const categoriasRaw = (negocio.categorias ?? []) as string[]
@@ -941,17 +942,7 @@ export default async function AdminPage({
                           <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/65 ring-1 ring-white/10">
                             {CIUDAD_LABELS[negocio.ciudad]}
                           </span>
-                          <span
-                            style={{
-                              background: plan.bg,
-                              color: plan.color,
-                              fontSize: '10px',
-                              fontWeight: 700,
-                              padding: '3px 10px',
-                              borderRadius: '100px',
-                              letterSpacing: '1px',
-                            }}
-                          >
+                          <span className={plan.className}>
                             {plan.label}
                           </span>
                           {stripeStatus === 'active' && (
