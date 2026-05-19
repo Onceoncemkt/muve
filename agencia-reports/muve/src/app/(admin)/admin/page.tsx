@@ -749,23 +749,6 @@ export default async function AdminPage({
                                     </div>
                                     <div>
                                       <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
-                                        Nivel
-                                      </label>
-                                      <select
-                                        name="nivel"
-                                        required
-                                        defaultValue={negocio.nivel ?? 'basico'}
-                                        className="w-full rounded-md border border-white/15 bg-[#151515] px-2.5 py-2 text-xs text-white outline-none focus:border-[#6B4FE8]"
-                                      >
-                                        {NIVELES.map(nivel => (
-                                          <option key={nivel} value={nivel}>
-                                            {NIVEL_LABELS[nivel]}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
                                         Plan (tarifa)
                                       </label>
                                       <select

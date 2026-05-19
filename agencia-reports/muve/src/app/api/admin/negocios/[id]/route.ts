@@ -156,7 +156,6 @@ export async function POST(
     .filter((value): value is Categoria => value !== null)
   const ciudadRaw = texto(formData.get('ciudad')).toLowerCase()
   const zonaRaw = texto(formData.get('zona')).toLowerCase()
-  const nivelRaw = texto(formData.get('nivel')).toLowerCase()
   const planNegocioRaw = texto(formData.get('plan_negocio')).toLowerCase()
   const direccion = texto(formData.get('direccion'))
   const descripcionRaw = texto(formData.get('descripcion'))
@@ -178,9 +177,6 @@ export async function POST(
   const zona = ZONAS_VALIDAS.includes(zonaRaw as ZonaNegocio)
     ? (zonaRaw as ZonaNegocio)
     : 'zona1'
-  const nivel = NIVELES_VALIDOS.includes(nivelRaw as NivelNegocio)
-    ? (nivelRaw as NivelNegocio)
-    : 'basico'
   const planNegocio = NIVELES_VALIDOS.includes(planNegocioRaw as NivelNegocio)
     ? (planNegocioRaw as NivelNegocio)
     : 'basico'
@@ -254,7 +250,6 @@ export async function POST(
     categorias,
     ciudad,
     zona,
-    nivel,
     plan_negocio: planNegocio,
     direccion,
     descripcion,
