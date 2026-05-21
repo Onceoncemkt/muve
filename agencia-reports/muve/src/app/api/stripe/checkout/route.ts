@@ -281,7 +281,11 @@ export async function POST(request: NextRequest) {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${origin}/dashboard?membresia=activada`,
       cancel_url: `${origin}/`,
-      discounts: descuentoAplicado ? [{ coupon: descuentoAplicado.codigo }] : undefined,
+      // Stripe no permite discounts y allow_promotion_codes a la vez: si ya hay
+      // un cupón aplicado se respeta ese; si no, se deja capturar código promo.
+      ...(descuentoAplicado
+        ? { discounts: [{ coupon: descuentoAplicado.codigo }] }
+        : { allow_promotion_codes: true }),
       metadata,
       subscription_data: {
         metadata,
