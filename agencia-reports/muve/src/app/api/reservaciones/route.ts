@@ -590,7 +590,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!perfilUsuario?.plan_activo || !normalizarPlan(perfilUsuario.plan ?? null)) {
-    return NextResponse.json({ error: 'Necesitas un plan activo para reservar.' }, { status: 403 })
+    return NextResponse.json({ error: 'Necesitas una membresía activa para reservar' }, { status: 403 })
   }
   if (perfilUsuario.reservas_suspendidas_hasta) {
     const fechaSuspension = new Date(perfilUsuario.reservas_suspendidas_hasta)

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { PLAN_LABELS, CREDITOS_POR_PLAN, normalizarPlan } from '@/lib/planes'
 import { calcularVisitasRestantes } from '@/lib/creditos'
+import { camposPaseWallet } from '@/lib/wallet/pase-campos'
 import { CIUDAD_LABELS, type Ciudad } from '@/types'
 import { generarPkpass } from '@/lib/wallet/apple-pkpass'
 import { obtenerAssetsApplePass } from '@/lib/wallet/apple-assets'
@@ -23,6 +24,7 @@ type SocioRow = {
   id: string
   nombre: string | null
   plan: string | null
+  plan_activo: boolean | string | number | null
   ciudad: Ciudad | null
   fecha_inicio_ciclo: string | null
   fecha_fin_plan: string | null
@@ -69,7 +71,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   const db = createServiceClient()
   const consulta = await db
     .from('users')
-    .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code, email')
+    .select('id, nombre, plan, plan_activo, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code, email')
     .eq('id', userId)
     .maybeSingle<SocioRow>()
 
@@ -79,7 +81,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   } else if (columnaNoExiste(consulta.error, 'qr_code')) {
     const fallback = await db
       .from('users')
-      .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, email')
+      .select('id, nombre, plan, plan_activo, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, email')
       .eq('id', userId)
       .maybeSingle<SocioRow>()
     socio = fallback.data ?? null
@@ -116,6 +118,14 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     ? socio.qr_code.trim()
     : createHash('sha256').update(userId).digest('hex')
 
+  const campos = camposPaseWallet({
+    planActivo: socio.plan_activo,
+    plan: socio.plan,
+    planLabelActivo: plan,
+    creditosDisponibles: creditos,
+    validoHastaActivo: formatearFecha(socio.fecha_fin_plan),
+  })
+
   const nombre = (socio.nombre ?? socio.email?.split('@')[0] ?? 'Socio MUVET').trim()
   const authenticationToken = generarAuthenticationToken(userId)
   const webServiceURL = authenticationToken
@@ -148,10 +158,10 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         backgroundColor: 'rgb(107, 79, 232)',
         labelColor: 'rgb(255, 255, 255)',
         nombre,
-        plan,
+        plan: campos.planLabel,
         ciudad: CIUDAD_LABELS[ciudad],
-        creditosTexto: `${creditos} disponibles`,
-        validoHasta: formatearFecha(socio.fecha_fin_plan),
+        creditosTexto: campos.creditosTexto,
+        validoHasta: campos.validoHasta,
         qrValue,
         webServiceURL,
         authenticationToken,

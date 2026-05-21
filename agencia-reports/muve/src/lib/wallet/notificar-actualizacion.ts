@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { CREDITOS_POR_PLAN, PLAN_LABELS, normalizarPlan } from '@/lib/planes'
 import { calcularVisitasRestantes } from '@/lib/creditos'
+import { camposPaseWallet } from './pase-campos'
 import { CIUDAD_LABELS, type Ciudad } from '@/types'
 import { enviarApnsPush } from './apple-apns'
 import { patchGenericObject } from './google-wallet-api'
@@ -8,6 +9,7 @@ import { patchGenericObject } from './google-wallet-api'
 type SocioRow = {
   id: string
   plan: string | null
+  plan_activo: boolean | string | number | null
   ciudad: Ciudad | null
   fecha_inicio_ciclo: string | null
   fecha_fin_plan: string | null
@@ -77,7 +79,7 @@ async function notificarGoogleWallet(userId: string): Promise<void> {
   const db = createServiceClient()
   const { data: socio, error } = await db
     .from('users')
-    .select('id, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
+    .select('id, plan, plan_activo, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
     .eq('id', userId)
     .maybeSingle<SocioRow>()
 
@@ -111,14 +113,22 @@ async function notificarGoogleWallet(userId: string): Promise<void> {
   const totalDisponibles = visitasIncluidas + creditosExtra
   const creditos = creditosDisponibles || Math.max(totalDisponibles - visitasUsadas, 0)
 
+  const campos = camposPaseWallet({
+    planActivo: socio.plan_activo,
+    plan: socio.plan,
+    planLabelActivo: plan,
+    creditosDisponibles: creditos,
+    validoHastaActivo: formatearFecha(socio.fecha_fin_plan),
+  })
+
   const objectId = `${issuerId}.muvet-${userId}`
   const result = await patchGenericObject({
     objectId,
     textModulesData: [
-      { id: 'plan', header: 'PLAN', body: plan },
+      { id: 'plan', header: 'PLAN', body: campos.planLabel },
       { id: 'ciudad', header: 'CIUDAD', body: CIUDAD_LABELS[ciudad] },
-      { id: 'creditos', header: 'CRÉDITOS', body: `${creditos} disponibles` },
-      { id: 'vigencia', header: 'VÁLIDO HASTA', body: formatearFecha(socio.fecha_fin_plan) },
+      { id: 'creditos', header: 'CRÉDITOS', body: campos.creditosTexto },
+      { id: 'vigencia', header: 'VÁLIDO HASTA', body: campos.validoHasta },
     ],
   })
 

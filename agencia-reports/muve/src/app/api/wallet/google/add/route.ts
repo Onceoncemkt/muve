@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { PLAN_LABELS, CREDITOS_POR_PLAN, normalizarPlan } from '@/lib/planes'
 import { calcularVisitasRestantes } from '@/lib/creditos'
+import { camposPaseWallet } from '@/lib/wallet/pase-campos'
 import { CIUDAD_LABELS, type Ciudad } from '@/types'
 
 export const runtime = 'nodejs'
@@ -54,6 +55,7 @@ type SocioRow = {
   id: string
   nombre: string | null
   plan: string | null
+  plan_activo: boolean | string | number | null
   ciudad: Ciudad | null
   fecha_inicio_ciclo: string | null
   fecha_fin_plan: string | null
@@ -66,10 +68,10 @@ type GenericPassPayload = {
   classId: string
   userId: string
   nombre: string
-  plan: 'BÁSICO' | 'PLUS' | 'TOTAL'
+  planLabel: string
   ciudad: string
-  creditosDisponibles: number
-  fechaVencimiento: string
+  creditosTexto: string
+  validoHasta: string
   qrValue: string
 }
 
@@ -177,10 +179,10 @@ function buildGenericObject(payload: GenericPassPayload) {
       defaultValue: { language: 'es-MX', value: payload.nombre },
     },
     textModulesData: [
-      { id: 'plan', header: 'PLAN', body: payload.plan },
+      { id: 'plan', header: 'PLAN', body: payload.planLabel },
       { id: 'ciudad', header: 'CIUDAD', body: payload.ciudad },
-      { id: 'creditos', header: 'CRÉDITOS', body: `${payload.creditosDisponibles} disponibles` },
-      { id: 'vigencia', header: 'VÁLIDO HASTA', body: payload.fechaVencimiento },
+      { id: 'creditos', header: 'CRÉDITOS', body: payload.creditosTexto },
+      { id: 'vigencia', header: 'VÁLIDO HASTA', body: payload.validoHasta },
     ],
     barcode: {
       type: 'QR_CODE',
@@ -255,7 +257,7 @@ export async function POST(request: NextRequest) {
   const db = createServiceClient()
   const consultaConQr = await db
     .from('users')
-    .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code')
+    .select('id, nombre, plan, plan_activo, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code')
     .eq('id', userId)
     .maybeSingle<SocioRow>()
 
@@ -265,7 +267,7 @@ export async function POST(request: NextRequest) {
   } else if (columnaNoExiste(consultaConQr.error, 'qr_code')) {
     const fallbackSinQr = await db
       .from('users')
-      .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
+      .select('id, nombre, plan, plan_activo, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
       .eq('id', userId)
       .maybeSingle<SocioRow>()
     if (fallbackSinQr.error) {
@@ -319,16 +321,24 @@ export async function POST(request: NextRequest) {
     ? socio.qr_code.trim()
     : createHash('sha256').update(userId).digest('hex')
 
+  const campos = camposPaseWallet({
+    planActivo: socio.plan_activo,
+    plan: socio.plan,
+    planLabelActivo: plan,
+    creditosDisponibles: creditos,
+    validoHastaActivo: formatearFecha(socio.fecha_fin_plan),
+  })
+
   const genericClass = buildGenericClass(classId)
   const genericObject = buildGenericObject({
     objectId,
     classId,
     userId,
     nombre: (socio.nombre ?? user.email?.split('@')[0] ?? 'Socio MUVET').trim(),
-    plan: plan as 'BÁSICO' | 'PLUS' | 'TOTAL',
+    planLabel: campos.planLabel,
     ciudad: CIUDAD_LABELS[ciudad],
-    creditosDisponibles: creditos,
-    fechaVencimiento: formatearFecha(socio.fecha_fin_plan),
+    creditosTexto: campos.creditosTexto,
+    validoHasta: campos.validoHasta,
     qrValue,
   })
 

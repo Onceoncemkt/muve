@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { PLAN_LABELS, CREDITOS_POR_PLAN, normalizarPlan } from '@/lib/planes'
 import { calcularVisitasRestantes } from '@/lib/creditos'
+import { camposPaseWallet } from '@/lib/wallet/pase-campos'
 import { CIUDAD_LABELS, type Ciudad } from '@/types'
 import { generarPkpass } from '@/lib/wallet/apple-pkpass'
 import { obtenerAssetsApplePass } from '@/lib/wallet/apple-assets'
@@ -15,6 +16,7 @@ type SocioRow = {
   id: string
   nombre: string | null
   plan: string | null
+  plan_activo: boolean | string | number | null
   ciudad: Ciudad | null
   fecha_inicio_ciclo: string | null
   fecha_fin_plan: string | null
@@ -75,7 +77,7 @@ export async function GET(
   const db = createServiceClient()
   const consultaConQr = await db
     .from('users')
-    .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code')
+    .select('id, nombre, plan, plan_activo, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, qr_code')
     .eq('id', userId)
     .maybeSingle<SocioRow>()
 
@@ -85,7 +87,7 @@ export async function GET(
   } else if (columnaNoExiste(consultaConQr.error, 'qr_code')) {
     const fallbackSinQr = await db
       .from('users')
-      .select('id, nombre, plan, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
+      .select('id, nombre, plan, plan_activo, ciudad, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra')
       .eq('id', userId)
       .maybeSingle<SocioRow>()
     if (fallbackSinQr.error) {
@@ -131,6 +133,14 @@ export async function GET(
     ? socio.qr_code.trim()
     : createHash('sha256').update(userId).digest('hex')
 
+  const campos = camposPaseWallet({
+    planActivo: socio.plan_activo,
+    plan: socio.plan,
+    planLabelActivo: plan,
+    creditosDisponibles: creditos,
+    validoHastaActivo: formatearFecha(socio.fecha_fin_plan),
+  })
+
   const nombre = (socio.nombre ?? user.email?.split('@')[0] ?? 'Socio MUVET').trim()
   const authenticationToken = generarAuthenticationToken(userId)
   const webServiceURL = authenticationToken
@@ -152,10 +162,10 @@ export async function GET(
         backgroundColor: 'rgb(107, 79, 232)',
         labelColor: 'rgb(255, 255, 255)',
         nombre,
-        plan,
+        plan: campos.planLabel,
         ciudad: CIUDAD_LABELS[ciudad],
-        creditosTexto: `${creditos} disponibles`,
-        validoHasta: formatearFecha(socio.fecha_fin_plan),
+        creditosTexto: campos.creditosTexto,
+        validoHasta: campos.validoHasta,
         qrValue,
         webServiceURL,
         authenticationToken,

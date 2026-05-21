@@ -412,44 +412,52 @@ export default async function DashboardPage() {
           <p className="mt-1 text-sm text-white/40">Sin membresía activa</p>
         )}
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 sm:col-span-2">
-            <p className="text-xs text-white/40">
-              {formatearCreditos(visitasRestantes)} de {formatearCreditos(visitasDisponibles)} créditos disponibles
-            </p>
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className={`h-full rounded-full transition-all ${barraProgresoColor}`}
-                style={{ width: `${progresoCiclo}%` }}
-              />
+        {hasActiveMembership ? (
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 sm:col-span-2">
+              <p className="text-xs text-white/40">
+                {formatearCreditos(visitasRestantes)} de {formatearCreditos(visitasDisponibles)} créditos disponibles
+              </p>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+                <div
+                  className={`h-full rounded-full transition-all ${barraProgresoColor}`}
+                  style={{ width: `${progresoCiclo}%` }}
+                />
+              </div>
+              <p className={`mt-2 text-sm font-bold ${textoRestantesColor}`}>
+                Créditos usados: {formatearCreditos(checkInsRealizados)}
+              </p>
+              <p className="mt-2 text-xs text-white/40">Tu ciclo actual: {cicloActualTexto}</p>
+              <p className="mt-1 text-xs text-white/40">Ciclo nuevo el {cicloNuevoTexto}</p>
+              {creditosExtra > 0 && (
+                <p className="mt-1 text-xs text-[#A78BFA]">
+                  Incluye {creditosExtra} créditos extra de regalo.
+                </p>
+              )}
+              <p className="mt-1 text-[11px] font-semibold text-[#E8FF47]">
+                Los créditos NO se acumulan — al terminar el ciclo se reinician a 0.
+              </p>
+              <p className="mt-1 text-[11px] font-semibold text-[#FCA5A5]">
+                {noShowsCiclo} de 3 no-shows permitidos este ciclo
+              </p>
+              {mostrarRenovacion && <BotonRenovacion />}
             </div>
-            <p className={`mt-2 text-sm font-bold ${textoRestantesColor}`}>
-              Créditos usados: {formatearCreditos(checkInsRealizados)}
-            </p>
-            {hasActiveMembership && (
-              <>
-                <p className="mt-2 text-xs text-white/40">Tu ciclo actual: {cicloActualTexto}</p>
-                <p className="mt-1 text-xs text-white/40">Ciclo nuevo el {cicloNuevoTexto}</p>
-                {creditosExtra > 0 && (
-                  <p className="mt-1 text-xs text-[#A78BFA]">
-                    Incluye {creditosExtra} créditos extra de regalo.
-                  </p>
-                )}
-                <p className="mt-1 text-[11px] font-semibold text-[#E8FF47]">
-                  Los créditos NO se acumulan — al terminar el ciclo se reinician a 0.
-                </p>
-                <p className="mt-1 text-[11px] font-semibold text-[#FCA5A5]">
-                  {noShowsCiclo} de 3 no-shows permitidos este ciclo
-                </p>
-                {mostrarRenovacion && <BotonRenovacion />}
-              </>
-            )}
+            <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+              <p className="text-2xl font-black text-[#E8FF47]">{formatearCreditos(totalVisitas)}</p>
+              <p className="text-xs text-white/40">créditos totales</p>
+            </div>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-            <p className="text-2xl font-black text-[#E8FF47]">{formatearCreditos(totalVisitas)}</p>
-            <p className="text-xs text-white/40">créditos totales</p>
+        ) : (
+          <div className="mt-6 rounded-lg border border-white/10 bg-white/5 px-4 py-6 text-center">
+            <p className="text-base font-bold text-white">Activa tu membresía para comenzar</p>
+            <Link
+              href="/planes"
+              className="mt-4 inline-flex rounded-lg bg-[#E8FF47] px-6 py-3 text-sm font-black uppercase tracking-wider text-[#0A0A0A] transition-colors hover:bg-[#dbef45]"
+            >
+              Ver planes
+            </Link>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Wallet */}
