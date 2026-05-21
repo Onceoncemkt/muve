@@ -189,17 +189,27 @@ export async function POST(request: NextRequest) {
             : 10,
         }
       } else {
-        const consultaPreregistro = await db
+        let consultaPreregistro = await db
           .from('preregistros')
           .select('id, codigo_descuento, codigo_expira_at')
           .eq('codigo_descuento', codigoDescuento)
           .maybeSingle<PreregistroCodigoRow>()
 
+        // Si la columna codigo_expira_at aún no existe en la BD (migración
+        // pendiente), reintenta sin ella tratando el código como sin expiración
+        // — un column faltante no debe bloquear el pago.
         if (columnaNoExiste(consultaPreregistro.error, 'codigo_expira_at')) {
-          return NextResponse.json(
-            { error: 'Falta ejecutar migración de preregistros: columna codigo_expira_at.' },
-            { status: 500 }
-          )
+          const fallbackSinExpira = await db
+            .from('preregistros')
+            .select('id, codigo_descuento')
+            .eq('codigo_descuento', codigoDescuento)
+            .maybeSingle<Omit<PreregistroCodigoRow, 'codigo_expira_at'>>()
+          consultaPreregistro = {
+            ...fallbackSinExpira,
+            data: fallbackSinExpira.data
+              ? { ...fallbackSinExpira.data, codigo_expira_at: null }
+              : null,
+          } as typeof consultaPreregistro
         }
 
         if (faltaRelacion(consultaPreregistro.error, 'preregistros')) {
