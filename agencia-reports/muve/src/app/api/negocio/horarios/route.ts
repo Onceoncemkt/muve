@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
-import type { DiaSemana, TipoServicioHorario } from '@/types'
+import type { DiaSemana, TipoClaseGenero, TipoServicioHorario } from '@/types'
+
+function normalizarTipoClaseGenero(value: unknown): TipoClaseGenero {
+  if (value === 'mujeres' || value === 'hombres') return value
+  return 'mixta'
+}
 
 const DIA_INDEX: Record<DiaSemana, number> = {
   domingo: 0,
@@ -200,7 +205,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}))
-  const { negocio_id, dia_semana, fecha, hora_inicio, hora_fin, capacidad_total, nombre_coach, tipo_clase, tipo_servicio, activo } = body as {
+  const { negocio_id, dia_semana, fecha, hora_inicio, hora_fin, capacidad_total, nombre_coach, tipo_clase, tipo_servicio, tipo_clase_genero, activo } = body as {
     negocio_id?: string
     dia_semana?: DiaSemana | string
     fecha?: string
@@ -210,9 +215,11 @@ export async function POST(request: NextRequest) {
     nombre_coach?: string | null
     tipo_clase?: string | null
     tipo_servicio?: TipoServicioHorario | string | null
+    tipo_clase_genero?: TipoClaseGenero | string | null
     activo?: boolean
   }
   const tipoServicio: TipoServicioHorario = tipo_servicio === 'gym' ? 'gym' : 'clase'
+  const tipoClaseGenero = normalizarTipoClaseGenero(tipo_clase_genero)
 
   const diaSemanaFinal = esDiaSemana(dia_semana)
     ? dia_semana
@@ -262,6 +269,7 @@ export async function POST(request: NextRequest) {
       nombre_coach: nombreCoachNormalizado,
       tipo_clase: tipoClaseNormalizado,
       tipo_servicio: tipoServicio,
+      tipo_clase_genero: tipoServicio === 'gym' ? 'mixta' : tipoClaseGenero,
       activo: typeof activo === 'boolean' ? activo : true,
     })
     .select('*')

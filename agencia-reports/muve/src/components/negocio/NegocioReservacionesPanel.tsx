@@ -28,6 +28,7 @@ type PerfilUsuario = {
   id: string
   nombre: string
   plan: string | null
+  genero: string | null
   foto_url: string | null
   lesiones: string | null
   objetivo_entrenamiento: string | null
@@ -36,6 +37,12 @@ type PerfilUsuario = {
   notas_negocio: string | null
   total_visitas_negocio: number
   ultima_visita_negocio: string | null
+}
+
+const GENERO_LABEL_STAFF: Record<string, string> = {
+  masculino: 'Hombre',
+  femenino: 'Mujer',
+  prefiero_no_decir: 'Prefiero no decir',
 }
 
 type Periodo = 'hoy' | 'semana' | 'mes' | 'rango'
@@ -551,9 +558,16 @@ export default function NegocioReservacionesPanel() {
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-base font-black text-[#0A0A0A]">{perfilUsuario.nombre}</p>
-                    <span className={`mt-0.5 inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${clasesPlanBadge(perfilUsuario.plan)}`}>
-                      Plan {planLabel(perfilUsuario.plan)}
-                    </span>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                      <span className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${clasesPlanBadge(perfilUsuario.plan)}`}>
+                        Plan {planLabel(perfilUsuario.plan)}
+                      </span>
+                      {perfilUsuario.genero && (
+                        <span className="inline-flex rounded-md bg-[#EFEAFF] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#6B4FE8]">
+                          {GENERO_LABEL_STAFF[perfilUsuario.genero] ?? perfilUsuario.genero}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

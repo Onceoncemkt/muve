@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
-import { formatHora, type DiaSemana } from '@/types'
+import { formatHora, validarGeneroClase, type DiaSemana, type GeneroPerfil, type TipoClaseGenero } from '@/types'
 import { getEmailFrom } from '@/lib/email'
 import { enviarPushAUsuarios, obtenerStaffIdsPorNegocio } from '@/lib/push/server'
 import {
@@ -486,7 +486,7 @@ export async function POST(request: NextRequest) {
   // Verificar que el horario existe y está activo
   const { data: horario, error: hError } = await db
     .from('horarios')
-    .select('id, capacidad_total, activo, dia_semana, hora_inicio, negocio_id, nombre_coach, tipo_clase, tipo_servicio')
+    .select('id, capacidad_total, activo, dia_semana, hora_inicio, negocio_id, nombre_coach, tipo_clase, tipo_servicio, tipo_clase_genero')
     .eq('id', horario_id)
     .single()
 
@@ -561,11 +561,12 @@ export async function POST(request: NextRequest) {
 
   const { data: perfilUsuario, error: perfilUsuarioError } = await db
     .from('users')
-    .select('plan_activo, plan, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, reservas_suspendidas_hasta')
+    .select('plan_activo, plan, genero, fecha_inicio_ciclo, fecha_fin_plan, creditos_extra, reservas_suspendidas_hasta')
     .eq('id', user.id)
     .maybeSingle<{
       plan_activo: boolean
       plan: string | null
+      genero: GeneroPerfil | null
       fecha_inicio_ciclo: string | null
       fecha_fin_plan: string | null
       creditos_extra: number | null
@@ -591,6 +592,14 @@ export async function POST(request: NextRequest) {
 
   if (!perfilUsuario?.plan_activo || !normalizarPlan(perfilUsuario.plan ?? null)) {
     return NextResponse.json({ error: 'Necesitas una membresía activa para reservar' }, { status: 403 })
+  }
+
+  const errorGenero = validarGeneroClase(
+    perfilUsuario.genero ?? null,
+    (horario as { tipo_clase_genero?: TipoClaseGenero | null }).tipo_clase_genero ?? null,
+  )
+  if (errorGenero) {
+    return NextResponse.json({ error: errorGenero }, { status: 403 })
   }
   if (perfilUsuario.reservas_suspendidas_hasta) {
     const fechaSuspension = new Date(perfilUsuario.reservas_suspendidas_hasta)

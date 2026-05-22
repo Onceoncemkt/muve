@@ -9,8 +9,8 @@ const CIUDADES: Ciudad[] = CIUDADES_OPERATIVAS
 const MAX_FOTO_SIZE_BYTES = 2 * 1024 * 1024
 const MIME_TYPES_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp']
 const GENERO_OPTIONS: Array<{ value: GeneroPerfil; label: string }> = [
-  { value: 'masculino', label: 'Masculino' },
-  { value: 'femenino', label: 'Femenino' },
+  { value: 'masculino', label: 'Hombre' },
+  { value: 'femenino', label: 'Mujer' },
   { value: 'prefiero_no_decir', label: 'Prefiero no decir' },
 ]
 

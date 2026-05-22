@@ -27,6 +27,7 @@ type UsuarioRow = {
   id: string
   nombre: string
   plan: string | null
+  genero: string | null
   foto_url: string | null
   lesiones: string | null
   objetivo_entrenamiento: string | null
@@ -114,7 +115,7 @@ export async function GET(
 
   const usuarioResult = await db
     .from('users')
-    .select('id, nombre, plan, foto_url, lesiones, objetivo_entrenamiento, nivel_condicion, disciplinas, notas_negocio')
+    .select('id, nombre, plan, genero, foto_url, lesiones, objetivo_entrenamiento, nivel_condicion, disciplinas, notas_negocio')
     .eq('id', usuarioId)
     .maybeSingle<UsuarioRow>()
 
@@ -128,6 +129,7 @@ export async function GET(
       id: u.id,
       nombre: u.nombre,
       plan: u.plan,
+      genero: u.genero,
       foto_url: u.foto_url,
       lesiones: u.lesiones,
       objetivo_entrenamiento: u.objetivo_entrenamiento,

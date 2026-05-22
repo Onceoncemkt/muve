@@ -14,6 +14,7 @@ import {
   type Negocio,
   type PlanMembresia,
   type ServicioNegocio,
+  type TipoClaseGenero,
 } from '@/types'
 import {
   CREDITOS_POR_PLAN,
@@ -43,6 +44,7 @@ type HorarioExplorar = {
   hora_inicio: string
   hora_fin: string
   tipo_servicio?: 'clase' | 'gym' | null
+  tipo_clase_genero?: TipoClaseGenero | null
   fecha_proxima?: string
   nombre_coach: string | null
   tipo_clase: string | null
@@ -1050,6 +1052,16 @@ export default function ExplorarPage() {
                                   <span className="text-sm font-semibold text-[#0A0A0A]">
                                     {DIA_LABELS[horario.dia_semana]} · {formatHora(horario.hora_inicio)} - {formatHora(horario.hora_fin)}
                                   </span>
+                                  {horario.tipo_clase_genero === 'mujeres' && (
+                                    <span className="mt-1 inline-flex w-fit items-center rounded-full bg-[#F6E6FF] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#9B2FB0]">
+                                      Solo mujeres ♀
+                                    </span>
+                                  )}
+                                  {horario.tipo_clase_genero === 'hombres' && (
+                                    <span className="mt-1 inline-flex w-fit items-center rounded-full bg-[#E0ECFF] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#1D4ED8]">
+                                      Solo hombres ♂
+                                    </span>
+                                  )}
                                   <span className="text-xs text-[#666]">
                                     Próxima fecha: {fechaProxima}
                                   </span>

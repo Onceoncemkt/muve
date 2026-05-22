@@ -6,6 +6,7 @@ export type Rol = 'usuario' | 'staff' | 'admin'
 export type PlanMembresia = 'basico' | 'plus' | 'total'
 export type NivelNegocio = 'basico' | 'plus' | 'total'
 export type GeneroPerfil = 'masculino' | 'femenino' | 'prefiero_no_decir'
+export type TipoClaseGenero = 'mixta' | 'mujeres' | 'hombres'
 export type ObjetivoFitness = 'perder_peso' | 'ganar_musculo' | 'bienestar' | 'flexibilidad' | 'energia' | 'social'
 export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
 export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada' | 'no_show'
@@ -124,8 +125,38 @@ export interface Horario {
   nombre_coach: string | null
   tipo_clase: string | null
   tipo_servicio?: TipoServicioHorario | null
+  tipo_clase_genero?: TipoClaseGenero | null
   capacidad_total: number
   activo: boolean
+}
+
+export const GENERO_LABELS: Record<GeneroPerfil, string> = {
+  masculino: 'Hombre',
+  femenino: 'Mujer',
+  prefiero_no_decir: 'Prefiero no decir',
+}
+
+export const TIPO_CLASE_GENERO_LABELS: Record<TipoClaseGenero, string> = {
+  mixta: 'Mixta',
+  mujeres: 'Solo mujeres',
+  hombres: 'Solo hombres',
+}
+
+// Devuelve null si el género del usuario puede reservar la clase, o un mensaje
+// de error si la clase es exclusiva de otro género.
+export function validarGeneroClase(
+  generoUsuario: GeneroPerfil | null | undefined,
+  tipoClaseGenero: TipoClaseGenero | null | undefined,
+): string | null {
+  if (!tipoClaseGenero || tipoClaseGenero === 'mixta') return null
+  if (!generoUsuario || generoUsuario === 'prefiero_no_decir') return null
+  if (tipoClaseGenero === 'mujeres' && generoUsuario !== 'femenino') {
+    return 'Esta clase es exclusiva para mujeres'
+  }
+  if (tipoClaseGenero === 'hombres' && generoUsuario !== 'masculino') {
+    return 'Esta clase es exclusiva para hombres'
+  }
+  return null
 }
 
 export interface Reservacion {

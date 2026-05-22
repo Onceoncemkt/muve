@@ -4,8 +4,14 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import { normalizarCategoriaNegocio, normalizarCategoriasNegocio } from '@/lib/planes'
-import type { Categoria, DiaSemana, Rol, ServicioNegocio } from '@/types'
+import type { Categoria, DiaSemana, Rol, ServicioNegocio, TipoClaseGenero } from '@/types'
 import { CATEGORIA_LABELS, DIA_LABELS, formatHora } from '@/types'
+
+const TIPO_CLASE_GENERO_OPCIONES: Array<{ value: TipoClaseGenero; label: string }> = [
+  { value: 'mixta', label: 'Mixta (hombres y mujeres)' },
+  { value: 'mujeres', label: 'Solo mujeres' },
+  { value: 'hombres', label: 'Solo hombres' },
+]
 
 const DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
 const CATEGORIA_TABS: Categoria[] = ['clases', 'restaurante', 'estetica', 'gimnasio']
@@ -176,6 +182,7 @@ export default function NegocioHorariosPage() {
     capacidad_total: 12,
     dias_recurrentes: [] as DiaSemana[],
     activo: true,
+    tipo_clase_genero: 'mixta' as TipoClaseGenero,
   })
 
   const [formRestaurante, setFormRestaurante] = useState({
@@ -399,6 +406,7 @@ export default function NegocioHorariosPage() {
           capacidad_total: formClases.capacidad_total,
           activo: formClases.activo,
           tipo_servicio: tieneGymYClases ? 'clase' : undefined,
+          tipo_clase_genero: formClases.tipo_clase_genero,
         })
       }
     }
@@ -933,6 +941,18 @@ export default function NegocioHorariosPage() {
                             className={inputCls}
                           />
                         </div>
+                      </div>
+                      <div>
+                        <label className="mb-0.5 block text-[10px] font-bold uppercase text-[#888]">¿Para quién es esta clase?</label>
+                        <select
+                          value={formClases.tipo_clase_genero}
+                          onChange={(event) => setFormClases((prev) => ({ ...prev, tipo_clase_genero: event.target.value as TipoClaseGenero }))}
+                          className={inputCls}
+                        >
+                          {TIPO_CLASE_GENERO_OPCIONES.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-[#888]">
