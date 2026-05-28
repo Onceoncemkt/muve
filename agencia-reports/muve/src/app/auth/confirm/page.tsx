@@ -38,9 +38,19 @@ function ConfirmPageContent() {
       const tokenHash = searchParams.get('token_hash')
       const typeQuery = (searchParams.get('type') ?? 'recovery').trim().toLowerCase()
       const tipo = typeQuery === 'invite' ? 'invite' : 'recovery'
+      const hashParams = new URLSearchParams(window.location.hash.substring(1))
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token') ?? ''
+      const hashType = hashParams.get('type')?.trim().toLowerCase()
 
       try {
-        if (code) {
+        if (accessToken && (hashType === 'recovery' || !hashType)) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+          if (sessionError) throw sessionError
+        } else if (code) {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
           if (exchangeError) throw exchangeError
         } else if (tokenHash) {
