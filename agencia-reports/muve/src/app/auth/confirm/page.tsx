@@ -34,20 +34,24 @@ function ConfirmPageContent() {
       setError(null)
       setTipoConfirmacion(null)
 
+      const code = searchParams.get('code')
       const tokenHash = searchParams.get('token_hash')
-      const typeQuery = searchParams.get('type')?.trim().toLowerCase()
-      const tipo = typeQuery === 'recovery' ? 'recovery' : (typeQuery === 'invite' ? 'invite' : null)
+      const typeQuery = (searchParams.get('type') ?? 'recovery').trim().toLowerCase()
+      const tipo = typeQuery === 'invite' ? 'invite' : 'recovery'
 
       try {
-        if (!tokenHash || !tipo) {
+        if (code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+          if (exchangeError) throw exchangeError
+        } else if (tokenHash) {
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: tipo,
+          })
+          if (verifyError) throw verifyError
+        } else {
           throw new Error('Link inválido o expirado')
         }
-
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: tipo,
-        })
-        if (verifyError) throw verifyError
 
         const { data: authData } = await supabase.auth.getUser()
         if (!activo) return
@@ -98,7 +102,7 @@ function ConfirmPageContent() {
         setError(updateError.message)
         return
       }
-      router.replace(tipoConfirmacion === 'recovery' ? '/dashboard' : '/negocio/dashboard')
+      router.replace('/dashboard')
       router.refresh()
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
