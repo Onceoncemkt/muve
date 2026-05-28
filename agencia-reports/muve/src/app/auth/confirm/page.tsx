@@ -23,6 +23,7 @@ function ConfirmPageContent() {
   const [cargando, setCargando] = useState(false)
   const [inicializando, setInicializando] = useState(true)
   const [tokenValido, setTokenValido] = useState(false)
+  const [tipoConfirmacion, setTipoConfirmacion] = useState<'invite' | 'recovery' | null>(null)
 
   useEffect(() => {
     let activo = true
@@ -31,18 +32,20 @@ function ConfirmPageContent() {
       const supabase = createClient()
       setInicializando(true)
       setError(null)
+      setTipoConfirmacion(null)
 
       const tokenHash = searchParams.get('token_hash')
       const typeQuery = searchParams.get('type')?.trim().toLowerCase()
+      const tipo = typeQuery === 'recovery' ? 'recovery' : (typeQuery === 'invite' ? 'invite' : null)
 
       try {
-        if (!tokenHash || typeQuery !== 'invite') {
+        if (!tokenHash || !tipo) {
           throw new Error('Link inválido o expirado')
         }
 
         const { error: verifyError } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
-          type: 'invite',
+          type: tipo,
         })
         if (verifyError) throw verifyError
 
@@ -51,6 +54,7 @@ function ConfirmPageContent() {
 
         const valido = Boolean(authData.user)
         setTokenValido(valido)
+        setTipoConfirmacion(valido ? tipo : null)
         if (!valido) setError('Link inválido o expirado')
       } catch {
         if (!activo) return
@@ -94,7 +98,7 @@ function ConfirmPageContent() {
         setError(updateError.message)
         return
       }
-      router.replace('/negocio/dashboard')
+      router.replace(tipoConfirmacion === 'recovery' ? '/dashboard' : '/negocio/dashboard')
       router.refresh()
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
@@ -120,10 +124,12 @@ function ConfirmPageContent() {
         <div className="w-full max-w-sm">
           <div className="mb-10">
             <h1 className="text-4xl font-black tracking-tight text-white">
-              Crea tu contraseña
+              {tipoConfirmacion === 'recovery' ? 'Nueva contraseña' : 'Crea tu contraseña'}
             </h1>
             <p className="mt-3 text-sm text-white/40">
-              Bienvenido a MUVET. Elige una contraseña para acceder a tu panel.
+              {tipoConfirmacion === 'recovery'
+                ? 'Define una nueva contraseña para tu cuenta.'
+                : 'Bienvenido a MUVET. Elige una contraseña para acceder a tu panel.'}
             </p>
           </div>
 
@@ -180,7 +186,9 @@ function ConfirmPageContent() {
                 disabled={cargando || !tokenValido}
                 className="mt-1 w-full rounded-lg bg-[#E8FF47] py-4 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-white disabled:opacity-40"
               >
-                {cargando ? 'Activando cuenta...' : 'Activar mi cuenta'}
+                {cargando
+                  ? (tipoConfirmacion === 'recovery' ? 'Guardando...' : 'Activando cuenta...')
+                  : (tipoConfirmacion === 'recovery' ? 'Guardar contraseña' : 'Activar mi cuenta')}
               </button>
             </form>
           )}

@@ -20,6 +20,11 @@ function LoginPageContent() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
+  const [modalResetAbierto, setModalResetAbierto] = useState(false)
+  const [emailReset, setEmailReset] = useState('')
+  const [resetError, setResetError] = useState<string | null>(null)
+  const [resetMensaje, setResetMensaje] = useState<string | null>(null)
+  const [enviandoReset, setEnviandoReset] = useState(false)
   const cuentaActivada = searchParams.get('activada') === '1'
 
   async function handleSubmit(e: React.FormEvent) {
@@ -65,6 +70,27 @@ function LoginPageContent() {
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
       setCargando(false)
+    }
+  }
+  async function solicitarResetPassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setResetError(null)
+    setResetMensaje(null)
+    setEnviandoReset(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.resetPasswordForEmail(emailReset, {
+        redirectTo: 'https://muvet.mx/auth/confirm?type=recovery',
+      })
+      if (error) {
+        setResetError(error.message)
+        return
+      }
+      setResetMensaje('Si tu correo está registrado recibirás un enlace en breve')
+    } catch {
+      setResetError('No se pudo procesar la solicitud. Intenta de nuevo.')
+    } finally {
+      setEnviandoReset(false)
     }
   }
 
@@ -139,6 +165,18 @@ function LoginPageContent() {
             >
               {cargando ? 'Entrando...' : 'Iniciar sesión'}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setModalResetAbierto(true)
+                setEmailReset(email)
+                setResetError(null)
+                setResetMensaje(null)
+              }}
+              className="text-sm font-semibold text-white/60 transition-colors hover:text-[#E8FF47]"
+            >
+              Olvidé mi contraseña
+            </button>
           </form>
 
           <p className="mt-8 text-center text-sm text-white/30">
@@ -149,6 +187,53 @@ function LoginPageContent() {
           </p>
         </div>
       </div>
+      {modalResetAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#111111] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-black uppercase tracking-widest text-white">Recuperar contraseña</h2>
+              <button
+                type="button"
+                onClick={() => setModalResetAbierto(false)}
+                className="rounded-md border border-white/20 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white/70 hover:text-white"
+              >
+                Cerrar
+              </button>
+            </div>
+            <form onSubmit={solicitarResetPassword} className="space-y-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-white/40">
+                  Correo electrónico
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={emailReset}
+                  onChange={e => setEmailReset(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-[#6B4FE8]"
+                />
+              </div>
+              {resetError && (
+                <p className="rounded-lg border border-red-500/25 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-400">
+                  {resetError}
+                </p>
+              )}
+              {resetMensaje && (
+                <p className="rounded-lg border border-emerald-400/25 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-300">
+                  {resetMensaje}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={enviandoReset}
+                className="w-full rounded-lg bg-[#E8FF47] py-3 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-white disabled:opacity-50"
+              >
+                {enviandoReset ? 'Enviando...' : 'Enviar enlace'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

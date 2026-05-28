@@ -178,9 +178,10 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
 
   const [modalPasswordAbierto, setModalPasswordAbierto] = useState(false)
   const [nuevaPassword, setNuevaPassword] = useState('')
+  const [confirmarPassword, setConfirmarPassword] = useState('')
   const [actualizandoPassword, setActualizandoPassword] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [passwordExito, setPasswordExito] = useState<string | null>(null)
+  const [passwordToast, setPasswordToast] = useState<string | null>(null)
 
   const hoyIso = new Date().toISOString().slice(0, 10)
   const inicialesUsuario = inicialesDesdeTexto(form.nombre || form.email || 'Muver')
@@ -315,10 +316,13 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
   async function actualizarPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setPasswordError(null)
-    setPasswordExito(null)
 
     if (nuevaPassword.length < 8) {
       setPasswordError('La contraseña debe tener al menos 8 caracteres.')
+      return
+    }
+    if (nuevaPassword !== confirmarPassword) {
+      setPasswordError('Las contraseñas no coinciden.')
       return
     }
 
@@ -330,13 +334,11 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
         setPasswordError(error.message || 'No se pudo actualizar la contraseña.')
         return
       }
-
-      setPasswordExito('Contraseña actualizada correctamente.')
+      setPasswordToast('Contraseña actualizada correctamente')
       setNuevaPassword('')
-      window.setTimeout(() => {
-        setModalPasswordAbierto(false)
-        setPasswordExito(null)
-      }, 900)
+      setConfirmarPassword('')
+      setModalPasswordAbierto(false)
+      window.setTimeout(() => setPasswordToast(null), 3000)
     } catch {
       setPasswordError('Error de conexión al actualizar contraseña.')
     } finally {
@@ -637,19 +639,22 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
             >
               {guardando ? 'Guardando...' : 'Guardar cambios'}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setModalPasswordAbierto(true)
-                setPasswordError(null)
-                setPasswordExito(null)
-              }}
-              className="flex-1 rounded-lg border border-[#0A0A0A] bg-white py-3 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-white"
-            >
-              Cambiar contraseña
-            </button>
           </div>
         </form>
+        <section className="rounded-xl border border-[#E5E5E5] bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-black uppercase tracking-widest text-[#0A0A0A]">Seguridad</h2>
+          <p className="mt-1 text-xs text-[#666]">Administra la contraseña de tu cuenta.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setModalPasswordAbierto(true)
+              setPasswordError(null)
+            }}
+            className="mt-3 rounded-lg border border-[#0A0A0A] bg-white px-4 py-2.5 text-sm font-bold text-[#0A0A0A] transition-colors hover:bg-[#0A0A0A] hover:text-white"
+          >
+            Cambiar contraseña
+          </button>
+        </section>
       </div>
 
       {modalPasswordAbierto && (
@@ -664,8 +669,8 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
                 onClick={() => {
                   setModalPasswordAbierto(false)
                   setNuevaPassword('')
+                  setConfirmarPassword('')
                   setPasswordError(null)
-                  setPasswordExito(null)
                 }}
                 className="rounded-md border border-[#E5E5E5] px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-[#555] hover:border-[#0A0A0A] hover:text-[#0A0A0A]"
               >
@@ -689,15 +694,25 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
                   className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
                 />
               </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#666]">
+                  Confirmar contraseña
+                </label>
+                <input
+                  type="password"
+                  value={confirmarPassword}
+                  onChange={(event) => setConfirmarPassword(event.target.value)}
+                  minLength={8}
+                  required
+                  autoComplete="new-password"
+                  placeholder="Repite tu nueva contraseña"
+                  className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
+                />
+              </div>
 
               {passwordError && (
                 <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
                   {passwordError}
-                </p>
-              )}
-              {passwordExito && (
-                <p className="rounded-md border border-[#6B4FE8]/20 bg-[#6B4FE8]/10 px-3 py-2 text-xs font-semibold text-[#4A2CA3]">
-                  {passwordExito}
                 </p>
               )}
 
@@ -706,10 +721,15 @@ export default function PerfilPageClient({ userId, initialProfile }: Props) {
                 disabled={actualizandoPassword}
                 className="w-full rounded-lg bg-[#6B4FE8] py-3 text-sm font-bold text-white transition-colors hover:bg-[#5a3fd6] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {actualizandoPassword ? 'Actualizando...' : 'Actualizar contraseña'}
+                {actualizandoPassword ? 'Guardando...' : 'Guardar contraseña'}
               </button>
             </form>
           </div>
+        </div>
+      )}
+      {passwordToast && (
+        <div className="fixed bottom-5 right-4 z-50 rounded-lg border border-[#6B4FE8]/20 bg-[#6B4FE8] px-4 py-2.5 text-sm font-semibold text-white shadow-lg">
+          {passwordToast}
         </div>
       )}
     </div>
