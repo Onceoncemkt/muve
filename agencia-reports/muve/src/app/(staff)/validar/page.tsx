@@ -49,6 +49,71 @@ function formatHora(fechaIso: string) {
   return date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
 }
 
+const SHA256_HEX_REGEX = /^[a-f0-9]{64}$/i
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+type EscaneoNormalizado = {
+  token: string | null
+  userId: string | null
+}
+
+function extraerValorDesdeUrl(valor: string): string | null {
+  try {
+    const url = new URL(valor)
+    const tokenDesdeQuery = (
+      url.searchParams.get('token')
+      ?? url.searchParams.get('hash')
+      ?? url.searchParams.get('qr')
+      ?? ''
+    ).trim()
+    if (tokenDesdeQuery) return tokenDesdeQuery
+
+    const ultimoSegmento = url.pathname.split('/').filter(Boolean).at(-1)?.trim() ?? ''
+    return ultimoSegmento || null
+  } catch {
+    return null
+  }
+}
+
+function extraerUserIdFormatoMuvet(valor: string): string | null {
+  const partes = valor.split('|').map((item) => item.trim())
+  if (partes.length < 2 || partes[0].toUpperCase() !== 'MUVET') return null
+  return UUID_REGEX.test(partes[1]) ? partes[1] : null
+}
+
+async function sha256Hex(valor: string) {
+  const data = new TextEncoder().encode(valor)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function normalizarEscaneoQr(textoEscaneado: string): Promise<EscaneoNormalizado> {
+  const limpio = textoEscaneado.trim()
+  if (!limpio) return { token: null, userId: null }
+  if (SHA256_HEX_REGEX.test(limpio)) return { token: limpio.toLowerCase(), userId: null }
+
+  const valorDesdeUrl = extraerValorDesdeUrl(limpio)
+  if (valorDesdeUrl && SHA256_HEX_REGEX.test(valorDesdeUrl)) {
+    return { token: valorDesdeUrl.toLowerCase(), userId: null }
+  }
+
+  const userId = (
+    extraerUserIdFormatoMuvet(limpio)
+    ?? (UUID_REGEX.test(limpio) ? limpio : null)
+    ?? (valorDesdeUrl && UUID_REGEX.test(valorDesdeUrl) ? valorDesdeUrl : null)
+  )
+
+  if (!userId) return { token: limpio, userId: null }
+  if (typeof crypto === 'undefined' || !crypto.subtle) return { token: null, userId }
+
+  return {
+    token: await sha256Hex(userId.toLowerCase()),
+    userId,
+  }
+}
+
 export default function ValidarPage() {
   const [sesion, setSesion] = useState<ValidadorSession | null>(null)
   const [cargandoSesion, setCargandoSesion] = useState(true)
@@ -169,11 +234,17 @@ export default function ValidarPage() {
 
   async function validarToken(token: string) {
     if (!token.trim()) return
+    const escaneoNormalizado = await normalizarEscaneoQr(token)
+    if (!escaneoNormalizado.token && !escaneoNormalizado.userId) {
+      setResultado({ tipo: 'error', texto: 'QR inválido. Intenta de nuevo.' })
+      return
+    }
     const res = await fetch('/api/validar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        token: token.trim(),
+        token: escaneoNormalizado.token ?? undefined,
+        user_id: escaneoNormalizado.token ? undefined : escaneoNormalizado.userId ?? undefined,
         solo_cotizar: false,
         tipo_servicio: negocioTieneGymYClases ? tipoServicioSeleccionado : undefined,
       }),

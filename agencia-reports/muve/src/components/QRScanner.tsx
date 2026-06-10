@@ -8,59 +8,97 @@ interface Props {
 }
 
 const SCANNER_ELEMENT_ID = 'muvet-qr-scanner'
+const ERROR_CAMARA = 'No se pudo acceder a la cámara. Verifica los permisos en tu navegador.'
 
 export default function QRScanner({ onScan, activo }: Props) {
   const scannerRef = useRef<InstanceType<typeof import('html5-qrcode').Html5Qrcode> | null>(null)
+  const onScanRef = useRef(onScan)
+  const scanProcesadoRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [iniciando, setIniciando] = useState(false)
+  useEffect(() => {
+    onScanRef.current = onScan
+  }, [onScan])
 
   useEffect(() => {
     if (!activo) return
 
     let destruido = false
+    async function detenerEscaner() {
+      const scanner = scannerRef.current
+      scannerRef.current = null
+      if (!scanner) return
+
+      try {
+        await scanner.stop()
+      } catch {}
+
+      try {
+        const clearResult = scanner.clear()
+        if (clearResult instanceof Promise) {
+          await clearResult
+        }
+      } catch {}
+    }
 
     async function iniciarEscaner() {
       setIniciando(true)
       setError(null)
+      scanProcesadoRef.current = false
 
       try {
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+          throw new Error('CAMERA_API_UNAVAILABLE')
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+        stream.getTracks().forEach((track) => track.stop())
         const { Html5Qrcode } = await import('html5-qrcode')
         const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, { verbose: false })
         scannerRef.current = scanner
+        const configuracionEscaneo = { fps: 10, qrbox: { width: 220, height: 220 } }
+        const onScanExitoso = (texto: string) => {
+          if (destruido || scanProcesadoRef.current) return
+          scanProcesadoRef.current = true
+          onScanRef.current(texto)
+        }
 
-        await scanner.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 220, height: 220 } },
-          (texto) => { if (!destruido) onScan(texto) },
-          () => {}
-        )
-      } catch (err) {
-        if (!destruido) {
-          const msg = err instanceof Error ? err.message : String(err)
-          setError(
-            msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')
-              ? 'Permiso de cámara denegado. Actívalo en los ajustes del navegador.'
-              : 'No se pudo iniciar la cámara.'
+        try {
+          await scanner.start(
+            { facingMode: 'environment' },
+            configuracionEscaneo,
+            onScanExitoso,
+            () => {}
+          )
+        } catch (errorCamaraTrasera) {
+          const camaras = await Html5Qrcode.getCameras()
+          if (camaras.length === 0) {
+            throw errorCamaraTrasera
+          }
+          await scanner.start(
+            camaras[0].id,
+            configuracionEscaneo,
+            onScanExitoso,
+            () => {}
           )
         }
+      } catch (err) {
+        if (!destruido) {
+          console.error('[QRScanner] Error al iniciar cámara', err)
+          setError(ERROR_CAMARA)
+        }
+        await detenerEscaner()
       } finally {
         if (!destruido) setIniciando(false)
       }
     }
-
-    iniciarEscaner()
+    void iniciarEscaner()
 
     return () => {
       destruido = true
-      const scanner = scannerRef.current
-      if (scanner) {
-        scanner.stop().catch(() => {}).finally(() => {
-          scanner.clear()
-          scannerRef.current = null
-        })
-      }
+      void detenerEscaner()
     }
-  }, [activo, onScan])
+  }, [activo])
 
   if (!activo) return null
 
