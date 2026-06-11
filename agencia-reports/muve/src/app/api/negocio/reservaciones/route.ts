@@ -42,6 +42,9 @@ function isoFecha(d: Date) {
 function rangoFechasDesdePeriodo(periodo: string, desde: string | null, hasta: string | null) {
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
+  if (periodo === 'historial') {
+    return { desde: null, hasta: isoFecha(hoy) }
+  }
 
   if (periodo === 'hoy') {
     const f = isoFecha(hoy)

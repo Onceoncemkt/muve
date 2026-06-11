@@ -45,7 +45,7 @@ const GENERO_LABEL_STAFF: Record<string, string> = {
   prefiero_no_decir: 'Prefiero no decir',
 }
 
-type Periodo = 'hoy' | 'semana' | 'mes' | 'rango'
+type Periodo = 'historial' | 'hoy' | 'semana' | 'mes' | 'rango'
 type FiltroEstado = 'todas' | EstadoReservacion
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -131,7 +131,7 @@ export default function NegocioReservacionesPanel() {
   const [hoyError, setHoyError] = useState<string | null>(null)
 
   // Historial
-  const [periodo, setPeriodo] = useState<Periodo>('mes')
+  const [periodo, setPeriodo] = useState<Periodo>('historial')
   const [desde, setDesde] = useState<string>('')
   const [hasta, setHasta] = useState<string>('')
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>('todas')
@@ -436,6 +436,7 @@ export default function NegocioReservacionesPanel() {
               }}
               className="mt-1 w-full rounded-md border border-[#E5E5E5] bg-white px-2.5 py-1.5 text-sm text-[#0A0A0A] outline-none focus:border-[#6B4FE8]"
             >
+              <option value="historial">Todo el historial</option>
               <option value="semana">Semana actual</option>
               <option value="mes">Mes actual</option>
               <option value="rango">Rango personalizado</option>
