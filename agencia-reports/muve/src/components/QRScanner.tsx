@@ -34,10 +34,7 @@ export default function QRScanner({ onScan, activo }: Props) {
       } catch {}
 
       try {
-        const clearResult = scanner.clear()
-        if (clearResult instanceof Promise) {
-          await clearResult
-        }
+        await Promise.resolve(scanner.clear())
       } catch {}
     }
 
