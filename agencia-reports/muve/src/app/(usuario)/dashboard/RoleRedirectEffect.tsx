@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { normalizarRol } from '@/lib/auth/roles'
 
 export default function RoleRedirectEffect() {
   useEffect(() => {
@@ -14,11 +15,12 @@ export default function RoleRedirectEffect() {
         .select('rol')
         .eq('id', user.id)
         .single()
-      if (perfil?.rol === 'admin') {
+      const rol = normalizarRol(perfil?.rol) ?? 'usuario'
+      if (rol === 'admin') {
         window.location.href = '/admin'
         return
       }
-      if (perfil?.rol === 'staff') {
+      if (rol === 'staff') {
         window.location.href = '/negocio/dashboard'
         return
       }

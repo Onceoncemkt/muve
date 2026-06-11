@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 
 type Estado = 'idle' | 'saving' | 'ok' | 'error'
+type Operacion = 'agregar' | 'quitar'
 
 type Props = {
   userId: string
@@ -18,6 +19,7 @@ const MOTIVOS_SUGERIDOS = [
 
 export default function AdminDarCreditosModal({ userId, userNombre }: Props) {
   const [abierto, setAbierto] = useState(false)
+  const [operacion, setOperacion] = useState<Operacion>('agregar')
   const [cantidad, setCantidad] = useState('1')
   const [motivo, setMotivo] = useState(MOTIVOS_SUGERIDOS[0])
   const [estado, setEstado] = useState<Estado>('idle')
@@ -53,6 +55,7 @@ export default function AdminDarCreditosModal({ userId, userNombre }: Props) {
           user_id: userId,
           cantidad: cantidadNumero,
           motivo: motivoLimpio,
+          operacion,
         }),
       })
 
@@ -61,7 +64,9 @@ export default function AdminDarCreditosModal({ userId, userNombre }: Props) {
         throw new Error(
           typeof payload.error === 'string'
             ? payload.error
-            : 'No se pudieron otorgar créditos.'
+            : operacion === 'agregar'
+              ? 'No se pudieron otorgar créditos.'
+              : 'No se pudieron retirar créditos.'
         )
       }
 
@@ -72,7 +77,13 @@ export default function AdminDarCreditosModal({ userId, userNombre }: Props) {
       }, 350)
     } catch (err) {
       setEstado('error')
-      setError(err instanceof Error ? err.message : 'No se pudieron otorgar créditos.')
+      setError(
+        err instanceof Error
+          ? err.message
+          : operacion === 'agregar'
+            ? 'No se pudieron otorgar créditos.'
+            : 'No se pudieron retirar créditos.'
+      )
     }
   }
 
@@ -82,12 +93,13 @@ export default function AdminDarCreditosModal({ userId, userNombre }: Props) {
         type="button"
         onClick={() => {
           setAbierto(true)
+          setOperacion('agregar')
           setEstado('idle')
           setError('')
         }}
         className="rounded-md border border-[#E8FF47] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#E8FF47] hover:bg-[#E8FF47]/10"
       >
-        Dar créditos
+        Ajustar créditos
       </button>
 
       {abierto && (
@@ -96,7 +108,7 @@ export default function AdminDarCreditosModal({ userId, userNombre }: Props) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider text-[#E8FF47]">
-                  Dar créditos
+                  Ajustar créditos
                 </h3>
                 <p className="mt-1 text-xs text-white/60">
                   Usuario: {userNombre}
@@ -112,6 +124,35 @@ export default function AdminDarCreditosModal({ userId, userNombre }: Props) {
             </div>
 
             <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
+                  Operación
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOperacion('agregar')}
+                    className={`rounded-md border px-3 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
+                      operacion === 'agregar'
+                        ? 'border-[#E8FF47] bg-[#E8FF47]/15 text-[#E8FF47]'
+                        : 'border-white/15 text-white/75 hover:border-[#E8FF47]/60'
+                    }`}
+                  >
+                    Agregar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOperacion('quitar')}
+                    className={`rounded-md border px-3 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
+                      operacion === 'quitar'
+                        ? 'border-red-400 bg-red-500/15 text-red-200'
+                        : 'border-white/15 text-white/75 hover:border-red-400/60'
+                    }`}
+                  >
+                    Quitar
+                  </button>
+                </div>
+              </div>
               <div>
                 <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-white/45">
                   Cantidad de créditos (1-50)
@@ -163,9 +204,17 @@ export default function AdminDarCreditosModal({ userId, userNombre }: Props) {
                 type="button"
                 onClick={() => void confirmar()}
                 disabled={estado === 'saving'}
-                className="rounded-md bg-[#E8FF47] px-3 py-2 text-xs font-black uppercase tracking-wider text-[#0A0A0A] hover:bg-[#f1ff89] disabled:opacity-60"
+                className={`rounded-md px-3 py-2 text-xs font-black uppercase tracking-wider disabled:opacity-60 ${
+                  operacion === 'agregar'
+                    ? 'bg-[#E8FF47] text-[#0A0A0A] hover:bg-[#f1ff89]'
+                    : 'bg-red-500 text-white hover:bg-red-400'
+                }`}
               >
-                {estado === 'saving' ? 'Guardando...' : 'Confirmar'}
+                {estado === 'saving'
+                  ? 'Guardando...'
+                  : operacion === 'agregar'
+                    ? 'Agregar créditos'
+                    : 'Quitar créditos'}
               </button>
             </div>
           </div>

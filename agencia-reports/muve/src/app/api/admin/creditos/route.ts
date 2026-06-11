@@ -9,7 +9,9 @@ type CreditosBody = {
   user_id?: unknown
   cantidad?: unknown
   motivo?: unknown
+  operacion?: unknown
 }
+type OperacionCreditos = 'agregar' | 'quitar'
 
 function admin() {
   return createAdminClient(
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
   const userId = typeof body.user_id === 'string' ? body.user_id.trim() : ''
   const cantidad = parseCantidad(body.cantidad)
   const motivo = typeof body.motivo === 'string' ? body.motivo.trim() : ''
+  const operacion: OperacionCreditos = body.operacion === 'quitar' ? 'quitar' : 'agregar'
 
   if (!userId) {
     return NextResponse.json({ error: 'user_id es requerido' }, { status: 400 })
@@ -78,7 +81,18 @@ export async function POST(request: NextRequest) {
   }
 
   const creditosActuales = Math.max(Math.trunc(usuarioObjetivo.creditos_extra ?? 0), 0)
-  const creditosNuevos = creditosActuales + cantidad
+  if (operacion === 'quitar' && creditosActuales <= 0) {
+    return NextResponse.json({ error: 'El usuario no tiene créditos extra para retirar' }, { status: 400 })
+  }
+  if (operacion === 'quitar' && cantidad > creditosActuales) {
+    return NextResponse.json(
+      { error: `No puedes retirar ${cantidad} créditos. El usuario tiene ${creditosActuales}.` },
+      { status: 400 }
+    )
+  }
+
+  const cantidadAjuste = operacion === 'quitar' ? -cantidad : cantidad
+  const creditosNuevos = Math.max(creditosActuales + cantidadAjuste, 0)
 
   const { error: updateError } = await db
     .from('users')
@@ -93,7 +107,7 @@ export async function POST(request: NextRequest) {
     .from('creditos_historial')
     .insert({
       user_id: userId,
-      cantidad,
+      cantidad: cantidadAjuste,
       motivo,
       otorgado_por: 'admin',
     })
@@ -103,7 +117,7 @@ export async function POST(request: NextRequest) {
       .from('creditos_historial')
       .insert({
         user_id: userId,
-        cantidad,
+        cantidad: cantidadAjuste,
         motivo,
       })
     if (fallback.error) {
@@ -113,11 +127,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: insercionHistorial.error.message ?? 'No se pudo guardar historial' }, { status: 500 })
   }
 
+  const bodyPush = operacion === 'agregar'
+    ? `MUVET te ha regalado ${cantidad} créditos extra. Motivo: ${motivo}`
+    : `Se retiraron ${cantidad} créditos extra de tu cuenta. Motivo: ${motivo}`
+
   await enviarPushAUsuarios(
     [userId],
     {
       title: 'MUVET',
-      body: `MUVET te ha regalado ${cantidad} créditos extra. Motivo: ${motivo}`,
+      body: bodyPush,
       url: '/dashboard',
     }
   )
@@ -129,7 +147,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     user_id: userId,
-    cantidad,
+    operacion,
+    cantidad: cantidadAjuste,
     motivo,
     creditos_extra: creditosNuevos,
   })

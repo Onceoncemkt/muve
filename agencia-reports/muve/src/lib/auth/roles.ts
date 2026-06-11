@@ -11,6 +11,9 @@ const ROLE_ALIASES: Record<string, Rol> = {
   admin: 'admin',
   administrador: 'admin',
   staff: 'staff',
+  negocio: 'staff',
+  negocios: 'staff',
+  business: 'staff',
   usuario: 'usuario',
   user: 'usuario',
 }

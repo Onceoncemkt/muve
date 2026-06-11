@@ -399,6 +399,7 @@ export default async function AdminPage({
     edad: usuario.edad ?? edadPorUsuario.get(usuario.id) ?? null,
   }))
 
+  let creditosOtorgados: CreditoOtorgadoRow[] = []
   const consultaCreditosOtorgados = await db
     .from('creditos_historial')
     .select('id, user_id, cantidad, motivo, created_at, otorgado_por, users(nombre, email)')
@@ -406,9 +407,22 @@ export default async function AdminPage({
     .order('created_at', { ascending: false })
     .limit(100)
 
-  const creditosOtorgados = consultaCreditosOtorgados.error
-    ? []
-    : (consultaCreditosOtorgados.data ?? []) as unknown as CreditoOtorgadoRow[]
+  if (!consultaCreditosOtorgados.error) {
+    creditosOtorgados = (consultaCreditosOtorgados.data ?? []) as unknown as CreditoOtorgadoRow[]
+  } else if (faltaColumnaExacta(consultaCreditosOtorgados.error, 'otorgado_por')) {
+    const consultaCreditosFallback = await db
+      .from('creditos_historial')
+      .select('id, user_id, cantidad, motivo, created_at, users(nombre, email)')
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (!consultaCreditosFallback.error) {
+      creditosOtorgados = ((consultaCreditosFallback.data ?? []) as unknown as Omit<CreditoOtorgadoRow, 'otorgado_por'>[]).map((row) => ({
+        ...row,
+        otorgado_por: null,
+      }))
+    }
+  }
 
   const stripeStatusEntries = await Promise.all(
     negociosAfiliados.map(async (negocio) => {
@@ -685,7 +699,7 @@ export default async function AdminPage({
               </a>
               <a
                 href="#finanzas"
-                className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
+                className="rounded-md border border-[#E8FF47] bg-[#E8FF47] px-3 py-1.5 text-xs font-black uppercase tracking-wider text-[#0A0A0A] transition-colors hover:bg-[#f1ff89]"
               >
                 Finanzas
               </a>
@@ -835,10 +849,10 @@ export default async function AdminPage({
         <section id="creditos-otorgados" className="scroll-mt-24">
           <div className="mb-3">
             <h2 className="text-sm font-black uppercase tracking-[0.18em] text-[#E8FF47]">
-              Historial de créditos otorgados
+              Historial de ajustes de créditos
             </h2>
             <p className="mt-1 text-xs text-white/50">
-              Últimos créditos extra otorgados manualmente por administración.
+              Últimos créditos extra agregados o retirados manualmente por administración.
             </p>
           </div>
 
@@ -854,32 +868,39 @@ export default async function AdminPage({
                 </tr>
               </thead>
               <tbody>
-                {creditosOtorgados.map((row) => (
-                  <tr key={row.id} className="border-b border-white/10 text-sm text-white/90">
-                    <td className="px-3 py-3">
-                      <p className="font-semibold">{row.users?.nombre ?? 'Usuario no disponible'}</p>
-                      <p className="text-xs text-white/55">{row.users?.email ?? row.user_id}</p>
-                    </td>
-                    <td className="px-3 py-3 font-black text-[#E8FF47]">+{row.cantidad}</td>
-                    <td className="px-3 py-3">{row.motivo}</td>
-                    <td className="px-3 py-3 text-white/75">
-                      {new Date(row.created_at).toLocaleString('es-MX', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="px-3 py-3 uppercase text-xs font-bold text-[#CBBEFF]">
-                      {row.otorgado_por ?? 'admin'}
-                    </td>
-                  </tr>
-                ))}
+                {creditosOtorgados.map((row) => {
+                  const esRetiro = row.cantidad < 0
+                  const cantidadLabel = row.cantidad > 0 ? `+${row.cantidad}` : String(row.cantidad)
+
+                  return (
+                    <tr key={row.id} className="border-b border-white/10 text-sm text-white/90">
+                      <td className="px-3 py-3">
+                        <p className="font-semibold">{row.users?.nombre ?? 'Usuario no disponible'}</p>
+                        <p className="text-xs text-white/55">{row.users?.email ?? row.user_id}</p>
+                      </td>
+                      <td className={`px-3 py-3 font-black ${esRetiro ? 'text-red-300' : 'text-[#E8FF47]'}`}>
+                        {cantidadLabel}
+                      </td>
+                      <td className="px-3 py-3">{row.motivo}</td>
+                      <td className="px-3 py-3 text-white/75">
+                        {new Date(row.created_at).toLocaleString('es-MX', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td className="px-3 py-3 uppercase text-xs font-bold text-[#CBBEFF]">
+                        {row.otorgado_por ?? 'N/D'}
+                      </td>
+                    </tr>
+                  )
+                })}
                 {creditosOtorgados.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-sm text-white/50">
-                      No hay créditos otorgados todavía.
+                      No hay ajustes de créditos todavía.
                     </td>
                   </tr>
                 )}
@@ -889,6 +910,14 @@ export default async function AdminPage({
         </section>
 
         <AdminReservacionesSection />
+        <div className="flex justify-end">
+          <a
+            href="#finanzas"
+            className="inline-flex items-center rounded-md border border-[#E8FF47]/50 bg-[#E8FF47]/10 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-[#E8FF47] transition-colors hover:bg-[#E8FF47]/20"
+          >
+            Ir a Finanzas
+          </a>
+        </div>
         <section id="finanzas" className="scroll-mt-24">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>

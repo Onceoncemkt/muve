@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { panelPorRol, rolDesdeAuth } from '@/lib/auth/roles'
 
 const RUTAS_PROTEGIDAS = ['/dashboard', '/historial', '/negocio', '/admin']
 const RUTAS_AUTH = ['/login', '/registro']
@@ -28,10 +29,6 @@ function redirectWithSession(url: URL, supabaseResponse: NextResponse): NextResp
 }
 
 export async function proxy(request: NextRequest) {
-  const pathname = request.nextUrl.pathname
-  if (pathname === '/api/stripe/webhook') {
-    return NextResponse.next({ request })
-  }
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -54,6 +51,7 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const pathname = request.nextUrl.pathname
   const esRutaProtegida = RUTAS_PROTEGIDAS.some(r => startsWithRoute(pathname, r))
   const esRutaAuth = RUTAS_AUTH.some(r => startsWithRoute(pathname, r))
 
@@ -69,7 +67,8 @@ export async function proxy(request: NextRequest) {
       request.nextUrl.searchParams.get('redirect')
     )
     const url = request.nextUrl.clone()
-    url.pathname = redirectSolicitado ?? '/dashboard'
+    const rol = rolDesdeAuth(user) ?? 'usuario'
+    url.pathname = redirectSolicitado ?? panelPorRol(rol)
     url.search = ''
     return redirectWithSession(url, supabaseResponse)
   }
@@ -80,6 +79,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/stripe/webhook|.*[.](?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
