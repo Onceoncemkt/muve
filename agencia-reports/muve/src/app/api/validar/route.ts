@@ -603,7 +603,6 @@ export async function POST(request: NextRequest) {
       )
     }
     const ventanaInicio = new Date(horaClase.getTime() - 30 * 60 * 1000)
-    const ventanaFin = new Date(horaClase.getTime() + 30 * 60 * 1000)
 
     if (ahora < ventanaInicio) {
       return NextResponse.json(
@@ -615,15 +614,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (ahora > ventanaFin) {
-      return NextResponse.json(
-        {
-          valido: false,
-          error: `El tiempo para validar esta reservación ha expirado. La clase comenzó a las ${horaCorta(horaClase)}.`,
-        },
-        { status: 400 }
-      )
-    }
   }
 
   if (categoriaEfectiva === 'gimnasio') {

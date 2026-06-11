@@ -51,7 +51,7 @@ type FiltroEstado = 'todas' | EstadoReservacion
 const ESTADO_LABEL: Record<string, string> = {
   confirmada: 'Confirmada',
   completada: 'Completada',
-  no_show: 'No show',
+  no_show: 'No asistió',
   cancelada: 'Cancelada',
 }
 
