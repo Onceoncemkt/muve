@@ -36,6 +36,10 @@ function horaActualHHMMSS() {
   return `${hh}:${mm}:${ss}`
 }
 
+function horaCorta(fecha: Date) {
+  return fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+}
+
 export async function POST(request: NextRequest) {
   const authClient = await createClient()
   const validadorSession = await getValidadorSession()
@@ -429,11 +433,12 @@ export async function POST(request: NextRequest) {
   let costoDobleZonaPremium = false
   let permiteVisitaDirecta = categoriaNegocio === 'restaurante' && !negocio.requiere_reserva
   let reservacionACompletarId: string | null = null
+  let reservacionClaseParaVentana: { fecha: string; hora_inicio: string } | null = null
 
   let servicioReservado: { id: string; nombre: string; precio_normal_mxn: number | null; fecha: string } | null = null
   const { data: horariosNegocio, error: horariosError } = await db
     .from('horarios')
-    .select('id, tipo_servicio')
+    .select('id, tipo_servicio, hora_inicio')
     .eq('negocio_id', negocioIdObjetivo)
 
   if (horariosError) {
@@ -455,6 +460,16 @@ export async function POST(request: NextRequest) {
         return [id, tipo] as const
       })
       .filter((entry): entry is readonly [string, 'gym' | 'clase'] => Boolean(entry))
+  )
+  const horaInicioPorHorario = new Map<string, string>(
+    horarios
+      .map((horario) => {
+        const id = typeof horario.id === 'string' ? horario.id : null
+        const horaInicio = typeof horario.hora_inicio === 'string' ? horario.hora_inicio : null
+        if (!id || !horaInicio) return null
+        return [id, horaInicio] as const
+      })
+      .filter((entry): entry is readonly [string, string] => Boolean(entry))
   )
 
   if (horarioIds.length === 0 && !permiteVisitaDirecta) {
@@ -532,7 +547,15 @@ export async function POST(request: NextRequest) {
       if (reservacionConfirmada) {
         reservacionACompletarId = reservacionConfirmada.id
         if (typeof reservacionConfirmada.horario_id === 'string') {
-          tipoServicioDetectado = tipoServicioPorHorario.get(reservacionConfirmada.horario_id) ?? null
+          const horarioId = reservacionConfirmada.horario_id
+          tipoServicioDetectado = tipoServicioPorHorario.get(horarioId) ?? null
+          const horaInicio = horaInicioPorHorario.get(horarioId)
+          if (horaInicio) {
+            reservacionClaseParaVentana = {
+              fecha: reservacionConfirmada.fecha,
+              hora_inicio: horaInicio,
+            }
+          }
         }
       }
     }
@@ -562,6 +585,45 @@ export async function POST(request: NextRequest) {
       },
       { status: 400 }
     )
+  }
+
+  if (categoriaEfectiva === 'clases' && reservacionACompletarId) {
+    if (!reservacionClaseParaVentana) {
+      return NextResponse.json(
+        { valido: false, error: 'No se pudo validar el horario de la clase reservada.' },
+        { status: 400 }
+      )
+    }
+    const ahora = new Date()
+    const horaClase = new Date(`${reservacionClaseParaVentana.fecha}T${reservacionClaseParaVentana.hora_inicio}`)
+    if (Number.isNaN(horaClase.getTime())) {
+      return NextResponse.json(
+        { valido: false, error: 'No se pudo validar el horario de la clase reservada.' },
+        { status: 400 }
+      )
+    }
+    const ventanaInicio = new Date(horaClase.getTime() - 30 * 60 * 1000)
+    const ventanaFin = new Date(horaClase.getTime() + 30 * 60 * 1000)
+
+    if (ahora < ventanaInicio) {
+      return NextResponse.json(
+        {
+          valido: false,
+          error: `Aún no es momento de validar. La clase comienza a las ${horaCorta(horaClase)}. Puedes escanear a partir de las ${horaCorta(ventanaInicio)}.`,
+        },
+        { status: 400 }
+      )
+    }
+
+    if (ahora > ventanaFin) {
+      return NextResponse.json(
+        {
+          valido: false,
+          error: `El tiempo para validar esta reservación ha expirado. La clase comenzó a las ${horaCorta(horaClase)}.`,
+        },
+        { status: 400 }
+      )
+    }
   }
 
   if (categoriaEfectiva === 'gimnasio') {
