@@ -7,7 +7,7 @@ import {
   resolverZonaNegocio,
   obtenerTarifasNegocioPorPlan,
 } from '@/lib/planes'
-import type { PlanMembresia, Rol } from '@/types'
+import type { DiaSemana, PlanMembresia, Rol } from '@/types'
 
 type Perfil = {
   rol: Rol
@@ -139,9 +139,52 @@ type PagosDashboard = {
   historial_semanal: PagoSemanalDashboard[]
   proximo_pago_estimado: PagoSemanalDashboard
 }
+type RendimientoDiaDashboard = {
+  dia_semana: DiaSemana
+  reservaciones: number
+  completadas: number
+  no_show: number
+  tasa_asistencia_pct: number
+  ingreso_estimado_mxn: number
+}
+type RendimientoHoraDashboard = {
+  hora_inicio: string
+  reservaciones: number
+  completadas: number
+  no_show: number
+  tasa_asistencia_pct: number
+  ingreso_estimado_mxn: number
+}
+type InteligenciaDashboard = {
+  periodo_dias: number
+  roi_operativo_pct: number
+  ingreso_promedio_visita_mxn: number
+  ingreso_promedio_horario_activo_semana_mxn: number
+  ingresos_mes_actual_mxn: number
+  ingresos_mes_anterior_mxn: number
+  crecimiento_mensual_pct: number | null
+  rendimiento_por_dia: RendimientoDiaDashboard[]
+  mejores_horas: RendimientoHoraDashboard[]
+  recomendaciones: string[]
+}
+type ReservacionHistoricaDashboard = {
+  fecha: string
+  estado: string
+  horarios: {
+    hora_inicio: string
+    dia_semana: DiaSemana
+    negocio_id: string
+  } | Array<{
+    hora_inicio: string
+    dia_semana: DiaSemana
+    negocio_id: string
+  }> | null
+}
 
 const PLANES_MEMBRESIA: PlanMembresia[] = ['basico', 'plus', 'total']
 const NOTA_GANANCIAS = 'MUVET hace corte, y te paga el total acumulado cada semana'
+const PERIODO_INTELIGENCIA_DIAS = 56
+const ORDEN_DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
 
 function admin() {
   return createAdmin(
@@ -266,6 +309,38 @@ function pagosVacios(): PagosDashboard {
   }
 }
 
+function redondear(value: number, decimales = 2) {
+  if (!Number.isFinite(value)) return 0
+  const multiplicador = 10 ** decimales
+  return Math.round(value * multiplicador) / multiplicador
+}
+
+function claveMesUTC(fecha: Date) {
+  return `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+function inteligenciaVacia(): InteligenciaDashboard {
+  return {
+    periodo_dias: PERIODO_INTELIGENCIA_DIAS,
+    roi_operativo_pct: 0,
+    ingreso_promedio_visita_mxn: 0,
+    ingreso_promedio_horario_activo_semana_mxn: 0,
+    ingresos_mes_actual_mxn: 0,
+    ingresos_mes_anterior_mxn: 0,
+    crecimiento_mensual_pct: null,
+    rendimiento_por_dia: ORDEN_DIAS.map((dia) => ({
+      dia_semana: dia,
+      reservaciones: 0,
+      completadas: 0,
+      no_show: 0,
+      tasa_asistencia_pct: 0,
+      ingreso_estimado_mxn: 0,
+    })),
+    mejores_horas: [],
+    recomendaciones: ['Aún no hay datos suficientes para recomendaciones de operación.'],
+  }
+}
+
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -304,6 +379,7 @@ export async function GET(request: NextRequest) {
       },
       ganancias: gananciasVacias(),
       pagos: pagosVacios(),
+      inteligencia: inteligenciaVacia(),
     })
   }
 
@@ -488,6 +564,28 @@ export async function GET(request: NextRequest) {
     } satisfies CheckinHoyDashboard
   })
 
+  const fechaAnalisisFin = new Date(`${fecha}T00:00:00`)
+  const fechaAnalisisInicio = new Date(fechaAnalisisFin)
+  fechaAnalisisInicio.setDate(fechaAnalisisInicio.getDate() - (PERIODO_INTELIGENCIA_DIAS - 1))
+  const inicioAnalisisISO = formatoFechaISO(fechaAnalisisInicio)
+  const finAnalisisISO = formatoFechaISO(fechaAnalisisFin)
+
+  let reservacionesHistoricas: ReservacionHistoricaDashboard[] = []
+  const reservacionesHistoricasResult = await db
+    .from('reservaciones')
+    .select(`
+      fecha, estado,
+      horarios!inner ( hora_inicio, dia_semana, negocio_id )
+    `)
+    .eq('horarios.negocio_id', negocioIdObjetivo)
+    .gte('fecha', inicioAnalisisISO)
+    .lte('fecha', finAnalisisISO)
+    .returns<ReservacionHistoricaDashboard[]>()
+
+  if (!reservacionesHistoricasResult.error) {
+    reservacionesHistoricas = reservacionesHistoricasResult.data ?? []
+  }
+
   let visitasGanancias: VisitaGanancias[] = []
   const visitasConPlan = await db
     .from('visitas')
@@ -531,6 +629,8 @@ export async function GET(request: NextRequest) {
   const visitasSemana = recordPlanInicial()
   const totalSemanaPorPlan = recordPlanInicial()
   const historicoPorMes = new Map<string, { visitas: number; total_ganado: number }>()
+  let totalVisitasHistoricas = 0
+  let totalIngresosHistoricos = 0
 
   for (const visita of visitasGanancias) {
     const fechaVisita = new Date(visita.fecha)
@@ -542,6 +642,8 @@ export async function GET(request: NextRequest) {
       planUsuario: visita.plan_usuario,
     })
     const tarifa = planTarifa ? tarifasPorPlan[planTarifa] : 0
+    totalVisitasHistoricas += 1
+    totalIngresosHistoricos += tarifa
 
     if (planTarifa && fechaVisita >= inicioSemana && fechaVisita < finSemana) {
       visitasSemana[planTarifa] += 1
@@ -564,6 +666,132 @@ export async function GET(request: NextRequest) {
     }))
 
   const totalSemana = PLANES_MEMBRESIA.reduce((suma, plan) => suma + totalSemanaPorPlan[plan], 0)
+  const ingresoPromedioVisita = totalVisitasHistoricas > 0
+    ? (totalIngresosHistoricos / totalVisitasHistoricas)
+    : (tarifasPorPlan.basico ?? 0)
+
+  const rendimientoPorDiaMap = new Map<DiaSemana, { reservaciones: number; completadas: number; no_show: number }>()
+  const rendimientoPorHoraMap = new Map<string, { reservaciones: number; completadas: number; no_show: number }>()
+  for (const dia of ORDEN_DIAS) {
+    rendimientoPorDiaMap.set(dia, { reservaciones: 0, completadas: 0, no_show: 0 })
+  }
+
+  for (const reservacion of reservacionesHistoricas) {
+    const horario = obtenerRelacion(reservacion.horarios)
+    if (!horario) continue
+    if (reservacion.estado === 'cancelada') continue
+
+    const acumuladoDia = rendimientoPorDiaMap.get(horario.dia_semana) ?? { reservaciones: 0, completadas: 0, no_show: 0 }
+    acumuladoDia.reservaciones += 1
+    if (reservacion.estado === 'completada') acumuladoDia.completadas += 1
+    if (reservacion.estado === 'no_show') acumuladoDia.no_show += 1
+    rendimientoPorDiaMap.set(horario.dia_semana, acumuladoDia)
+
+    const horaNormalizada = /^\d{2}/.test(horario.hora_inicio)
+      ? `${horario.hora_inicio.slice(0, 2)}:00`
+      : '00:00'
+    const acumuladoHora = rendimientoPorHoraMap.get(horaNormalizada) ?? { reservaciones: 0, completadas: 0, no_show: 0 }
+    acumuladoHora.reservaciones += 1
+    if (reservacion.estado === 'completada') acumuladoHora.completadas += 1
+    if (reservacion.estado === 'no_show') acumuladoHora.no_show += 1
+    rendimientoPorHoraMap.set(horaNormalizada, acumuladoHora)
+  }
+
+  const rendimientoPorDia = ORDEN_DIAS.map((dia) => {
+    const acumulado = rendimientoPorDiaMap.get(dia) ?? { reservaciones: 0, completadas: 0, no_show: 0 }
+    const visitasEfectivas = acumulado.completadas + acumulado.no_show
+    const tasaAsistencia = visitasEfectivas > 0
+      ? redondear((acumulado.completadas * 100) / visitasEfectivas, 1)
+      : 0
+    return {
+      dia_semana: dia,
+      reservaciones: acumulado.reservaciones,
+      completadas: acumulado.completadas,
+      no_show: acumulado.no_show,
+      tasa_asistencia_pct: tasaAsistencia,
+      ingreso_estimado_mxn: redondear(acumulado.completadas * ingresoPromedioVisita),
+    } satisfies RendimientoDiaDashboard
+  })
+
+  const mejoresHoras = Array.from(rendimientoPorHoraMap.entries())
+    .map(([horaInicio, acumulado]) => {
+      const visitasEfectivas = acumulado.completadas + acumulado.no_show
+      const tasaAsistencia = visitasEfectivas > 0
+        ? redondear((acumulado.completadas * 100) / visitasEfectivas, 1)
+        : 0
+      return {
+        hora_inicio: horaInicio,
+        reservaciones: acumulado.reservaciones,
+        completadas: acumulado.completadas,
+        no_show: acumulado.no_show,
+        tasa_asistencia_pct: tasaAsistencia,
+        ingreso_estimado_mxn: redondear(acumulado.completadas * ingresoPromedioVisita),
+      } satisfies RendimientoHoraDashboard
+    })
+    .sort((a, b) => {
+      if (b.ingreso_estimado_mxn !== a.ingreso_estimado_mxn) return b.ingreso_estimado_mxn - a.ingreso_estimado_mxn
+      if (b.completadas !== a.completadas) return b.completadas - a.completadas
+      return a.hora_inicio.localeCompare(b.hora_inicio)
+    })
+    .slice(0, 5)
+
+  const totalCompletadasPeriodo = rendimientoPorDia.reduce((acc, item) => acc + item.completadas, 0)
+  const totalNoShowPeriodo = rendimientoPorDia.reduce((acc, item) => acc + item.no_show, 0)
+  const totalEfectivasPeriodo = totalCompletadasPeriodo + totalNoShowPeriodo
+  const roiOperativoPct = totalEfectivasPeriodo > 0
+    ? redondear((totalCompletadasPeriodo * 100) / totalEfectivasPeriodo, 1)
+    : 0
+
+  const fechaBaseMetricas = new Date(`${fecha}T00:00:00`)
+  const claveMesActual = claveMesUTC(fechaBaseMetricas)
+  const fechaMesAnterior = new Date(Date.UTC(fechaBaseMetricas.getUTCFullYear(), fechaBaseMetricas.getUTCMonth() - 1, 1))
+  const claveMesAnterior = claveMesUTC(fechaMesAnterior)
+  const ingresosMesActual = historicoPorMes.get(claveMesActual)?.total_ganado ?? 0
+  const ingresosMesAnterior = historicoPorMes.get(claveMesAnterior)?.total_ganado ?? 0
+  const crecimientoMensualPct = ingresosMesAnterior > 0
+    ? redondear(((ingresosMesActual - ingresosMesAnterior) * 100) / ingresosMesAnterior, 1)
+    : null
+
+  const horariosActivosCount = horariosActivos ?? 0
+  const ingresoPromedioHorarioActivoSemana = horariosActivosCount > 0
+    ? redondear(totalSemana / horariosActivosCount)
+    : 0
+
+  const recomendaciones: string[] = []
+  const diaMasRentable = [...rendimientoPorDia]
+    .sort((a, b) => b.ingreso_estimado_mxn - a.ingreso_estimado_mxn)[0]
+  if (diaMasRentable && diaMasRentable.ingreso_estimado_mxn > 0) {
+    recomendaciones.push(`Refuerza oferta los ${diaMasRentable.dia_semana}; es tu día con mayor retorno estimado.`)
+  }
+  const horaMasFuerte = mejoresHoras[0]
+  if (horaMasFuerte && horaMasFuerte.ingreso_estimado_mxn > 0) {
+    recomendaciones.push(`Abre más cupos cerca de las ${horaMasFuerte.hora_inicio}; es tu franja con mejor rendimiento.`)
+  }
+  const diaCritico = [...rendimientoPorDia]
+    .filter((item) => item.reservaciones >= 3)
+    .sort((a, b) => {
+      if (a.tasa_asistencia_pct !== b.tasa_asistencia_pct) return a.tasa_asistencia_pct - b.tasa_asistencia_pct
+      return b.no_show - a.no_show
+    })[0]
+  if (diaCritico && diaCritico.tasa_asistencia_pct < 70) {
+    recomendaciones.push(`Revisa recordatorios en ${diaCritico.dia_semana}: su asistencia está en ${diaCritico.tasa_asistencia_pct}%.`)
+  }
+  if (recomendaciones.length === 0) {
+    recomendaciones.push('Aún no hay suficiente volumen para recomendaciones automáticas. Mantén registro de reservas por 2-4 semanas.')
+  }
+
+  const inteligencia: InteligenciaDashboard = {
+    periodo_dias: PERIODO_INTELIGENCIA_DIAS,
+    roi_operativo_pct: roiOperativoPct,
+    ingreso_promedio_visita_mxn: redondear(ingresoPromedioVisita),
+    ingreso_promedio_horario_activo_semana_mxn: ingresoPromedioHorarioActivoSemana,
+    ingresos_mes_actual_mxn: redondear(ingresosMesActual),
+    ingresos_mes_anterior_mxn: redondear(ingresosMesAnterior),
+    crecimiento_mensual_pct: crecimientoMensualPct,
+    rendimiento_por_dia: rendimientoPorDia,
+    mejores_horas: mejoresHoras,
+    recomendaciones,
+  }
 
   let pagosHistorico: PagoSemanalDashboard[] = []
   const pagosResult = await db
@@ -636,6 +864,7 @@ export async function GET(request: NextRequest) {
       historial_semanal: pagosHistorico,
       proximo_pago_estimado: pagoSemanaActual ?? proximoPagoEstimado,
     },
+    inteligencia,
     reservaciones: reservaciones ?? [],
   })
 }

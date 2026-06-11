@@ -100,6 +100,34 @@ interface PagosPayload {
   historial_semanal: PagoSemanalPayload[]
   proximo_pago_estimado: PagoSemanalPayload
 }
+interface RendimientoDiaPayload {
+  dia_semana: DiaSemana | string
+  reservaciones: number
+  completadas: number
+  no_show: number
+  tasa_asistencia_pct: number
+  ingreso_estimado_mxn: number
+}
+interface RendimientoHoraPayload {
+  hora_inicio: string
+  reservaciones: number
+  completadas: number
+  no_show: number
+  tasa_asistencia_pct: number
+  ingreso_estimado_mxn: number
+}
+interface InteligenciaPayload {
+  periodo_dias: number
+  roi_operativo_pct: number
+  ingreso_promedio_visita_mxn: number
+  ingreso_promedio_horario_activo_semana_mxn: number
+  ingresos_mes_actual_mxn: number
+  ingresos_mes_anterior_mxn: number
+  crecimiento_mensual_pct: number | null
+  rendimiento_por_dia: RendimientoDiaPayload[]
+  mejores_horas: RendimientoHoraPayload[]
+  recomendaciones: string[]
+}
 
 interface DashboardPayload {
   sin_negocio: boolean
@@ -114,6 +142,7 @@ interface DashboardPayload {
   }
   ganancias?: GananciasPayload
   pagos?: PagosPayload
+  inteligencia?: InteligenciaPayload
   reservaciones?: ReservacionNegocio[]
   error?: string
 }
@@ -273,8 +302,31 @@ function pagosIniciales(): PagosPayload {
   }
 }
 
+function inteligenciaInicial(): InteligenciaPayload {
+  return {
+    periodo_dias: 56,
+    roi_operativo_pct: 0,
+    ingreso_promedio_visita_mxn: 0,
+    ingreso_promedio_horario_activo_semana_mxn: 0,
+    ingresos_mes_actual_mxn: 0,
+    ingresos_mes_anterior_mxn: 0,
+    crecimiento_mensual_pct: null,
+    rendimiento_por_dia: [],
+    mejores_horas: [],
+    recomendaciones: ['Aún no hay datos suficientes para recomendaciones de operación.'],
+  }
+}
+
 function formatMonedaMXN(valor: number) {
   return `$${valor.toLocaleString('es-MX')}`
+}
+
+function formatPorcentaje(valor: number) {
+  return `${valor.toFixed(1)}%`
+}
+
+function etiquetaDiaSemana(value: DiaSemana | string) {
+  return DIA_LABELS[value as DiaSemana] ?? value
 }
 
 function claseEstadoPago(estado: 'pagado' | 'pendiente') {
@@ -326,6 +378,7 @@ export default function NegocioDashboardPage() {
   const [resumen, setResumen] = useState({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
   const [ganancias, setGanancias] = useState<GananciasPayload>(gananciasIniciales())
   const [pagos, setPagos] = useState<PagosPayload>(pagosIniciales())
+  const [inteligencia, setInteligencia] = useState<InteligenciaPayload>(inteligenciaInicial())
   const [sinNegocio, setSinNegocio] = useState(false)
   const [cargando, setCargando] = useState(false)
   const [completandoId, setCompletandoId] = useState<string | null>(null)
@@ -361,6 +414,7 @@ export default function NegocioDashboardPage() {
         setResumen({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
         setGanancias(gananciasIniciales())
         setPagos(pagosIniciales())
+        setInteligencia(inteligenciaInicial())
         return
       }
       const negocioPerfil = data.negocio ?? null
@@ -376,6 +430,7 @@ export default function NegocioDashboardPage() {
         setResumen({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
         setGanancias(data.ganancias ?? gananciasIniciales())
         setPagos(data.pagos ?? pagosIniciales())
+        setInteligencia(data.inteligencia ?? inteligenciaInicial())
         return
       }
 
@@ -397,6 +452,7 @@ export default function NegocioDashboardPage() {
       })
       setGanancias(data.ganancias ?? gananciasIniciales())
       setPagos(data.pagos ?? pagosIniciales())
+      setInteligencia(data.inteligencia ?? inteligenciaInicial())
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de conexión al cargar el panel' })
       setNegocio(null)
@@ -409,6 +465,7 @@ export default function NegocioDashboardPage() {
       setResumen({ reservaciones_hoy: 0, checkins_hoy: 0, horarios_activos: 0 })
       setGanancias(gananciasIniciales())
       setPagos(pagosIniciales())
+      setInteligencia(inteligenciaInicial())
     } finally {
       setCargando(false)
     }
@@ -1061,6 +1118,125 @@ export default function NegocioDashboardPage() {
                     </table>
                   </div>
                 )}
+              </div>
+            </div>
+
+            <div className="md:col-span-4 rounded-xl border border-[#E5E5E5] bg-white p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Inteligencia comercial</p>
+                  <p className="mt-1 text-xs text-[#666]">
+                    Métricas para definir mejores días, horarios y retorno de operación.
+                  </p>
+                </div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#6B4FE8]">
+                  Últimos {inteligencia.periodo_dias} días
+                </span>
+              </div>
+
+              <div className="mt-3 grid gap-2 md:grid-cols-4">
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#888]">ROI operativo</p>
+                  <p className="mt-1 text-xl font-black text-[#0A0A0A]">{formatPorcentaje(inteligencia.roi_operativo_pct)}</p>
+                  <p className="text-[11px] text-[#666]">Asistencias / asistencias + no-show</p>
+                </div>
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#888]">Ingresos mes actual</p>
+                  <p className="mt-1 text-xl font-black text-[#0A0A0A]">{formatMonedaMXN(inteligencia.ingresos_mes_actual_mxn)}</p>
+                </div>
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#888]">Crecimiento mensual</p>
+                  <p className={`mt-1 text-xl font-black ${
+                    inteligencia.crecimiento_mensual_pct === null
+                      ? 'text-[#666]'
+                      : inteligencia.crecimiento_mensual_pct >= 0
+                        ? 'text-green-700'
+                        : 'text-red-600'
+                  }`}>
+                    {inteligencia.crecimiento_mensual_pct === null
+                      ? 'Sin base'
+                      : `${inteligencia.crecimiento_mensual_pct >= 0 ? '+' : ''}${formatPorcentaje(inteligencia.crecimiento_mensual_pct)}`}
+                  </p>
+                  <p className="text-[11px] text-[#666]">Vs mes anterior</p>
+                </div>
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#888]">Retorno por horario activo</p>
+                  <p className="mt-1 text-xl font-black text-[#0A0A0A]">
+                    {formatMonedaMXN(inteligencia.ingreso_promedio_horario_activo_semana_mxn)}
+                  </p>
+                  <p className="text-[11px] text-[#666]">Promedio semanal</p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Rendimiento por día</p>
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="min-w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-[#E5E5E5] text-left font-black uppercase tracking-wider text-[#888]">
+                          <th className="px-2 py-1.5">Día</th>
+                          <th className="px-2 py-1.5 text-right">Reservas</th>
+                          <th className="px-2 py-1.5 text-right">Asistencia</th>
+                          <th className="px-2 py-1.5 text-right">No-show</th>
+                          <th className="px-2 py-1.5 text-right">Ingreso</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inteligencia.rendimiento_por_dia.map((fila) => (
+                          <tr key={`rend-dia-${fila.dia_semana}`} className="border-b border-[#EFEFEF] text-[#0A0A0A]">
+                            <td className="px-2 py-1.5 font-semibold">{etiquetaDiaSemana(fila.dia_semana)}</td>
+                            <td className="px-2 py-1.5 text-right">{fila.reservaciones}</td>
+                            <td className="px-2 py-1.5 text-right">{formatPorcentaje(fila.tasa_asistencia_pct)}</td>
+                            <td className="px-2 py-1.5 text-right">{fila.no_show}</td>
+                            <td className="px-2 py-1.5 text-right font-bold">{formatMonedaMXN(fila.ingreso_estimado_mxn)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Horas con mejor retorno</p>
+                  {inteligencia.mejores_horas.length === 0 ? (
+                    <p className="mt-2 text-xs text-[#666]">Sin datos suficientes de horarios para análisis.</p>
+                  ) : (
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="min-w-full border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-[#E5E5E5] text-left font-black uppercase tracking-wider text-[#888]">
+                            <th className="px-2 py-1.5">Hora</th>
+                            <th className="px-2 py-1.5 text-right">Reservas</th>
+                            <th className="px-2 py-1.5 text-right">Asistencia</th>
+                            <th className="px-2 py-1.5 text-right">Ingreso</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {inteligencia.mejores_horas.map((fila) => (
+                            <tr key={`rend-hora-${fila.hora_inicio}`} className="border-b border-[#EFEFEF] text-[#0A0A0A]">
+                              <td className="px-2 py-1.5 font-semibold">{fila.hora_inicio}</td>
+                              <td className="px-2 py-1.5 text-right">{fila.reservaciones}</td>
+                              <td className="px-2 py-1.5 text-right">{formatPorcentaje(fila.tasa_asistencia_pct)}</td>
+                              <td className="px-2 py-1.5 text-right font-bold">{formatMonedaMXN(fila.ingreso_estimado_mxn)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Recomendaciones automáticas</p>
+                <ul className="mt-2 space-y-1.5">
+                  {inteligencia.recomendaciones.map((item, index) => (
+                    <li key={`recomendacion-${index}`} className="text-sm text-[#0A0A0A]">
+                      • {item}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
 
