@@ -43,7 +43,7 @@ function rangoFechasDesdePeriodo(periodo: string, desde: string | null, hasta: s
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
   if (periodo === 'historial') {
-    return { desde: null, hasta: isoFecha(hoy) }
+    return { desde: null, hasta: null }
   }
 
   if (periodo === 'hoy') {
@@ -195,7 +195,11 @@ export async function GET(request: NextRequest) {
 
   if (desde) query = query.gte('fecha', desde)
   if (hasta) query = query.lte('fecha', hasta)
-  if (estado) query = query.eq('estado', estado)
+  if (estado) {
+    query = query.eq('estado', estado)
+  } else if (!esProximas) {
+    query = query.in('estado', ['confirmada', 'completada', 'no_show', 'cancelada'])
+  }
 
   if (esProximas) {
     const limite = Math.min(pageSize, 10)
