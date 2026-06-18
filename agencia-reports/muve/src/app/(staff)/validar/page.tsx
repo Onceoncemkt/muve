@@ -186,7 +186,10 @@ export default function ValidarPage() {
 
   useEffect(() => {
     if (!resultado) return
-    const id = setTimeout(() => setResultado(null), 3000)
+    // Solo auto-ocultamos los mensajes de éxito. Los errores permanecen visibles
+    // hasta el siguiente intento para que el staff pueda leer el motivo exacto.
+    if (resultado.tipo !== 'ok') return
+    const id = setTimeout(() => setResultado(null), 4000)
     return () => clearTimeout(id)
   }, [resultado])
 
@@ -239,23 +242,28 @@ export default function ValidarPage() {
       setResultado({ tipo: 'error', texto: 'QR inválido. Intenta de nuevo.' })
       return
     }
-    const res = await fetch('/api/validar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        token: escaneoNormalizado.token ?? undefined,
-        user_id: escaneoNormalizado.token ? undefined : escaneoNormalizado.userId ?? undefined,
-        solo_cotizar: false,
-        tipo_servicio: negocioTieneGymYClases ? tipoServicioSeleccionado : undefined,
-      }),
-    })
-    const data = await res.json().catch(() => ({})) as ResultadoValidacion
-    if (!res.ok || !data.valido) {
-      setResultado({ tipo: 'error', texto: data.error ?? 'No se pudo validar' })
-    } else {
-      setResultado({ tipo: 'ok', texto: `Visita confirmada: ${data.usuario ?? 'Usuario'}` })
+    try {
+      const res = await fetch('/api/validar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: escaneoNormalizado.token ?? undefined,
+          user_id: escaneoNormalizado.token ? undefined : escaneoNormalizado.userId ?? undefined,
+          solo_cotizar: false,
+          tipo_servicio: negocioTieneGymYClases ? tipoServicioSeleccionado : undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({})) as ResultadoValidacion
+      if (!res.ok || !data.valido) {
+        setResultado({ tipo: 'error', texto: data.error ?? 'No se pudo validar' })
+      } else {
+        setResultado({ tipo: 'ok', texto: `Visita confirmada: ${data.usuario ?? 'Usuario'}` })
+      }
+      void cargarHistorial()
+    } catch {
+      // Falla de red (frecuente en móvil/iPhone con señal intermitente).
+      setResultado({ tipo: 'error', texto: 'Error de conexión. Revisa el internet e intenta de nuevo.' })
     }
-    void cargarHistorial()
   }
 
   async function buscarUsuarios(event?: React.FormEvent<HTMLFormElement>) {

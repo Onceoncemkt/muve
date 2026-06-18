@@ -41,6 +41,13 @@ function horaCorta(fecha: Date) {
 }
 
 export async function POST(request: NextRequest) {
+  // Contexto para diagnóstico: se rellena durante el flujo y se registra si algo lanza.
+  const diagnostico: { token: string; negocioId: string; userId: string } = {
+    token: '',
+    negocioId: '',
+    userId: '',
+  }
+  try {
   const authClient = await createClient()
   const validadorSession = await getValidadorSession()
 
@@ -106,6 +113,7 @@ export async function POST(request: NextRequest) {
   }
   const body = await request.json().catch(() => ({}))
   const token = typeof body.token === 'string' ? body.token.trim() : ''
+  diagnostico.token = token
   const userIdBody = typeof body.user_id === 'string' ? body.user_id.trim() : ''
   const negocioIdBody = typeof body.negocio_id === 'string' ? body.negocio_id : ''
   const soloCotizar = body.solo_cotizar === true
@@ -141,6 +149,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   }
+  diagnostico.negocioId = negocioIdObjetivo
 
   let usuarioId = ''
   let usuario: {
@@ -240,6 +249,7 @@ export async function POST(request: NextRequest) {
   if (!usuario) {
     return NextResponse.json({ valido: false, error: 'Usuario no encontrado' }, { status: 404 })
   }
+  diagnostico.userId = usuarioId
   const planUsuario = normalizarPlan(usuario?.plan ?? null) ?? 'basico'
   const zonaUsuario = zonaPorCiudad(usuario.ciudad)
 
@@ -808,4 +818,26 @@ export async function POST(request: NextRequest) {
     ciclo_inicio: ciclo.inicio.toISOString(),
     ciclo_fin: ciclo.fin.toISOString(),
   })
+  } catch (error) {
+    const err = error as { message?: string; stack?: string }
+    // No registramos el token completo (es una credencial portadora): solo prefijo + longitud.
+    console.error('[VALIDAR] Error no controlado:', {
+      message: err?.message ?? String(error),
+      stack: err?.stack,
+      tokenPrefix: diagnostico.token
+        ? `${diagnostico.token.slice(0, 12)}…(len ${diagnostico.token.length})`
+        : null,
+      negocioId: diagnostico.negocioId || null,
+      userId: diagnostico.userId || null,
+      timestamp: new Date().toISOString(),
+    })
+    return NextResponse.json(
+      {
+        valido: false,
+        error: err?.message ? `Error al validar: ${err.message}` : 'Error interno al validar',
+        detalle: 'Error interno al validar',
+      },
+      { status: 500 }
+    )
+  }
 }
