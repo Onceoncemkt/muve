@@ -7,6 +7,7 @@ import { getEmailFrom } from '@/lib/email'
 import { enviarPushAUsuarios, obtenerStaffIdsPorNegocio } from '@/lib/push/server'
 import { normalizarPlan, puedeReservarConPlan } from '@/lib/planes'
 import { planExpirado } from '@/lib/ciclos'
+import { registrarVisitaPorReservacionCompletada } from '@/lib/visitas'
 function escapeHtml(value: string) {
   return value
     .replaceAll('&', '&amp;')
@@ -146,10 +147,11 @@ export async function PATCH(
   const db = admin()
   const { data: perfilActual, error: perfilActualError } = await db
     .from('users')
-    .select('rol, plan_activo, plan, fecha_fin_plan')
+    .select('rol, nombre, plan_activo, plan, fecha_fin_plan')
     .eq('id', user.id)
     .maybeSingle<{
       rol: 'usuario' | 'staff' | 'admin'
+      nombre: string | null
       plan_activo: boolean
       plan: string | null
       fecha_fin_plan: string | null
@@ -299,6 +301,24 @@ export async function PATCH(
   if (updateError) {
     console.error('[PATCH /api/reservaciones/id]', updateError)
     return NextResponse.json({ error: updateError.message }, { status: 500 })
+  }
+
+  // Al completar una reservación se registra la visita y el monto al negocio,
+  // igual que /api/validar con el QR. Solo si NO estaba ya completada (idempotencia).
+  if (estado === 'completada' && reserva.estado !== 'completada') {
+    const resultadoVisita = await registrarVisitaPorReservacionCompletada(
+      db,
+      {
+        id: reserva.id,
+        user_id: reserva.user_id,
+        fecha: reserva.fecha,
+        horario_id: reserva.horario_id,
+      },
+      perfilActual.nombre ?? null
+    )
+    if (!resultadoVisita.ok) {
+      console.warn('[PATCH /api/reservaciones/[id]] No se pudo registrar la visita', resultadoVisita.error)
+    }
   }
 
   if (estado === 'cancelada') {

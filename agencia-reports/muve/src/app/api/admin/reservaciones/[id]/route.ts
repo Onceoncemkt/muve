@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { formatHora, type DiaSemana, type EstadoReserva, type Rol } from '@/types'
 import { enviarPushAUsuarios } from '@/lib/push/server'
+import { registrarVisitaPorReservacionCompletada } from '@/lib/visitas'
 
 type EstadoEditable = Extract<EstadoReserva, 'cancelada' | 'completada' | 'no_show'>
 
@@ -43,9 +44,9 @@ export async function PATCH(
   const db = admin()
   const { data: perfil } = await db
     .from('users')
-    .select('rol')
+    .select('rol, nombre')
     .eq('id', user.id)
-    .single<{ rol: Rol }>()
+    .single<{ rol: Rol; nombre: string | null }>()
 
   if (!perfil || perfil.rol !== 'admin') {
     return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
@@ -156,6 +157,24 @@ export async function PATCH(
 
   if (updateEstadoError) {
     return NextResponse.json({ error: updateEstadoError.message ?? 'No se pudo actualizar estado' }, { status: 500 })
+  }
+
+  // Al completar una reservación se debe registrar la visita y el monto al negocio,
+  // igual que hace /api/validar con el QR. Solo si NO estaba ya completada (idempotencia).
+  if (estadoFinal === 'completada' && reservacionActual.estado !== 'completada') {
+    const resultadoVisita = await registrarVisitaPorReservacionCompletada(
+      db,
+      {
+        id: reservacionActual.id,
+        user_id: reservacionActual.user_id,
+        fecha: reservacionActual.fecha,
+        horario_id: reservacionActual.horario_id,
+      },
+      perfil.nombre ?? null
+    )
+    if (!resultadoVisita.ok) {
+      console.warn('[PATCH /api/admin/reservaciones/[id]] No se pudo registrar la visita', resultadoVisita.error)
+    }
   }
 
   if (estadoFinal === 'cancelada') {
