@@ -492,7 +492,8 @@ export default async function AdminPage({
         .lt('fecha', finExclusivoISO)
 
       if (incluyeEstadoVisita) {
-        consultaVisitas = consultaVisitas.eq('estado', 'completada')
+        // El check-in válido se guarda como 'asistio' (EstadoVisita), no 'completada'.
+        consultaVisitas = consultaVisitas.eq('estado', 'asistio')
       }
 
       const resultadoVisitas = await consultaVisitas.returns<VisitaFinanzasRow[]>()

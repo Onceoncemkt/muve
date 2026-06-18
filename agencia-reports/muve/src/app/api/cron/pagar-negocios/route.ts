@@ -245,6 +245,10 @@ export async function GET(request: NextRequest) {
     .in('negocio_id', negociosPendientes.map(negocio => negocio.id))
     .gte('fecha', inicioConsulta.toISOString())
     .lt('fecha', finConsultaExclusivo.toISOString())
+    // Solo check-ins válidos ('asistio'); excluir no_show/cancelado para que el pago
+    // coincida con el preview de resumen-pagos (que usa el mismo filtro).
+    .neq('estado', 'no_show')
+    .neq('estado', 'cancelado')
     .returns<VisitaPeriodo[]>()
 
   if (faltaColumna(visitasError, 'plan_usuario')) {
