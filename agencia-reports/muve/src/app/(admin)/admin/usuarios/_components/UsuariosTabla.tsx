@@ -8,6 +8,7 @@ import AdminUsuarioRolControl from '@/components/admin/AdminUsuarioRolControl'
 import AdminUsuarioPlanToggle from '@/components/admin/AdminUsuarioPlanToggle'
 import AdminDarCreditosModal from '@/components/admin/AdminDarCreditosModal'
 import AdminInvitarUsuarioModal from '@/components/admin/AdminInvitarUsuarioModal'
+import HistorialActividadDrawer from './HistorialActividadDrawer'
 
 type UsuarioRow = {
   id: string
@@ -36,6 +37,7 @@ export default function UsuariosTabla({
 }) {
   const [busqueda, setBusqueda] = useState('')
   const [rolFiltro, setRolFiltro] = useState<'todos' | Rol>('todos')
+  const [historialUser, setHistorialUser] = useState<{ id: string; nombre: string } | null>(null)
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -100,7 +102,16 @@ export default function UsuariosTabla({
 
               return (
                 <tr key={usuario.id} className="border-b border-white/10 align-top text-sm text-white/90">
-                  <td className="px-3 py-3 font-semibold">{usuario.nombre}</td>
+                  <td className="px-3 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setHistorialUser({ id: usuario.id, nombre: usuario.nombre })}
+                      className="text-left font-semibold text-white underline-offset-2 hover:text-[#E8FF47] hover:underline"
+                    >
+                      {usuario.nombre}
+                    </button>
+                    <p className="mt-0.5 text-[10px] uppercase tracking-wide text-white/35">Ver actividad</p>
+                  </td>
                   <td className="px-3 py-3 text-white/70">{usuario.email}</td>
                   <td className="px-3 py-3">{CIUDAD_LABELS[usuario.ciudad]}</td>
                   <td className="px-3 py-3">
@@ -163,6 +174,14 @@ export default function UsuariosTabla({
           </tbody>
         </table>
       </div>
+
+      {historialUser && (
+        <HistorialActividadDrawer
+          userId={historialUser.id}
+          userNombre={historialUser.nombre}
+          onClose={() => setHistorialUser(null)}
+        />
+      )}
     </section>
   )
 }
