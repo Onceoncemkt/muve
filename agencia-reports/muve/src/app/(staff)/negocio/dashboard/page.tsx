@@ -708,6 +708,21 @@ export default function NegocioDashboardPage() {
           Hoy: {new Date(`${fechaHoy}T00:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
 
+        {!sinNegocio && negocio && (
+          <div className="flex flex-col gap-3 rounded-xl bg-[#0A0A0A] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-black text-white">Escáner QR</p>
+              <p className="mt-0.5 text-xs text-white/50">Valida visitas de socios al instante desde tu teléfono.</p>
+            </div>
+            <Link
+              href="/validar"
+              className="inline-flex shrink-0 items-center justify-center rounded-lg bg-[#E8FF47] px-5 py-2.5 text-xs font-black uppercase tracking-widest text-[#0A0A0A] transition-colors hover:bg-[#d8f03f]"
+            >
+              Abrir escáner →
+            </Link>
+          </div>
+        )}
+
         {mensaje && (
           <div
             className={`rounded-lg px-4 py-3 text-sm font-semibold ${
@@ -1202,42 +1217,6 @@ export default function NegocioDashboardPage() {
 
             <div className="md:col-span-4">
               <NegocioReservacionesPanel />
-            </div>
-
-            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
-              <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-[#888]">Escáner QR</p>
-              <Link
-                href="/validar"
-                className="inline-flex rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222]"
-              >
-                Abrir escáner QR
-              </Link>
-            </div>
-
-            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Validadores</p>
-              <p className="mt-1 text-xs text-[#666]">
-                Crea y administra recepcionistas con PIN para validar visitas desde mostrador.
-              </p>
-              <Link
-                href="/negocio/validadores"
-                className="mt-3 inline-flex rounded-lg bg-[#6B4FE8] px-4 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-[#5a3fd6]"
-              >
-                Ir a validadores
-              </Link>
-            </div>
-
-            <div className="rounded-xl border border-[#E5E5E5] bg-white p-4 md:col-span-4">
-              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Perfil del negocio</p>
-              <p className="mt-1 text-xs text-[#666]">
-                Administra información comercial, redes, contacto, foto y Stripe en una pantalla dedicada.
-              </p>
-              <Link
-                href="/negocio/perfil"
-                className="mt-3 inline-flex rounded-lg bg-[#0A0A0A] px-4 py-2 text-xs font-black uppercase tracking-widest text-[#E8FF47] transition-colors hover:bg-[#222]"
-              >
-                Ir a perfil del negocio
-              </Link>
             </div>
           </section>
         )}
