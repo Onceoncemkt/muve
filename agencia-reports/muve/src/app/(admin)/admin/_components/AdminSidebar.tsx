@@ -38,7 +38,7 @@ export default function AdminSidebar({ previewLocal = false }: { previewLocal?: 
   return (
     <>
       {/* Sidebar fijo en desktop */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-white/10 bg-[#111111] md:flex">
+      <aside className="glass-panel scroll-fina fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-white/10 md:flex">
         <div className="border-b border-white/10 px-5 py-5">
           <Link href="/admin" className="text-lg font-black tracking-tight text-[#E8FF47]">MUVET</Link>
           <p className="mt-0.5 text-[11px] uppercase tracking-[0.18em] text-white/45">Panel Admin</p>
@@ -55,10 +55,10 @@ export default function AdminSidebar({ previewLocal = false }: { previewLocal?: 
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors ${
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-all ${
                   activo
-                    ? 'bg-[#E8FF47]/10 text-[#E8FF47]'
-                    : 'text-white/70 hover:bg-white/5 hover:text-white'
+                    ? 'bg-gradient-to-r from-[#E8FF47]/18 to-transparent text-[#E8FF47] ring-1 ring-[#E8FF47]/25 shadow-[0_6px_22px_-12px_rgba(232,255,71,0.6)]'
+                    : 'text-white/65 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 {item.icon}
@@ -73,7 +73,7 @@ export default function AdminSidebar({ previewLocal = false }: { previewLocal?: 
       </aside>
 
       {/* Nav superior horizontal en móvil */}
-      <div className="sticky top-0 z-30 border-b border-white/10 bg-[#111111] md:hidden">
+      <div className="glass-panel sticky top-0 z-30 border-b border-white/10 md:hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <Link href="/admin" className="text-base font-black tracking-tight text-[#E8FF47]">MUVET</Link>
           <div className="flex items-center gap-2">
@@ -92,9 +92,9 @@ export default function AdminSidebar({ previewLocal = false }: { previewLocal?: 
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
                   activo
-                    ? 'bg-[#E8FF47]/10 text-[#E8FF47]'
+                    ? 'bg-gradient-to-r from-[#E8FF47]/18 to-transparent text-[#E8FF47] ring-1 ring-[#E8FF47]/25'
                     : 'text-white/60 hover:text-white'
                 }`}
               >

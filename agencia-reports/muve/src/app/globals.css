@@ -32,3 +32,76 @@ body {
 .wizard-step-enter {
   animation: wizard-step-enter 180ms ease-out;
 }
+
+/* ───────────────────────── Sistema "glass / premium" ─────────────────────────
+   Primitivas reutilizables para los paneles internos (admin + negocio).
+   Son CSS plano: conviven con utilidades de Tailwind y no se purgan.            */
+
+/* Fondo "aurora": resplandores de marca sobre un negro casi puro. */
+.bg-aurora {
+  background-color: #060607;
+  background-image:
+    radial-gradient(55rem 55rem at 108% -8%, rgba(232, 255, 71, 0.10), transparent 58%),
+    radial-gradient(48rem 48rem at -12% 2%, rgba(107, 79, 232, 0.16), transparent 55%),
+    radial-gradient(42rem 42rem at 50% 118%, rgba(107, 79, 232, 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Tarjeta de vidrio: translúcida, con blur, borde sutil y profundidad. */
+.glass-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 14px 40px -18px rgba(0, 0, 0, 0.75);
+}
+
+/* Panel de vidrio (sidebar / drawers): más opaco para legibilidad. */
+.glass-panel {
+  background: linear-gradient(180deg, rgba(20, 20, 24, 0.82), rgba(9, 9, 12, 0.92));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Resplandores de acento. */
+.glow-yellow { box-shadow: 0 0 0 1px rgba(232, 255, 71, 0.25), 0 10px 34px -10px rgba(232, 255, 71, 0.40); }
+.glow-purple { box-shadow: 0 0 0 1px rgba(107, 79, 232, 0.30), 0 10px 34px -10px rgba(107, 79, 232, 0.50); }
+
+/* Elevación suave en hover. */
+.lift { transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+.lift:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.16); }
+
+/* Tarjeta métrica: brillo direccional en la esquina. */
+.metric-card { position: relative; overflow: hidden; }
+.metric-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(22rem 13rem at 100% 0%, rgba(232, 255, 71, 0.12), transparent 60%);
+  pointer-events: none;
+}
+.metric-card.metric-purple::before {
+  background: radial-gradient(22rem 13rem at 100% 0%, rgba(107, 79, 232, 0.20), transparent 60%);
+}
+
+/* Aparición suave de paneles/tarjetas. */
+@keyframes glass-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.glass-in { animation: glass-in 220ms ease-out both; }
+
+/* Scrollbar afinada para los paneles oscuros. */
+.scroll-fina { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
+.scroll-fina::-webkit-scrollbar { width: 10px; height: 10px; }
+.scroll-fina::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.scroll-fina::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); background-clip: content-box; }

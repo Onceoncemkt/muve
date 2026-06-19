@@ -21,11 +21,15 @@ function Tarjeta({
   sub?: string
   acento?: 'amarillo' | 'morado'
 }) {
+  const morado = acento === 'morado'
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#111111] p-5">
-      <p className="text-[11px] font-bold uppercase tracking-widest text-white/45">{titulo}</p>
-      <p className={`mt-2 text-3xl font-black ${acento === 'amarillo' ? 'text-[#E8FF47]' : 'text-[#CBBEFF]'}`}>{valor}</p>
-      {sub && <p className="mt-1 text-xs text-white/50">{sub}</p>}
+    <div className={`glass-card metric-card lift glass-in rounded-2xl p-5 ${morado ? 'metric-purple' : ''}`}>
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-white/50">{titulo}</p>
+        <span className={`h-2 w-2 rounded-full ${morado ? 'bg-[#6B4FE8] shadow-[0_0_12px_2px_rgba(107,79,232,0.7)]' : 'bg-[#E8FF47] shadow-[0_0_12px_2px_rgba(232,255,71,0.7)]'}`} />
+      </div>
+      <p className={`mt-3 text-4xl font-black tracking-tight ${morado ? 'text-[#CBBEFF]' : 'text-[#E8FF47]'}`}>{valor}</p>
+      {sub && <p className="mt-1.5 text-xs text-white/55">{sub}</p>}
     </div>
   )
 }
@@ -104,9 +108,9 @@ export default async function AdminDashboardPage() {
             <Link
               key={a.href}
               href={a.href}
-              className="rounded-xl border border-white/10 bg-[#111111] p-4 transition-colors hover:border-[#E8FF47]/50"
+              className="glass-card lift group rounded-xl p-4"
             >
-              <p className="text-sm font-black text-white">{a.label}</p>
+              <p className="text-sm font-black text-white transition-colors group-hover:text-[#E8FF47]">{a.label}</p>
               <p className="mt-1 text-xs text-white/55">{a.desc}</p>
             </Link>
           ))}

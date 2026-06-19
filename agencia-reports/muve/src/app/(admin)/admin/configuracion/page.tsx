@@ -24,7 +24,7 @@ export default async function AdminConfiguracionPage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/admin/preregistros"
-            className="rounded-xl border border-white/10 bg-[#111111] p-4 transition-colors hover:border-[#E8FF47]/50"
+            className="glass-card rounded-xl p-4 transition-colors hover:border-[#E8FF47]/50"
           >
             <p className="text-sm font-black text-white">Pre-registros</p>
             <p className="mt-1 text-xs text-white/55">
@@ -43,8 +43,8 @@ export default async function AdminConfiguracionPage() {
             Últimos créditos extra agregados o retirados manualmente por administración.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-xl border border-white/10">
-          <table className="min-w-full border-collapse bg-[#111111]">
+        <div className="glass-card scroll-fina overflow-x-auto rounded-xl">
+          <table className="min-w-full border-collapse bg-transparent">
             <thead>
               <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
                 <th className="px-3 py-3">Usuario</th>
@@ -99,11 +99,11 @@ export default async function AdminConfiguracionPage() {
       <section className="space-y-3">
         <h2 className="text-xs font-bold uppercase tracking-widest text-white/45">Entorno</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+          <div className="glass-card rounded-xl p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-white/45">Ambiente</p>
             <p className="mt-1 text-sm font-black text-white">{ambiente}</p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+          <div className="glass-card rounded-xl p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-white/45">Preview admin</p>
             <p className="mt-1 text-sm font-black text-white">{previewAdmin ? 'Activado' : 'Desactivado'}</p>
           </div>

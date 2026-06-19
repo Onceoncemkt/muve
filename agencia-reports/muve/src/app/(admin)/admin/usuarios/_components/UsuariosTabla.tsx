@@ -79,8 +79,8 @@ export default function UsuariosTabla({
         <span className="text-xs text-white/45">{filtrados.length} de {usuarios.length}</span>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="min-w-full border-collapse bg-[#111111]">
+      <div className="glass-card scroll-fina overflow-x-auto rounded-xl">
+        <table className="min-w-full border-collapse bg-transparent">
           <thead>
             <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
               <th className="px-3 py-3">Nombre</th>

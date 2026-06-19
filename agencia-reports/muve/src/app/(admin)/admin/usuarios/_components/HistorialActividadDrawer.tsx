@@ -81,7 +81,7 @@ export default function HistorialActividadDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <button type="button" aria-label="Cerrar" onClick={onClose} className="flex-1 bg-black/60" />
-      <div className="h-full w-full max-w-2xl overflow-y-auto border-l border-white/10 bg-[#111111] p-5 shadow-2xl">
+      <div className="h-full w-full max-w-2xl glass-panel scroll-fina glass-in overflow-y-auto border-l border-white/10 p-5 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-white/45">Historial de actividad</p>
@@ -92,19 +92,19 @@ export default function HistorialActividadDrawer({
 
         {/* Resumen */}
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded-xl border border-white/10 bg-[#151515] p-3">
+          <div className="glass-card rounded-xl p-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/45">Reservaciones</p>
             <p className="mt-1 text-xl font-black text-white">{resumen?.total ?? '—'}</p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-[#151515] p-3">
+          <div className="glass-card rounded-xl p-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/45">Asistencias</p>
             <p className="mt-1 text-xl font-black text-green-300">{resumen?.asistencias ?? '—'}</p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-[#151515] p-3">
+          <div className="glass-card rounded-xl p-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/45">No-shows</p>
             <p className="mt-1 text-xl font-black text-red-300">{resumen?.noShows ?? '—'}</p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-[#151515] p-3">
+          <div className="glass-card rounded-xl p-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/45">% Asistencia</p>
             <p className="mt-1 text-xl font-black text-[#E8FF47]">{resumen?.porcentajeAsistencia == null ? '—' : `${resumen.porcentajeAsistencia}%`}</p>
           </div>
@@ -118,8 +118,8 @@ export default function HistorialActividadDrawer({
 
         {data && (
           <>
-            <div className="overflow-x-auto rounded-xl border border-white/10">
-              <table className="min-w-full border-collapse bg-[#111111]">
+            <div className="glass-card scroll-fina overflow-x-auto rounded-xl">
+              <table className="min-w-full border-collapse bg-transparent">
                 <thead>
                   <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
                     <th className="px-3 py-2.5">Fecha</th>

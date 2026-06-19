@@ -7,7 +7,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { adminPreviewEnabled } = await requireAdmin()
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white">
+    <div className="min-h-screen bg-aurora text-white">
       <AdminSidebar previewLocal={adminPreviewEnabled} />
       <main className="md:ml-60">
         <div className="mx-auto w-full max-w-7xl px-4 py-6 pb-20">{children}</div>

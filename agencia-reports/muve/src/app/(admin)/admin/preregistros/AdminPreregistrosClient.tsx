@@ -150,11 +150,11 @@ export default function AdminPreregistrosClient() {
         </div>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+        <div className="glass-card rounded-xl p-4">
           <p className="text-xs font-black uppercase tracking-widest text-[#E8FF47]">Total preregistros</p>
           <p className="mt-2 text-3xl font-black text-white">{stats.total}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+        <div className="glass-card rounded-xl p-4">
           <p className="text-xs font-black uppercase tracking-widest text-[#E8FF47]">Por ciudad</p>
           <div className="mt-2 space-y-1 text-sm text-white/80">
             {stats.porCiudad.map((row) => (
@@ -162,7 +162,7 @@ export default function AdminPreregistrosClient() {
             ))}
           </div>
         </div>
-        <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+        <div className="glass-card rounded-xl p-4">
           <p className="text-xs font-black uppercase tracking-widest text-[#E8FF47]">Por estado</p>
           <div className="mt-2 space-y-1 text-sm text-white/80">
             {stats.porEstado.map((row) => (
@@ -172,7 +172,7 @@ export default function AdminPreregistrosClient() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+      <div className="glass-card rounded-xl p-4">
         <div className="grid gap-3 md:grid-cols-4">
           <input
             type="search"
@@ -212,8 +212,8 @@ export default function AdminPreregistrosClient() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="min-w-full border-collapse bg-[#111111]">
+      <div className="glass-card scroll-fina overflow-x-auto rounded-xl">
+        <table className="min-w-full border-collapse bg-transparent">
           <thead>
             <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
               <th className="px-3 py-3">Email</th>

@@ -64,7 +64,7 @@ export default async function FinanzasPage({
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-xl border border-white/10 bg-[#111111] p-4">
+        <article className="glass-card rounded-xl p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/50">
             Total a pagar esta semana
           </p>
@@ -75,7 +75,7 @@ export default async function FinanzasPage({
             {resumenSemanalNegocios.reduce((acc, row) => acc + row.visitasSemana, 0)} visitas acumuladas.
           </p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-[#111111] p-4">
+        <article className="glass-card rounded-xl p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/50">
             Pagado a negocios este mes
           </p>
@@ -83,7 +83,7 @@ export default async function FinanzasPage({
             {formatearMonto(totalPagadoMes)}
           </p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-[#111111] p-4">
+        <article className="glass-card rounded-xl p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/50">
             Pagado histórico
           </p>
@@ -91,7 +91,7 @@ export default async function FinanzasPage({
             {formatearMonto(totalPagadoHistorico)}
           </p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-[#111111] p-4">
+        <article className="glass-card rounded-xl p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/50">
             Promedio visitas / negocio
           </p>
@@ -107,7 +107,7 @@ export default async function FinanzasPage({
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.3fr_1fr]">
-        <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h3 className="text-sm font-black uppercase tracking-wider text-[#E8FF47]">
             Resumen semanal por negocio
           </h3>
@@ -143,7 +143,7 @@ export default async function FinanzasPage({
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-[#111111] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h3 className="text-sm font-black uppercase tracking-wider text-[#E8FF47]">
             Métricas generales
           </h3>
@@ -168,7 +168,7 @@ export default async function FinanzasPage({
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-white/10 bg-[#111111] p-4">
+      <div className="mt-4 glass-card rounded-xl p-4">
         <h3 className="text-sm font-black uppercase tracking-wider text-[#E8FF47]">
           Tabla de pagos por negocio
         </h3>
@@ -231,7 +231,7 @@ export default async function FinanzasPage({
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-white/10 bg-[#111111] p-4">
+      <div className="mt-4 glass-card rounded-xl p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h3 className="text-sm font-black uppercase tracking-wider text-[#E8FF47]">

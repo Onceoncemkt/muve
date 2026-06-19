@@ -235,14 +235,14 @@ export default function AdminReservacionesSection() {
 
       <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
-          <div key={card.label} className="rounded-xl border border-white/10 bg-[#111111] p-4">
+          <div key={card.label} className="glass-card rounded-xl p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/55">{card.label}</p>
             <p className="mt-1 text-2xl font-black text-[#E8FF47]">{card.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="mb-4 rounded-xl border border-white/10 bg-[#111111] p-4">
+      <div className="mb-4 glass-card rounded-xl p-4">
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
           <input
             type="text"
@@ -301,8 +301,8 @@ export default function AdminReservacionesSection() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="min-w-full border-collapse bg-[#111111]">
+      <div className="glass-card scroll-fina overflow-x-auto rounded-xl">
+        <table className="min-w-full border-collapse bg-transparent">
           <thead>
             <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
               <th className="px-3 py-3">Usuario</th>

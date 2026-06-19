@@ -81,8 +81,8 @@ export default function NegociosBrowser({
         <span className="text-xs text-white/45">{filtrados.length} de {paneles.length}</span>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="min-w-full border-collapse bg-[#111111]">
+      <div className="glass-card scroll-fina overflow-x-auto rounded-xl">
+        <table className="min-w-full border-collapse bg-transparent">
           <thead>
             <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-[0.12em] text-white/50">
               <th className="px-3 py-3">Nombre</th>
@@ -134,7 +134,7 @@ export default function NegociosBrowser({
       {drawerAbierto && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <button type="button" aria-label="Cerrar" onClick={cerrar} className="flex-1 bg-black/60" />
-          <div className="h-full w-full max-w-lg overflow-y-auto border-l border-white/10 bg-[#111111] p-5 shadow-2xl">
+          <div className="h-full w-full max-w-lg glass-panel scroll-fina glass-in overflow-y-auto border-l border-white/10 p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-[11px] font-bold uppercase tracking-widest text-white/45">
                 {mostrarNuevo ? 'Nuevo negocio' : 'Detalle del negocio'}
