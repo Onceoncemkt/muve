@@ -6,9 +6,15 @@ import { createClient } from '@/lib/supabase/client'
 
 type BotonCerrarSesionProps = {
   className?: string
+  variant?: 'dark' | 'light'
 }
 
-export default function BotonCerrarSesion({ className = '' }: BotonCerrarSesionProps) {
+const VARIANTES = {
+  dark: 'border-[#333333] bg-transparent text-[#E8FF47] hover:border-[#E8FF47] hover:text-white focus-visible:ring-offset-[#0A0A0A]',
+  light: 'border-[#E5E5E5] bg-white text-[#666] hover:border-[#0A0A0A] hover:text-[#0A0A0A] focus-visible:ring-offset-white',
+}
+
+export default function BotonCerrarSesion({ className = '', variant = 'dark' }: BotonCerrarSesionProps) {
   const router = useRouter()
   const [cerrando, setCerrando] = useState(false)
 
@@ -28,7 +34,7 @@ export default function BotonCerrarSesion({ className = '' }: BotonCerrarSesionP
       onClick={cerrarSesion}
       disabled={cerrando}
       aria-label="Cerrar sesión"
-      className={`min-h-9 rounded-md border border-[#333333] bg-transparent px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-[#E8FF47] transition-colors hover:border-[#E8FF47] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8FF47] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0A0A] disabled:opacity-60 ${className}`}
+      className={`min-h-9 rounded-md border px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8FF47] focus-visible:ring-offset-2 disabled:opacity-60 ${VARIANTES[variant]} ${className}`}
     >
       {cerrando ? 'Cerrando...' : 'Cerrar sesión'}
     </button>

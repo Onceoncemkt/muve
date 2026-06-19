@@ -1,8 +1,6 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import { normalizarCategoriaNegocio, normalizarCategoriasNegocio } from '@/lib/planes'
 import type { Categoria, DiaSemana, Rol, ServicioNegocio, TipoClaseGenero } from '@/types'
 import { CATEGORIA_LABELS, DIA_LABELS, formatHora } from '@/types'
@@ -668,46 +666,13 @@ export default function NegocioHorariosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F7F7] pb-10">
-      <div className="bg-[#0A0A0A] px-4 py-6">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Link
-              href="/negocio/dashboard"
-              className="text-xs font-bold uppercase tracking-widest text-[#E8FF47] transition-colors hover:text-white"
-            >
-              MUVET
-            </Link>
-            <h1 className="text-2xl font-black tracking-tight text-white">Gestión de horarios</h1>
-            <p className="mt-1 text-sm text-white/50">
-              Administra horarios por categoría con vista semanal y mensual.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Link
-              href="/negocio/dashboard"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/negocio/perfil"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Perfil negocio
-            </Link>
-            <Link
-              href="/negocio/validadores"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Validadores
-            </Link>
-            <BotonCerrarSesion />
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Gestión de horarios</h1>
+        <p className="mt-1 text-sm text-[#666]">
+          Administra horarios por categoría con vista semanal y mensual.
+        </p>
       </div>
-
-      <div className="mx-auto w-full max-w-6xl space-y-4 p-4">
         <div className="space-y-3 rounded-xl border border-[#E5E5E5] bg-white p-4">
           <div>
             <label className="mb-1 block text-[11px] font-black uppercase tracking-widest text-[#888]">Negocio</label>
@@ -1454,7 +1419,6 @@ export default function NegocioHorariosPage() {
             </div>
           </>
         )}
-      </div>
     </div>
   )
 }

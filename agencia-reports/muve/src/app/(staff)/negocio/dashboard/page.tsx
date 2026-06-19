@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import NegocioReservacionesPanel from '@/components/negocio/NegocioReservacionesPanel'
 import StaffPushNotificationBanner from '@/components/push/StaffPushNotificationBanner'
 import type { DiaSemana, EstadoReserva, NivelNegocio, PlanMembresia } from '@/types'
@@ -691,59 +690,20 @@ export default function NegocioDashboardPage() {
   }, [etiquetaCategoriaTarifa, tarifaMiCheckin, totalVisitasSemana])
 
   return (
-    <div className="min-h-screen bg-[#F7F7F7] pb-10">
-      <div className="bg-[#0A0A0A] px-4 py-6">
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Link
-              href="/negocio/dashboard"
-              className="text-xs font-bold uppercase tracking-widest text-[#E8FF47] transition-colors hover:text-white"
-            >
-              MUVET
-            </Link>
-            <h1 className="text-2xl font-black tracking-tight text-white">Panel de negocio</h1>
-            <p className="mt-1 text-sm text-white/40">
-              {esRestaurante
-                ? 'Control de entradas y resumen de créditos del restaurante'
-                : esEstetica
-                  ? 'Reservaciones wellness y servicios disponibles'
-                  : esGimnasio
-                    ? 'Check-ins diarios y ganancias del gimnasio'
-                    : 'Horarios, reservaciones y operación de clases'}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Link
-              href="/negocio/dashboard"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Inicio
-            </Link>
-            <Link
-              href="/negocio/horarios"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Horarios
-            </Link>
-            <Link
-              href="/negocio/perfil"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Perfil
-            </Link>
-            <Link
-              href="/negocio/validadores"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Validadores
-            </Link>
-            <BotonCerrarSesion />
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Panel de negocio</h1>
+        <p className="mt-1 text-sm text-[#666]">
+          {esRestaurante
+            ? 'Control de entradas y resumen de créditos del restaurante'
+            : esEstetica
+              ? 'Reservaciones wellness y servicios disponibles'
+              : esGimnasio
+                ? 'Check-ins diarios y ganancias del gimnasio'
+                : 'Horarios, reservaciones y operación de clases'}
+        </p>
       </div>
-
-      <div className="mx-auto w-full max-w-4xl space-y-4 p-4">
-        <StaffPushNotificationBanner />
+      <StaffPushNotificationBanner />
         <div className="rounded-lg border border-[#E5E5E5] bg-white px-4 py-3 text-xs font-semibold text-[#555]">
           Hoy: {new Date(`${fechaHoy}T00:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
@@ -1358,6 +1318,5 @@ export default function NegocioDashboardPage() {
           </div>
         )}
       </div>
-    </div>
   )
 }

@@ -1,8 +1,6 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import { negocioAccessCode } from '@/lib/negocio-code'
 
 type ValidadorRow = {
@@ -174,47 +172,15 @@ export default function ValidadoresPageClient() {
   )
 
   return (
-    <div className="min-h-screen bg-[#F7F7F7] pb-10">
-      <div className="bg-[#0A0A0A] px-4 py-6">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Link
-              href="/negocio/dashboard"
-              className="text-xs font-bold uppercase tracking-widest text-[#E8FF47] transition-colors hover:text-white"
-            >
-              MUVET
-            </Link>
-            <h1 className="text-2xl font-black tracking-tight text-white">Validadores</h1>
-            <p className="mt-1 text-sm text-white/50">
-              Gestiona recepcionistas con PIN de 4 dígitos para `/validar`.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Link
-              href="/negocio/dashboard"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/negocio/horarios"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Horarios
-            </Link>
-            <Link
-              href="/negocio/perfil"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Perfil
-            </Link>
-            <BotonCerrarSesion />
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Validadores</h1>
+        <p className="mt-1 text-sm text-[#666]">
+          Gestiona recepcionistas con PIN de 4 dígitos para `/validar`.
+        </p>
       </div>
 
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-4">
-        {mensaje && (
+      {mensaje && (
           <div
             className={`rounded-lg px-4 py-3 text-sm font-semibold ${
               mensaje.tipo === 'ok'
@@ -272,7 +238,7 @@ export default function ValidadoresPageClient() {
         </div>
 
         <div className="overflow-hidden rounded-xl border border-[#E5E5E5] bg-white">
-          <div className="grid grid-cols-4 border-b border-[#E5E5E5] bg-[#FAFAFA] px-4 py-3 text-[11px] font-black uppercase tracking-widest text-[#666]">
+          <div className="hidden grid-cols-4 border-b border-[#E5E5E5] bg-[#FAFAFA] px-4 py-3 text-[11px] font-black uppercase tracking-widest text-[#666] sm:grid">
             <span>Nombre</span>
             <span>Estado</span>
             <span>Última actividad</span>
@@ -286,7 +252,7 @@ export default function ValidadoresPageClient() {
           ) : (
             <ul className="divide-y divide-[#E5E5E5]">
               {validadores.map((v) => (
-                <li key={v.id} className="grid grid-cols-4 items-center gap-2 px-4 py-3 text-sm">
+                <li key={v.id} className="flex flex-col gap-2 px-4 py-3 text-sm sm:grid sm:grid-cols-4 sm:items-center">
                   <span className="font-semibold text-[#0A0A0A]">{v.nombre}</span>
                   <span>
                     <span
@@ -321,7 +287,6 @@ export default function ValidadoresPageClient() {
             </ul>
           )}
         </div>
-      </div>
 
       {mostrarModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

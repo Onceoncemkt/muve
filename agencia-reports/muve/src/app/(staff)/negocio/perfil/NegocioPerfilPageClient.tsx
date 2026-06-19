@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import BotonCerrarSesion from '@/components/BotonCerrarSesion'
 import { CATEGORIA_LABELS, CIUDAD_LABELS, type Categoria, type Ciudad } from '@/types'
 
 type StripeConnectStatus = 'no_account' | 'pending' | 'active'
@@ -565,29 +564,23 @@ export default function NegocioPerfilPageClient() {
 
   if (cargando) {
     return (
-      <div className="min-h-screen bg-[#F7F7F7]">
-        <div className="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-4">
-          <p className="text-sm font-semibold text-[#666]">Cargando perfil del negocio...</p>
-        </div>
+      <div className="flex items-center justify-center py-10">
+        <p className="text-sm font-semibold text-[#666]">Cargando perfil del negocio...</p>
       </div>
     )
   }
 
   if (!perfil) {
     return (
-      <div className="min-h-screen bg-[#F7F7F7]">
-        <div className="mx-auto flex min-h-screen w-full max-w-2xl items-center px-4">
-          <div className="w-full rounded-xl border border-red-200 bg-red-50 p-4">
-            <p className="text-sm font-black text-red-800">No se pudo cargar el perfil del negocio</p>
-            {mensaje && <p className="mt-1 text-xs text-red-700">{mensaje.texto}</p>}
-            <Link
-              href="/negocio/dashboard"
-              className="mt-4 inline-flex rounded-lg bg-red-700 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-red-800"
-            >
-              Volver al dashboard
-            </Link>
-          </div>
-        </div>
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+        <p className="text-sm font-black text-red-800">No se pudo cargar el perfil del negocio</p>
+        {mensaje && <p className="mt-1 text-xs text-red-700">{mensaje.texto}</p>}
+        <Link
+          href="/negocio/dashboard"
+          className="mt-4 inline-flex rounded-lg bg-red-700 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-red-800"
+        >
+          Volver al dashboard
+        </Link>
       </div>
     )
   }
@@ -595,53 +588,15 @@ export default function NegocioPerfilPageClient() {
   const esWellness = perfil.categoria === 'estetica'
 
   return (
-    <div className="min-h-screen bg-[#F7F7F7] pb-10">
-      <div className="bg-[#0A0A0A] px-4 py-6">
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Link
-              href="/negocio/dashboard"
-              className="text-xs font-bold uppercase tracking-widest text-[#E8FF47] transition-colors hover:text-white"
-            >
-              MUVET
-            </Link>
-            <h1 className="text-2xl font-black tracking-tight text-white">Perfil del negocio</h1>
-            <p className="mt-1 text-sm text-white/50">
-              Administra la información pública y de contacto de tu negocio.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Link
-              href="/negocio/dashboard"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/negocio/horarios"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Horarios
-            </Link>
-            <Link
-              href="/perfil"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Perfil usuario
-            </Link>
-            <Link
-              href="/negocio/validadores"
-              className="rounded-lg border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest text-white transition-colors hover:border-[#E8FF47] hover:text-[#E8FF47]"
-            >
-              Validadores
-            </Link>
-            <BotonCerrarSesion />
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-black tracking-tight text-[#0A0A0A]">Perfil del negocio</h1>
+        <p className="mt-1 text-sm text-[#666]">
+          Administra la información pública y de contacto de tu negocio.
+        </p>
       </div>
 
-      <div className="mx-auto mt-4 w-full max-w-3xl space-y-4 px-4">
-        {mensaje && (
+      {mensaje && (
           <div
             className={`rounded-lg px-4 py-3 text-sm font-semibold ${
               mensaje.tipo === 'ok'
@@ -1091,7 +1046,6 @@ export default function NegocioPerfilPageClient() {
             </div>
           </section>
         )}
-      </div>
     </div>
   )
 }
