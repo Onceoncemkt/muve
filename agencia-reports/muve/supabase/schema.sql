@@ -1,5 +1,5 @@
 -- ============================================================
--- MUVE — Schema para Supabase
+-- MUVET — Schema para Supabase
 -- Correr en: Supabase Dashboard > SQL Editor
 -- ============================================================
 create extension if not exists pgcrypto;
