@@ -3,6 +3,7 @@ import type { NivelNegocio } from '@/types'
 import { normalizarCategoriasNegocio, tarifaNegocioPorCheckin } from '@/lib/planes'
 import type { StripeConnectStatus } from '@/lib/stripe-connect'
 import NegocioStaffAsignarSelect from '@/components/admin/NegocioStaffAsignarSelect'
+import ImpersonarNegocioButton from './ImpersonarNegocioButton'
 import {
   CATEGORIAS,
   CATEGORIA_FORM_LABELS,
@@ -202,6 +203,9 @@ export default function DetalleNegocio({
           </div>
         </form>
       </details>
+
+      {/* Entrar como negocio (impersonación) */}
+      <ImpersonarNegocioButton negocioId={negocio.id} />
 
       {/* Acciones Stripe / activo */}
       <div className="space-y-2">
