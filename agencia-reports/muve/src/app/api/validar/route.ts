@@ -14,30 +14,44 @@ import {
 import { planExpirado, resolverVentanaCiclo } from '@/lib/ciclos'
 import { getValidadorSession } from '@/lib/validador-auth'
 import { notificarActualizacionWallet } from '@/lib/wallet/notificar-actualizacion'
-function diaSemanaActual(): 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo' {
-  const dias: Array<'domingo' | 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado'> = [
-    'domingo',
-    'lunes',
-    'martes',
-    'miercoles',
-    'jueves',
-    'viernes',
-    'sabado',
-  ]
-  const ahora = new Date()
-  return dias[ahora.getDay()]
+// Zona horaria del negocio según su ciudad (Ensenada usa horario del Pacífico;
+// el resto, centro de México). Necesario porque el servidor corre en UTC.
+function zonaHorariaPorCiudad(ciudad: string | null | undefined): string {
+  return (ciudad ?? '').trim().toLowerCase() === 'ensenada'
+    ? 'America/Tijuana'
+    : 'America/Mexico_City'
 }
 
-function horaActualHHMMSS() {
-  const ahora = new Date()
-  const hh = String(ahora.getHours()).padStart(2, '0')
-  const mm = String(ahora.getMinutes()).padStart(2, '0')
-  const ss = String(ahora.getSeconds()).padStart(2, '0')
-  return `${hh}:${mm}:${ss}`
-}
-
-function horaCorta(fecha: Date) {
-  return fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+// Fecha (YYYY-MM-DD), día de la semana y hora (HH:MM:SS) ACTUALES en la zona
+// horaria del negocio, no en la del servidor.
+function partesEnZona(timeZone: string): { fecha: string; hora: string; dia: string } {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+    weekday: 'long',
+  })
+  const p: Record<string, string> = {}
+  for (const part of fmt.formatToParts(new Date())) p[part.type] = part.value
+  const mapaDia: Record<string, string> = {
+    Sunday: 'domingo',
+    Monday: 'lunes',
+    Tuesday: 'martes',
+    Wednesday: 'miercoles',
+    Thursday: 'jueves',
+    Friday: 'viernes',
+    Saturday: 'sabado',
+  }
+  return {
+    fecha: `${p.year}-${p.month}-${p.day}`,
+    hora: `${p.hour}:${p.minute}:${p.second}`,
+    dia: mapaDia[p.weekday] ?? 'lunes',
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -604,21 +618,26 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    const ahora = new Date()
-    const horaClase = new Date(`${reservacionClaseParaVentana.fecha}T${reservacionClaseParaVentana.hora_inicio}`)
-    if (Number.isNaN(horaClase.getTime())) {
+    // Comparación en la zona horaria del negocio (el servidor corre en UTC).
+    const tz = zonaHorariaPorCiudad(negocio.ciudad)
+    const { fecha: hoyZona, hora: horaZona } = partesEnZona(tz)
+    const ahoraWallclock = `${hoyZona}T${horaZona}`
+    // La 'Z' es solo para la aritmética de tiempo (restar 30 min con rollover de
+    // fecha correcto); no implica que el horario esté en UTC.
+    const baseClase = new Date(`${reservacionClaseParaVentana.fecha}T${reservacionClaseParaVentana.hora_inicio}Z`)
+    if (Number.isNaN(baseClase.getTime())) {
       return NextResponse.json(
         { valido: false, error: 'No se pudo validar el horario de la clase reservada.' },
         { status: 400 }
       )
     }
-    const ventanaInicio = new Date(horaClase.getTime() - 30 * 60 * 1000)
+    const ventanaInicioWallclock = new Date(baseClase.getTime() - 30 * 60 * 1000).toISOString().slice(0, 19)
 
-    if (ahora < ventanaInicio) {
+    if (ahoraWallclock < ventanaInicioWallclock) {
       return NextResponse.json(
         {
           valido: false,
-          error: `Aún no es momento de validar. La clase comienza a las ${horaCorta(horaClase)}. Puedes escanear a partir de las ${horaCorta(ventanaInicio)}.`,
+          error: `Aún no es momento de validar. La clase comienza a las ${reservacionClaseParaVentana.hora_inicio.slice(0, 5)}. Puedes escanear a partir de las ${ventanaInicioWallclock.slice(11, 16)}.`,
         },
         { status: 400 }
       )
@@ -627,8 +646,8 @@ export async function POST(request: NextRequest) {
   }
 
   if (categoriaEfectiva === 'gimnasio') {
-    const diaActual = diaSemanaActual()
-    const horaActual = horaActualHHMMSS()
+    const tzGym = zonaHorariaPorCiudad(negocio.ciudad)
+    const { dia: diaActual, hora: horaActual } = partesEnZona(tzGym)
     const { data: ventanasGym, error: ventanasGymError } = await db
       .from('horarios')
       .select('hora_inicio, hora_fin')
