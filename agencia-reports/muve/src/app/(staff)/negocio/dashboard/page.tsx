@@ -1035,6 +1035,9 @@ export default function NegocioDashboardPage() {
                 <p className="mt-1 text-2xl font-black text-[#0A0A0A]">{resumen.horarios_activos}</p>
               </div>
             )}
+            <div className="md:col-span-4 pt-1">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Ganancias y pagos</p>
+            </div>
             <div className="md:col-span-4 space-y-3">
               <div className="rounded-xl border border-[#D5E63A] bg-[#E8FF47] p-5 text-[#0A0A0A]">
                 <p className="text-[11px] font-black uppercase tracking-widest">Pago acumulado actual</p>
@@ -1096,10 +1099,13 @@ export default function NegocioDashboardPage() {
               </div>
             </div>
 
-            <div className="md:col-span-4 rounded-xl border border-[#E5E5E5] bg-white p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <details className="group md:col-span-4 rounded-xl border border-[#E5E5E5] bg-white p-4">
+              <summary className="flex cursor-pointer list-none flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Inteligencia comercial</p>
+                  <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-[#888]">
+                    <span className="text-[#6B4FE8] transition-transform group-open:rotate-90">▸</span>
+                    Inteligencia comercial
+                  </p>
                   <p className="mt-1 text-xs text-[#666]">
                     Métricas para definir mejores días, horarios y retorno de operación.
                   </p>
@@ -1107,7 +1113,7 @@ export default function NegocioDashboardPage() {
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#6B4FE8]">
                   Últimos {inteligencia.periodo_dias} días
                 </span>
-              </div>
+              </summary>
 
               <div className="mt-3 grid gap-2 md:grid-cols-4">
                 <div className="rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2">
@@ -1213,12 +1219,22 @@ export default function NegocioDashboardPage() {
                   ))}
                 </ul>
               </div>
-            </div>
+            </details>
 
+            <div className="md:col-span-4 pt-1">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Reservaciones de hoy</p>
+            </div>
             <div className="md:col-span-4">
               <NegocioReservacionesPanel />
             </div>
           </section>
+        )}
+
+        {esClases && !sinNegocio && negocio && (
+          <div className="pt-1">
+            <p className="text-[11px] font-black uppercase tracking-widest text-[#888]">Asistencia de clases de hoy</p>
+            <p className="mt-0.5 text-xs text-[#666]">Marca quién asistió en cada clase reservada para hoy.</p>
+          </div>
         )}
 
         {esClases && cargando && <p className="text-center text-sm text-[#888]">Cargando reservaciones...</p>}
