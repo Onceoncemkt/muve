@@ -16,7 +16,6 @@ export const metadata: Metadata = {
     description: 'Wellness Club',
   },
   manifest: '/manifest.json',
-  themeColor: '#5B3FFF',
   icons: {
     icon: '/favicon.png',
     apple: [
